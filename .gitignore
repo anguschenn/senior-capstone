@@ -49,6 +49,9 @@ docker-compose.local*.yml
 *.iml
 .env
 .idea
+.env
+node/.env
+.env.*
 
 #vscode
 .vscode
