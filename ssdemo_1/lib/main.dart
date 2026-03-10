@@ -1,392 +1,234 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 
-/// Demo backend endpoint (can point to Plaid sandbox proxy)
-const String demoApiBaseUrl = "http://localhost:3000";
+// App entry point
+void main() => runApp(const SmartSpendApp());
 
-/// Backend endpoints used for Plaid sandbox flow
-const String createLinkTokenEndpoint = "$demoApiBaseUrl/create_link_token";
-const String exchangePublicTokenEndpoint = "$demoApiBaseUrl/exchange_public_token";
-const String transactionsEndpoint = "$demoApiBaseUrl/transactions";
-
-/// Simulates Plaid sandbox connection using backend endpoints
-Future<void> connectBankDemo(BuildContext context) async {
-  try {
-    // 1. Ask backend to create a Plaid link_token
-    final linkTokenResponse = await http
-        .post(Uri.parse(createLinkTokenEndpoint))
-        .timeout(const Duration(seconds: 10));
-
-    if (linkTokenResponse.statusCode != 200) {
-      throw Exception("Failed to create link token");
-    }
-
-    debugPrint("Link token response: ${linkTokenResponse.body}");
-
-    // For demo purposes we simulate receiving a public_token
-    const simulatedPublicToken = "public-sandbox-demo-token";
-
-    // 2. Send public_token to backend to exchange for access_token
-    final exchangeResponse = await http.post(
-      Uri.parse(exchangePublicTokenEndpoint),
-      headers: {"Content-Type": "application/json"},
-      body: '{"public_token": "$simulatedPublicToken"}',
-    );
-
-    if (exchangeResponse.statusCode != 200) {
-      throw Exception("Failed to exchange public token");
-    }
-
-    debugPrint("Token exchange response: ${exchangeResponse.body}");
-
-    // 3. Request transactions from backend
-    final transactionsResponse = await http.get(
-      Uri.parse(transactionsEndpoint),
-    );
-
-    if (transactionsResponse.statusCode != 200) {
-      throw Exception("Failed to fetch transactions");
-    }
-
-    debugPrint("Transactions: ${transactionsResponse.body}");
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Plaid sandbox connection simulated successfully."),
-      ),
-    );
-  } catch (e) {
-    debugPrint("Plaid sandbox flow error: $e");
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text("Plaid connection failed: $e"),
-      ),
-    );
-  }
-}
-
-void main() {
-  runApp(const SmartSpend());
-}
-
-/// Root application
-class SmartSpend extends StatelessWidget {
-  const SmartSpend({super.key});
+// Root app widget
+class SmartSpendApp extends StatelessWidget {
+  const SmartSpendApp({super.key});
 
   @override
   Widget build(BuildContext context) {
+    // App configuration
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: "SmartSpend Demo",
+      title: 'SmartSpend',
       theme: ThemeData(
         useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
       ),
-      home: const DashboardPage(),
+      home: const MainScreen(),
     );
   }
 }
 
-/// Main dashboard page
-class DashboardPage extends StatelessWidget {
-  const DashboardPage({super.key});
+// Main screen with bottom navigation
+class MainScreen extends StatefulWidget {
+  const MainScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-
-    // Mobile layout
-    if (width < 800) {
-      return const MobileDashboard();
-    }
-
-    // Desktop layout
-    return const DesktopDashboard();
-  }
+  State<MainScreen> createState() => _MainScreenState();
 }
 
-/// Desktop layout
-class DesktopDashboard extends StatelessWidget {
-  const DesktopDashboard({super.key});
+class _MainScreenState extends State<MainScreen> {
+  // current selected tab
+  int index = 0;
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Row(
-        children: const [
-          SizedBox(width: 220, child: Sidebar()),
-          Expanded(child: DashboardContent()),
-        ],
-      ),
-    );
-  }
-}
-
-/// Mobile layout
-class MobileDashboard extends StatelessWidget {
-  const MobileDashboard({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Dashboard"),
-
-        actions: const [],
-      ),
-
-      /// Mobile sidebar menu
-      drawer: const Drawer(
-        child: Sidebar(),
-      ),
-
-      body: const DashboardContent(),
-    );
-  }
-}
-
-/// Sidebar (visual only)
-class Sidebar extends StatelessWidget {
-  const Sidebar({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: Colors.grey.shade100,
-      child: Column(
-        children: const [
-          SizedBox(height: 40),
-          NavItem("Dashboard"),
-          NavItem("Accounts"),
-          NavItem("Transactions"),
-          NavItem("Cash Flow"),
-          NavItem("Reports"),
-          NavItem("Budget"),
-        ],
-      ),
-    );
-  }
-}
-
-class NavItem extends StatelessWidget {
-  final String label;
-
-  const NavItem(this.label, {super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      title: Text(label),
-      onTap: () {},
-    );
-  }
-}
-
-/// Main dashboard content
-class DashboardContent extends StatefulWidget {
-  const DashboardContent({super.key});
-
-  @override
-  State<DashboardContent> createState() => _DashboardContentState();
-}
-
-class _DashboardContentState extends State<DashboardContent> {
-
-  final List<Map<String, String>> demoTransactions = const [
-    {"name": "Netflix", "category": "Subscription", "amount": "\$15.99"},
-    {"name": "Starbucks", "category": "Coffee", "amount": "\$5.20"},
-    {"name": "Uber", "category": "Transport", "amount": "\$22.40"},
-    {"name": "Amazon", "category": "Shopping", "amount": "\$64.56"},
-    {"name": "Apple", "category": "App Store", "amount": "\$3.99"},
+  // pages for each tab
+  final pages = const [
+    HomePage(),
+    CashFlowPage(),
+    TransactionsPage(),
+    BudgetPage(),
+    SubscriptionsPage(),
   ];
 
-  List<Map<String, dynamic>> sandboxTransactions = [];
-
-  Future<void> connectAndLoadTransactions() async {
-    try {
-      final linkTokenResponse = await http
-          .post(Uri.parse(createLinkTokenEndpoint))
-          .timeout(const Duration(seconds: 10));
-
-      if (linkTokenResponse.statusCode != 200) {
-        throw Exception("Failed to create link token");
-      }
-
-      const simulatedPublicToken = "public-sandbox-demo-token";
-
-      final exchangeResponse = await http.post(
-        Uri.parse(exchangePublicTokenEndpoint),
-        headers: {"Content-Type": "application/json"},
-        body: '{"public_token": "$simulatedPublicToken"}',
-      );
-
-      if (exchangeResponse.statusCode != 200) {
-        throw Exception("Failed to exchange public token");
-      }
-
-      final transactionsResponse = await http.get(
-        Uri.parse(transactionsEndpoint),
-      );
-
-      if (transactionsResponse.statusCode != 200) {
-        throw Exception("Failed to fetch transactions");
-      }
-
-      final decoded = jsonDecode(transactionsResponse.body);
-
-      final transactions = List<Map<String, dynamic>>.from(
-        decoded["transactions"] ?? [],
-      );
-
-      setState(() {
-        sandboxTransactions = transactions;
-      });
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Plaid sandbox transactions loaded."),
-        ),
-      );
-
-    } catch (e) {
-      debugPrint("Plaid sandbox flow error: $e");
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Plaid connection failed: $e")),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final isDesktop = MediaQuery.of(context).size.width > 800;
-
-    return SafeArea(
-      child: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  if (isDesktop)
-                    const Text(
-                      "Dashboard",
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-
-                  ElevatedButton.icon(
-                    onPressed: connectAndLoadTransactions,
-                    icon: const Icon(Icons.link),
-                    label: const Text("Connect Bank"),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-
-              const Wrap(
-                spacing: 16,
-                runSpacing: 16,
-                children: [
-                  SummaryCard("Income", "\$4200"),
-                  SummaryCard("Expenses", "\$3719"),
-                  SummaryCard("Net", "\$480"),
-                  SummaryCard("Savings", "11%"),
-                ],
-              ),
-
-              const SizedBox(height: 24),
-
-              Container(
-                height: 250,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade200,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Padding(
-                  padding: EdgeInsets.all(20),
-                  child: FakeCashFlowChart(),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              const Text(
-                "Recent Transactions",
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-
-              const SizedBox(height: 8),
-
-              ...sandboxTransactions.map((t) => TransactionItem(
-                    t["name"]?.toString() ?? "Unknown",
-                    t["category"]?.toString() ?? "Unknown",
-                    "\$${t["amount"] ?? "0"}",
-                  )),
-
-              ...demoTransactions.map((t) => TransactionItem(
-                    t["name"]!,
-                    t["category"]!,
-                    t["amount"]!,
-                  )),
-            ],
-          ),
-        ),
+    // show selected page
+    return Scaffold(
+      body: pages[index],
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: index,
+        onDestinationSelected: (i) => setState(() => index = i),
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.home_outlined), label: 'Home'),
+          NavigationDestination(icon: Icon(Icons.bar_chart), label: 'Flow'),
+          NavigationDestination(icon: Icon(Icons.receipt_long), label: 'Activity'),
+          NavigationDestination(icon: Icon(Icons.pie_chart_outline), label: 'Budget'),
+          NavigationDestination(icon: Icon(Icons.subscriptions_outlined), label: 'Subs'),
+        ],
       ),
     );
   }
 }
 
-/// Small stat card
+// Home dashboard page
+class HomePage extends StatelessWidget {
+  const HomePage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    // avoid system UI overlap
+    return SafeArea(
+      child: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          const Text('SmartSpend', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 20),
+
+          const Text('Total Balance'),
+          const Text('\$12,430', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          const Text('Net this month: +\$481', style: TextStyle(color: Colors.green)),
+
+          const SizedBox(height: 20),
+
+          Row(
+            children: const [
+              Expanded(child: SummaryCard(title: 'Income', value: '\$4,200')),
+              SizedBox(width: 12),
+              Expanded(child: SummaryCard(title: 'Expenses', value: '\$3,719')),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
+          const Text('Recent Transactions', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const ListTile(
+            leading: Icon(Icons.shopping_cart),
+            title: Text('Amazon'),
+            subtitle: Text('Mar 10'),
+            trailing: Text('- \$64'),
+          ),
+          const ListTile(
+            leading: Icon(Icons.local_cafe),
+            title: Text('Starbucks'),
+            subtitle: Text('Mar 9'),
+            trailing: Text('- \$5'),
+          ),
+          const ListTile(
+            leading: Icon(Icons.directions_car),
+            title: Text('Uber'),
+            subtitle: Text('Mar 8'),
+            trailing: Text('- \$22'),
+          ),
+
+          const SizedBox(height: 20),
+
+          const Text('Upcoming Subscriptions', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const ListTile(
+            leading: Icon(Icons.tv),
+            title: Text('Netflix'),
+            subtitle: Text('Renews Mar 15'),
+            trailing: Text('\$15.99'),
+          ),
+          const ListTile(
+            leading: Icon(Icons.music_note),
+            title: Text('Spotify'),
+            subtitle: Text('Renews Mar 18'),
+            trailing: Text('\$9.99'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Cash flow page
+class CashFlowPage extends StatelessWidget {
+  const CashFlowPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    // avoid system UI overlap
+    return SafeArea(
+      child: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          const Text('Cash Flow', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          const Text('Track monthly money in and out'),
+          const SizedBox(height: 20),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.green.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              children: const [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Income', style: TextStyle(fontWeight: FontWeight.bold)),
+                    Text('\$4,200'),
+                  ],
+                ),
+                SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Expenses', style: TextStyle(fontWeight: FontWeight.bold)),
+                    Text('\$3,719'),
+                  ],
+                ),
+                SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Net', style: TextStyle(fontWeight: FontWeight.bold)),
+                    Text('+\$481'),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                ChartBar(label: 'Jan', height: 60),
+                ChartBar(label: 'Feb', height: 90),
+                ChartBar(label: 'Mar', height: 70),
+                ChartBar(label: 'Apr', height: 110),
+                ChartBar(label: 'May', height: 80),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// summary card widget
 class SummaryCard extends StatelessWidget {
   final String title;
   final String value;
 
-  const SummaryCard(this.title, this.value, {super.key});
+  const SummaryCard({super.key, required this.title, required this.value});
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final cardWidth = screenWidth > 800 ? 160.0 : (screenWidth - 60) / 2;
-
     return Container(
-      width: cardWidth,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: const [
-          BoxShadow(
-            blurRadius: 10,
-            color: Colors.black12,
-          )
-        ],
+        color: Colors.green.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 4),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
           Text(title),
         ],
       ),
@@ -394,74 +236,173 @@ class SummaryCard extends StatelessWidget {
   }
 }
 
-/// Simple fake cash flow chart for demo
-class FakeCashFlowChart extends StatelessWidget {
-  const FakeCashFlowChart({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: const [
-        ChartBar(height: 120, label: 'Jan'),
-        ChartBar(height: 150, label: 'Feb'),
-        ChartBar(height: 90, label: 'Mar'),
-        ChartBar(height: 170, label: 'Apr'),
-        ChartBar(height: 140, label: 'May'),
-      ],
-    );
-  }
-}
-
+// chart bar widget
 class ChartBar extends StatelessWidget {
-  final double height;
   final String label;
+  final double height;
 
-  const ChartBar({required this.height, required this.label, super.key});
+  const ChartBar({super.key, required this.label, required this.height});
 
   @override
   Widget build(BuildContext context) {
     return Column(
-      mainAxisAlignment: MainAxisAlignment.end,
       children: [
         Container(
-          width: 18,
+          width: 16,
           height: height,
-          decoration: BoxDecoration(
-            color: Colors.blue,
-            borderRadius: BorderRadius.circular(6),
-          ),
+          color: Colors.green,
         ),
-        const SizedBox(height: 6),
-        Text(label, style: const TextStyle(fontSize: 10)),
+        const SizedBox(height: 4),
+        Text(label),
       ],
     );
   }
 }
 
-/// Transaction row
-class TransactionItem extends StatelessWidget {
-  final String name;
-  final String category;
-  final String amount;
-
-  const TransactionItem(
-    this.name,
-    this.category,
-    this.amount, {
-    super.key,
-  });
+// transactions list page
+class TransactionsPage extends StatelessWidget {
+  const TransactionsPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: const Icon(Icons.receipt),
-      title: Text(name),
-      subtitle: Text(category),
-      trailing: Text(
-        amount,
-        style: const TextStyle(fontWeight: FontWeight.bold),
+    // avoid system UI overlap
+    return SafeArea(
+      child: ListView(
+        padding: const EdgeInsets.all(20),
+        children: const [
+          Text('Activity', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+          SizedBox(height: 8),
+          Text('Recent spending and income'),
+          SizedBox(height: 16),
+          ListTile(
+            leading: Icon(Icons.shopping_cart),
+            title: Text('Amazon'),
+            subtitle: Text('Mar 10 • Shopping'),
+            trailing: Text('- \$64'),
+          ),
+          ListTile(
+            leading: Icon(Icons.local_cafe),
+            title: Text('Starbucks'),
+            subtitle: Text('Mar 9 • Coffee'),
+            trailing: Text('- \$5'),
+          ),
+          ListTile(
+            leading: Icon(Icons.directions_car),
+            title: Text('Uber'),
+            subtitle: Text('Mar 8 • Transport'),
+            trailing: Text('- \$22'),
+          ),
+          ListTile(
+            leading: Icon(Icons.tv),
+            title: Text('Netflix'),
+            subtitle: Text('Mar 7 • Subscription'),
+            trailing: Text('- \$15.99'),
+          ),
+          ListTile(
+            leading: Icon(Icons.attach_money),
+            title: Text('Freelance Payment'),
+            subtitle: Text('Mar 6 • Income'),
+            trailing: Text('+ \$500'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// budget page
+class BudgetPage extends StatelessWidget {
+  const BudgetPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    // avoid system UI overlap
+    return SafeArea(
+      child: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          const Text('Budget', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          const Text('Simple category-based budget view'),
+          const SizedBox(height: 20),
+          _budgetItem('Food', '\$230 / \$350', 0.66),
+          const SizedBox(height: 14),
+          _budgetItem('Transport', '\$95 / \$150', 0.63),
+          const SizedBox(height: 14),
+          _budgetItem('Shopping', '\$320 / \$400', 0.80),
+          const SizedBox(height: 14),
+          _budgetItem('Entertainment', '\$75 / \$120', 0.62),
+        ],
+      ),
+    );
+  }
+
+  // budget item widget
+  Widget _budgetItem(String title, String amount, double progress) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.green.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+              Text(amount),
+            ],
+          ),
+          const SizedBox(height: 10),
+          LinearProgressIndicator(value: progress, minHeight: 8),
+        ],
+      ),
+    );
+  }
+}
+
+// subscriptions page
+class SubscriptionsPage extends StatelessWidget {
+  const SubscriptionsPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    // avoid system UI overlap
+    return SafeArea(
+      child: ListView(
+        padding: const EdgeInsets.all(20),
+        children: const [
+          Text('Subs', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+          SizedBox(height: 8),
+          Text('Recurring monthly payments'),
+          SizedBox(height: 16),
+          ListTile(
+            leading: Icon(Icons.tv),
+            title: Text('Netflix'),
+            subtitle: Text('Renews Mar 15'),
+            trailing: Text('\$15.99'),
+          ),
+          ListTile(
+            leading: Icon(Icons.music_note),
+            title: Text('Spotify'),
+            subtitle: Text('Renews Mar 18'),
+            trailing: Text('\$9.99'),
+          ),
+          ListTile(
+            leading: Icon(Icons.cloud),
+            title: Text('iCloud'),
+            subtitle: Text('Renews Mar 22'),
+            trailing: Text('\$2.99'),
+          ),
+          ListTile(
+            leading: Icon(Icons.school),
+            title: Text('Notion Student Plus'),
+            subtitle: Text('Renews Mar 28'),
+            trailing: Text('\$4.99'),
+          ),
+        ],
       ),
     );
   }
