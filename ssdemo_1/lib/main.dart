@@ -1,29 +1,69 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 /// Demo backend endpoint (can point to Plaid sandbox proxy)
 const String demoApiBaseUrl = "http://localhost:3000";
 
-/// Example endpoints your backend could expose
-const String connectEndpoint = "$demoApiBaseUrl/connect";
+/// Backend endpoints used for Plaid sandbox flow
+const String createLinkTokenEndpoint = "$demoApiBaseUrl/create_link_token";
+const String exchangePublicTokenEndpoint = "$demoApiBaseUrl/exchange_public_token";
 const String transactionsEndpoint = "$demoApiBaseUrl/transactions";
 
-/// Placeholder function for future Plaid sandbox connection
-/// Later you can replace the print statements with a real HTTP request
+/// Simulates Plaid sandbox connection using backend endpoints
 Future<void> connectBankDemo(BuildContext context) async {
-  // TODO: Replace this with real backend call to Plaid sandbox
-  // Example:
-  // final response = await http.get(Uri.parse(connectEndpoint));
+  try {
+    // 1. Ask backend to create a Plaid link_token
+    final linkTokenResponse = await http
+        .post(Uri.parse(createLinkTokenEndpoint))
+        .timeout(const Duration(seconds: 10));
 
-  debugPrint("Calling backend: $connectEndpoint");
+    if (linkTokenResponse.statusCode != 200) {
+      throw Exception("Failed to create link token");
+    }
 
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(
-      content: Text("Simulating Plaid sandbox connection..."),
-    ),
-  );
+    debugPrint("Link token response: ${linkTokenResponse.body}");
 
-  // After backend is ready you could fetch transactions like:
-  // http.get(Uri.parse(transactionsEndpoint));
+    // For demo purposes we simulate receiving a public_token
+    const simulatedPublicToken = "public-sandbox-demo-token";
+
+    // 2. Send public_token to backend to exchange for access_token
+    final exchangeResponse = await http.post(
+      Uri.parse(exchangePublicTokenEndpoint),
+      headers: {"Content-Type": "application/json"},
+      body: '{"public_token": "$simulatedPublicToken"}',
+    );
+
+    if (exchangeResponse.statusCode != 200) {
+      throw Exception("Failed to exchange public token");
+    }
+
+    debugPrint("Token exchange response: ${exchangeResponse.body}");
+
+    // 3. Request transactions from backend
+    final transactionsResponse = await http.get(
+      Uri.parse(transactionsEndpoint),
+    );
+
+    if (transactionsResponse.statusCode != 200) {
+      throw Exception("Failed to fetch transactions");
+    }
+
+    debugPrint("Transactions: ${transactionsResponse.body}");
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Plaid sandbox connection simulated successfully."),
+      ),
+    );
+  } catch (e) {
+    debugPrint("Plaid sandbox flow error: $e");
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text("Plaid connection failed: $e"),
+      ),
+    );
+  }
 }
 
 void main() {
@@ -144,8 +184,83 @@ class NavItem extends StatelessWidget {
 }
 
 /// Main dashboard content
-class DashboardContent extends StatelessWidget {
+class DashboardContent extends StatefulWidget {
   const DashboardContent({super.key});
+
+  @override
+  State<DashboardContent> createState() => _DashboardContentState();
+}
+
+class _DashboardContentState extends State<DashboardContent> {
+
+  final List<Map<String, String>> demoTransactions = const [
+    {"name": "Netflix", "category": "Subscription", "amount": "\$15.99"},
+    {"name": "Starbucks", "category": "Coffee", "amount": "\$5.20"},
+    {"name": "Uber", "category": "Transport", "amount": "\$22.40"},
+    {"name": "Amazon", "category": "Shopping", "amount": "\$64.56"},
+    {"name": "Apple", "category": "App Store", "amount": "\$3.99"},
+  ];
+
+  List<Map<String, dynamic>> sandboxTransactions = [];
+
+  Future<void> connectAndLoadTransactions() async {
+    try {
+      final linkTokenResponse = await http
+          .post(Uri.parse(createLinkTokenEndpoint))
+          .timeout(const Duration(seconds: 10));
+
+      if (linkTokenResponse.statusCode != 200) {
+        throw Exception("Failed to create link token");
+      }
+
+      const simulatedPublicToken = "public-sandbox-demo-token";
+
+      final exchangeResponse = await http.post(
+        Uri.parse(exchangePublicTokenEndpoint),
+        headers: {"Content-Type": "application/json"},
+        body: '{"public_token": "$simulatedPublicToken"}',
+      );
+
+      if (exchangeResponse.statusCode != 200) {
+        throw Exception("Failed to exchange public token");
+      }
+
+      final transactionsResponse = await http.get(
+        Uri.parse(transactionsEndpoint),
+      );
+
+      if (transactionsResponse.statusCode != 200) {
+        throw Exception("Failed to fetch transactions");
+      }
+
+      final decoded = jsonDecode(transactionsResponse.body);
+
+      final transactions = List<Map<String, dynamic>>.from(
+        decoded["transactions"] ?? [],
+      );
+
+      setState(() {
+        sandboxTransactions = transactions;
+      });
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Plaid sandbox transactions loaded."),
+        ),
+      );
+
+    } catch (e) {
+      debugPrint("Plaid sandbox flow error: $e");
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Plaid connection failed: $e")),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -158,11 +273,9 @@ class DashboardContent extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              /// Top row
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  /// Only show title on desktop
                   if (isDesktop)
                     const Text(
                       "Dashboard",
@@ -173,9 +286,7 @@ class DashboardContent extends StatelessWidget {
                     ),
 
                   ElevatedButton.icon(
-                    onPressed: () async {
-                      await connectBankDemo(context);
-                    },
+                    onPressed: connectAndLoadTransactions,
                     icon: const Icon(Icons.link),
                     label: const Text("Connect Bank"),
                   ),
@@ -183,7 +294,6 @@ class DashboardContent extends StatelessWidget {
               ),
               const SizedBox(height: 20),
 
-              /// Summary cards
               const Wrap(
                 spacing: 16,
                 runSpacing: 16,
@@ -197,7 +307,6 @@ class DashboardContent extends StatelessWidget {
 
               const SizedBox(height: 24),
 
-              /// Chart placeholder
               Container(
                 height: 250,
                 width: double.infinity,
@@ -221,11 +330,19 @@ class DashboardContent extends StatelessWidget {
                 ),
               ),
 
-              const TransactionItem("Netflix", "Subscription", "\$15.99"),
-              const TransactionItem("Starbucks", "Coffee", "\$5.20"),
-              const TransactionItem("Uber", "Transport", "\$22.40"),
-              const TransactionItem("Amazon", "Shopping", "\$64.56"),
-              const TransactionItem("Apple", "App Store", "\$3.99"),
+              const SizedBox(height: 8),
+
+              ...sandboxTransactions.map((t) => TransactionItem(
+                    t["name"]?.toString() ?? "Unknown",
+                    t["category"]?.toString() ?? "Unknown",
+                    "\$${t["amount"] ?? "0"}",
+                  )),
+
+              ...demoTransactions.map((t) => TransactionItem(
+                    t["name"]!,
+                    t["category"]!,
+                    t["amount"]!,
+                  )),
             ],
           ),
         ),
