@@ -45,10 +45,13 @@ interface AuthDataItem {
   balance: string;
   name: string;
 }
+
 interface TransactionsDataItem {
   amount: string;
   date: string;
   name: string;
+  category?: string;
+  website?: string;
 }
 
 interface IdentityDataItem {
@@ -235,6 +238,14 @@ export const transactionsCategories: Array<Categories> = [
     title: "Date",
     field: "date",
   },
+  {
+    title: "Category",
+    field: "category",
+  },
+  {
+    title: "Website",
+    field: "website",
+  }
 ];
 
 export const identityCategories: Array<Categories> = [
@@ -602,10 +613,12 @@ export const transformTransactionsData = (data: {
   latest_transactions: Transaction[];
 }): Array<DataItem> => {
   return data.latest_transactions!.map((t) => {
-    const item: DataItem = {
-      name: t.name!,
+    const item: TransactionsDataItem = {
+      name: t.name || "",
       amount: formatCurrency(t.amount!, t.iso_currency_code),
-      date: t.date,
+      date: t.authorized_date || t.date || "",
+      category: t.personal_finance_category?.primary || "",
+      website: t.website || t.counterparties?.[0]?.website || "",
     };
     return item;
   });
