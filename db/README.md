@@ -10,7 +10,9 @@
 Add these to your `.env` file:
 SUPABASE_URL=your_project_url
 SUPABASE_KEY=your_anon_key
+BACKEND_URL=http://localhost:8000
 
 ## Notes
 - Never commit your actual .env file
+- `BACKEND_URL` is the Python service base URL used by the Flutter app
 - access_token in plaid_items is sensitive, never log or expose it

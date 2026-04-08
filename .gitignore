@@ -58,3 +58,5 @@ node/.env
 
 #Python virtual nv
 python/venv/*
+python/__pycache__/
+*.pyc

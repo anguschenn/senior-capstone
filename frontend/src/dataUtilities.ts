@@ -33,10 +33,27 @@ const formatCurrency = (
   return "no data";
 };
 
+const sortByAccountId = <T extends { account_id: string }>(items: T[]): T[] =>
+  [...items].sort((a, b) => (a.account_id > b.account_id ? 1 : -1));
+
+const findById = <T>(
+  items: T[],
+  selector: (item: T) => string,
+  id: string
+): T | undefined => items.find((item) => selector(item) === id);
+
+const pickAccountBalance = (account: AccountBase): number | null | undefined =>
+  account.balances.available || account.balances.current;
+
+const formatAccountBalance = (account: AccountBase): string =>
+  formatCurrency(pickAccountBalance(account), account.balances.iso_currency_code);
+
 export interface Categories {
   title: string;
   field: string;
 }
+
+const category = (title: string, field: string): Categories => ({ title, field });
 
 //interfaces for categories in each individual product
 interface AuthDataItem {
@@ -90,7 +107,7 @@ interface InvestmentsTransactionItem {
   name: string;
 }
 
-interface LiabilitiessDataItem {
+interface LiabilitiesDataItem {
   amount: string;
   date: string;
   name: string;
@@ -191,7 +208,7 @@ export type DataItem =
   | BalanceDataItem
   | InvestmentsDataItem
   | InvestmentsTransactionItem
-  | LiabilitiessDataItem
+  | LiabilitiesDataItem
   | ItemDataItem
   | PaymentDataItem
   | AssetsDataItem
@@ -207,389 +224,166 @@ export type DataItem =
 export type Data = Array<DataItem>;
 
 export const authCategories: Array<Categories> = [
-  {
-    title: "Name",
-    field: "name",
-  },
-  {
-    title: "Balance",
-    field: "balance",
-  },
-  {
-    title: "Account #",
-    field: "account",
-  },
-  {
-    title: "Routing #",
-    field: "routing",
-  },
+  category("Name", "name"),
+  category("Balance", "balance"),
+  category("Account #", "account"),
+  category("Routing #", "routing"),
 ];
 
 export const transactionsCategories: Array<Categories> = [
-  {
-    title: "Name",
-    field: "name",
-  },
-  {
-    title: "Amount",
-    field: "amount",
-  },
-  {
-    title: "Date",
-    field: "date",
-  },
-  {
-    title: "Category",
-    field: "category",
-  },
-  {
-    title: "Website",
-    field: "website",
-  }
+  category("Name", "name"),
+  category("Amount", "amount"),
+  category("Date", "date"),
+  category("Category", "category"),
+  category("Website", "website"),
 ];
 
 export const identityCategories: Array<Categories> = [
-  {
-    title: "Names",
-    field: "names",
-  },
-  {
-    title: "Emails",
-    field: "emails",
-  },
-  {
-    title: "Phone numbers",
-    field: "phoneNumbers",
-  },
-  {
-    title: "Addresses",
-    field: "addresses",
-  },
+  category("Names", "names"),
+  category("Emails", "emails"),
+  category("Phone numbers", "phoneNumbers"),
+  category("Addresses", "addresses"),
 ];
 
 export const balanceCategories: Array<Categories> = [
-  {
-    title: "Name",
-    field: "name",
-  },
-  {
-    title: "Current Balance",
-    field: "current",
-  },
-  {
-    title: "Available Balance",
-    field: "available",
-  },
-  {
-    title: "Subtype",
-    field: "subtype",
-  },
-  {
-    title: "Mask",
-    field: "mask",
-  },
+  category("Name", "name"),
+  category("Current Balance", "current"),
+  category("Available Balance", "available"),
+  category("Subtype", "subtype"),
+  category("Mask", "mask"),
 ];
 
 export const investmentsCategories: Array<Categories> = [
-  {
-    title: "Account Mask",
-    field: "mask",
-  },
-  {
-    title: "Name",
-    field: "name",
-  },
-  {
-    title: "Quantity",
-    field: "quantity",
-  },
-  {
-    title: "Close Price",
-    field: "price",
-  },
-  {
-    title: "Value",
-    field: "value",
-  },
+  category("Account Mask", "mask"),
+  category("Name", "name"),
+  category("Quantity", "quantity"),
+  category("Close Price", "price"),
+  category("Value", "value"),
 ];
 
 export const investmentsTransactionsCategories: Array<Categories> = [
-  {
-    title: "Name",
-    field: "name",
-  },
-  {
-    title: "Amount",
-    field: "amount",
-  },
-  {
-    title: "Date",
-    field: "date",
-  },
+  category("Name", "name"),
+  category("Amount", "amount"),
+  category("Date", "date"),
 ];
 
 export const liabilitiesCategories: Array<Categories> = [
-  {
-    title: "Name",
-    field: "name",
-  },
-  {
-    title: "Type",
-    field: "type",
-  },
-  {
-    title: "Last Payment Date",
-    field: "date",
-  },
-  {
-    title: "Last Payment Amount",
-    field: "amount",
-  },
+  category("Name", "name"),
+  category("Type", "type"),
+  category("Last Payment Date", "date"),
+  category("Last Payment Amount", "amount"),
 ];
 
 export const itemCategories: Array<Categories> = [
-  {
-    title: "Institution Name",
-    field: "name",
-  },
-  {
-    title: "Billed Products",
-    field: "billed",
-  },
-  {
-    title: "Available Products",
-    field: "available",
-  },
+  category("Institution Name", "name"),
+  category("Billed Products", "billed"),
+  category("Available Products", "available"),
 ];
 
 export const accountsCategories: Array<Categories> = [
-  {
-    title: "Name",
-    field: "name",
-  },
-  {
-    title: "Balance",
-    field: "balance",
-  },
-  {
-    title: "Subtype",
-    field: "subtype",
-  },
-  {
-    title: "Mask",
-    field: "mask",
-  },
+  category("Name", "name"),
+  category("Balance", "balance"),
+  category("Subtype", "subtype"),
+  category("Mask", "mask"),
 ];
 
 export const paymentCategories: Array<Categories> = [
-  {
-    title: "Payment ID",
-    field: "paymentId",
-  },
-  {
-    title: "Amount",
-    field: "amount",
-  },
-  {
-    title: "Status",
-    field: "status",
-  },
-  {
-    title: "Status Update",
-    field: "statusUpdate",
-  },
-  {
-    title: "Recipient ID",
-    field: "recipientId",
-  },
+  category("Payment ID", "paymentId"),
+  category("Amount", "amount"),
+  category("Status", "status"),
+  category("Status Update", "statusUpdate"),
+  category("Recipient ID", "recipientId"),
 ];
 
 export const assetsCategories: Array<Categories> = [
-  {
-    title: "Account",
-    field: "account",
-  },
-  {
-    title: "Transactions",
-    field: "transactions",
-  },
-  {
-    title: "Balance",
-    field: "balance",
-  },
-  {
-    title: "Days Available",
-    field: "daysAvailable",
-  },
+  category("Account", "account"),
+  category("Transactions", "transactions"),
+  category("Balance", "balance"),
+  category("Days Available", "daysAvailable"),
 ];
 
 export const transferCategories: Array<Categories> = [
-  {
-    title: "Transfer ID",
-    field: "transferId",
-  },
-  {
-    title: "Amount",
-    field: "amount",
-  },
-  {
-    title: "Type",
-    field: "type",
-  },
-  {
-    title: "ACH Class",
-    field: "achClass",
-  },
-  {
-    title: "Network",
-    field: "network",
-  },
-  {
-    title: "Status",
-    field: "status",
-  },
+  category("Transfer ID", "transferId"),
+  category("Amount", "amount"),
+  category("Type", "type"),
+  category("ACH Class", "achClass"),
+  category("Network", "network"),
+  category("Status", "status"),
 ];
 
 export const transferAuthorizationCategories: Array<Categories> = [
-  {
-    title: "Authorization ID",
-    field: "authorizationId",
-  },
-  {
-    title: "Authorization Decision",
-    field: "authorizationDecision",
-  },
-  {
-    title: "Decision rationale code",
-    field: "decisionRationaleCode",
-  },
-  {
-    title: "Decision rationale description",
-    field: "decisionRationaleDescription",
-  },
+  category("Authorization ID", "authorizationId"),
+  category("Authorization Decision", "authorizationDecision"),
+  category("Decision rationale code", "decisionRationaleCode"),
+  category("Decision rationale description", "decisionRationaleDescription"),
 ];
 
 export const signalCategories: Array<Categories> = [
-  {
-    title: "Current Balance",
-    field: "currentBalance",
-  },
-  {
-    title: "Available Balance",
-    field: "availableBalance",
-  },
-  {
-    title: "Ruleset evaluation outcome",
-    field: "rulesetOutcome",
-  },
-  {
-    title: "Fields to right returned for Signal Transaction Scores templates only ➡️",
-    field: "stsHeader",
-  },
-  {
-    title: "Customer Initiated Return Score",
-    field: "customerInitiatedReturnScore",
-  },
-  {
-    title: "Bank Initiated Return Score",
-    field: "bankInitiatedReturnScore",
-  },
-  {
-    title: "Sample core attribute: Days since first Plaid connection",
-    field: "daysSinceFirstPlaidConnection",
-  },
+  category("Current Balance", "currentBalance"),
+  category("Available Balance", "availableBalance"),
+  category("Ruleset evaluation outcome", "rulesetOutcome"),
+  category(
+    "Fields to right returned for Signal Transaction Scores templates only ➡️",
+    "stsHeader"
+  ),
+  category("Customer Initiated Return Score", "customerInitiatedReturnScore"),
+  category("Bank Initiated Return Score", "bankInitiatedReturnScore"),
+  category(
+    "Sample core attribute: Days since first Plaid connection",
+    "daysSinceFirstPlaidConnection"
+  ),
 ];
 
 export const statementsCategories: Array<Categories> = [
-  { 
-    title: "Account name",
-    field: "account"
-  },
-  {
-    title: "Statement Date",
-    field: "date"
-  }
+  category("Account name", "account"),
+  category("Statement Date", "date"),
 ];
 
 export const incomePaystubsCategories: Array<Categories> = [
-  {
-    title: "Description",
-    field: "description",
-  },
-  {
-    title: "Current Amount",
-    field: "currentAmount",
-  },
-  {
-    title: "Currency",
-    field: "currency",
-  },
+  category("Description", "description"),
+  category("Current Amount", "currentAmount"),
+  category("Currency", "currency"),
 ];
 
 
 export const checkReportBaseReportCategories: Array<Categories> = [
-  {
-    title: "Account Name",
-    field: "accountName"
-  },
-  {
-    title: "Balance",
-    field: "balance"
-  },
-  {
-    title: "Avg. Balance",
-    field: "averageBalance"
-  },
-  {
-    title: "Avg. Inflow Amount",
-    field: "averageInflowAmount"
-  },
-  {
-    title: "Avg. Outflow Amount",
-    field: "averageOutflowAmount"
-  },
-  {
-    title: "Avg. Days Between Transactions",
-    field: "averageDaysBetweenTransactions"
-  }
+  category("Account Name", "accountName"),
+  category("Balance", "balance"),
+  category("Avg. Balance", "averageBalance"),
+  category("Avg. Inflow Amount", "averageInflowAmount"),
+  category("Avg. Outflow Amount", "averageOutflowAmount"),
+  category("Avg. Days Between Transactions", "averageDaysBetweenTransactions"),
 ];
 
 export const checkReportInsightsCategories: Array<Categories> = [
-  {
-    title: "Income Sources",
-    field: "incomeSourcesCount",
-  },
-  {
-    title: "Historical Annual Income",
-    field: "historicalAnnualIncome",
-  },
-  {
-    title: "Forecasted Annual Income",
-    field: "forecastedAnnualIncome",
-  }
+  category("Income Sources", "incomeSourcesCount"),
+  category("Historical Annual Income", "historicalAnnualIncome"),
+  category("Forecasted Annual Income", "forecastedAnnualIncome"),
 ];
 
 export const checkReportPartnerInsightsCategories: Array<Categories> = [
-  {
-    title: "CashScore®",
-    field: "cashScore",
-  },
-  {
-    title: "FirstDetect Score",
-    field: "firstDetectScore",
-  }
+  category("CashScore®", "cashScore"),
+  category("FirstDetect Score", "firstDetectScore"),
 ];
 
 export const transformAuthData = (data: AuthGetResponse) => {
   return data.numbers.ach!.map((achNumbers) => {
-    const account = data.accounts!.filter((a) => {
-      return a.account_id === achNumbers.account_id;
-    })[0];
-    const balance: number | null | undefined =
-      account.balances.available || account.balances.current;
+    const account = findById(
+      data.accounts || [],
+      (a) => a.account_id,
+      achNumbers.account_id!
+    );
+    if (!account) {
+      return {
+        name: "",
+        balance: "no data",
+        account: achNumbers.account!,
+        routing: achNumbers.routing!,
+      };
+    }
     const obj: DataItem = {
       name: account.name,
-      balance: formatCurrency(balance, account.balances.iso_currency_code),
+      balance: formatAccountBalance(account),
       account: achNumbers.account!,
       routing: achNumbers.routing!,
     };
@@ -672,8 +466,14 @@ export const transformBalanceData = (data: AccountsGetResponse) => {
   return balanceData.map((account: AccountBase) => {
     const obj: DataItem = {
       name: account.name,
-      current: formatCurrency(account.balances.current, account.balances.iso_currency_code),
-      available: formatCurrency(account.balances.available, account.balances.iso_currency_code),
+      current: formatCurrency(
+        account.balances.current,
+        account.balances.iso_currency_code
+      ),
+      available: formatCurrency(
+        account.balances.available,
+        account.balances.iso_currency_code
+      ),
       subtype: account.subtype,
       mask: account.mask!,
     };
@@ -687,17 +487,27 @@ interface InvestmentData {
 }
 
 export const transformInvestmentsData = (data: InvestmentData) => {
-  const holdingsData = data.holdings.holdings!.sort(function (a, b) {
-    if (a.account_id > b.account_id) return 1;
-    return -1;
-  });
+  const holdingsData = sortByAccountId(data.holdings.holdings!);
   return holdingsData.map((holding) => {
-    const account = data.holdings.accounts!.filter(
-      (acc) => acc.account_id === holding.account_id
-    )[0];
-    const security = data.holdings.securities!.filter(
-      (sec) => sec.security_id === holding.security_id
-    )[0];
+    const account = findById(
+      data.holdings.accounts || [],
+      (acc) => acc.account_id,
+      holding.account_id
+    );
+    const security = findById(
+      data.holdings.securities || [],
+      (sec) => sec.security_id!,
+      holding.security_id!
+    );
+    if (!account || !security) {
+      return {
+        mask: "",
+        name: "",
+        quantity: formatCurrency(holding.quantity, ""),
+        price: "no data",
+        value: "no data",
+      };
+    }
     const value = holding.quantity * security.close_price!;
 
     const obj: DataItem = {
@@ -722,21 +532,18 @@ interface InvestmentsTransactionData {
 export const transformInvestmentTransactionsData = (
   data: InvestmentsTransactionData
 ) => {
-  const investmentTransactionsData =
-    data.investments_transactions.investment_transactions!.sort(function (
-      a,
-      b
-    ) {
-      if (a.account_id > b.account_id) return 1;
-      return -1;
-    });
+  const investmentTransactionsData = sortByAccountId(
+    data.investments_transactions.investment_transactions!
+  );
   return investmentTransactionsData.map((investmentTransaction) => {
-    const security = data.investments_transactions.securities!.filter(
-      (sec) => sec.security_id === investmentTransaction.security_id
-    )[0];
+    const security = findById(
+      data.investments_transactions.securities || [],
+      (sec) => sec.security_id!,
+      investmentTransaction.security_id!
+    );
 
     const obj: DataItem = {
-      name: security.name!,
+      name: security?.name || "",
       amount: investmentTransaction.amount,
       date: investmentTransaction.date,
     };
@@ -751,57 +558,39 @@ interface LiabilitiesDataResponse {
 
 export const transformLiabilitiesData = (data: LiabilitiesDataResponse) => {
   const liabilitiesData = data.liabilities.liabilities;
-  //console.log(liabilitiesData)
-  //console.log("random")
-  const credit = liabilitiesData.credit!.map((credit) => {
-    const account = data.liabilities.accounts.filter(
-      (acc) => acc.account_id === credit.account_id
-    )[0];
-    const obj: DataItem = {
-      name: account.name,
-      type: "credit card",
-      date: credit.last_payment_date ?? "",
-      amount: formatCurrency(
-        credit.last_payment_amount,
-        account.balances.iso_currency_code
-      ),
-    };
-    return obj;
-  });
+  const mapLiabilityGroup = <
+    T extends {
+      account_id: string;
+      last_payment_date?: string | null;
+      last_payment_amount?: number | null;
+    }
+  >(
+    entries: T[] | null | undefined,
+    typeLabel: string
+  ): DataItem[] => {
+    if (!entries) return [];
+    return entries.map((entry) => {
+      const account = findById(
+        data.liabilities.accounts,
+        (acc) => acc.account_id,
+        entry.account_id
+      );
+      return {
+        name: account?.name || "",
+        type: typeLabel,
+        date: entry.last_payment_date ?? "",
+        amount: formatCurrency(
+          entry.last_payment_amount,
+          account?.balances.iso_currency_code || null
+        ),
+      };
+    });
+  };
 
-  const mortgages = liabilitiesData.mortgage?.map((mortgage) => {
-    const account = data.liabilities.accounts.filter(
-      (acc) => acc.account_id === mortgage.account_id
-    )[0];
-    const obj: DataItem = {
-      name: account.name,
-      type: "mortgage",
-      date: mortgage.last_payment_date!,
-      amount: formatCurrency(
-        mortgage.last_payment_amount!,
-        account.balances.iso_currency_code
-      ),
-    };
-    return obj;
-  });
-
-  const student = liabilitiesData.student?.map((student) => {
-    const account = data.liabilities.accounts.filter(
-      (acc) => acc.account_id === student.account_id
-    )[0];
-    const obj: DataItem = {
-      name: account.name,
-      type: "student loan",
-      date: student.last_payment_date!,
-      amount: formatCurrency(
-        student.last_payment_amount!,
-        account.balances.iso_currency_code
-      ),
-    };
-    return obj;
-  });
-
-  return credit!.concat(mortgages!).concat(student!);
+  return []
+    .concat(mapLiabilityGroup(liabilitiesData.credit, "credit card"))
+    .concat(mapLiabilityGroup(liabilitiesData.mortgage, "mortgage"))
+    .concat(mapLiabilityGroup(liabilitiesData.student, "student loan"));
 };
 
 export const transformSignalData = (data: SignalEvaluateResponse) => {
@@ -879,11 +668,9 @@ export const transformItemData = (data: ItemData): Array<DataItem> => {
 export const transformAccountsData = (data: AccountsGetResponse) => {
   const accountsData = data.accounts;
   return accountsData.map((account) => {
-    const balance: number | null | undefined =
-      account.balances.available || account.balances.current;
     const obj: DataItem = {
       name: account.name,
-      balance: formatCurrency(balance, account.balances.iso_currency_code),
+      balance: formatAccountBalance(account),
       subtype: account.subtype,
       mask: account.mask!,
     };
@@ -922,11 +709,12 @@ export const transformAssetsData = (data: AssetResponseData) => {
   const assetItems = data.json.items;
   return assetItems.flatMap((item) => {
     return item.accounts.map((account) => {
-      const balance: number | null | undefined =
-        account.balances.available || account.balances.current;
       const obj: DataItem = {
         account: account.name,
-        balance: formatCurrency(balance, account.balances.iso_currency_code),
+        balance: formatCurrency(
+          account.balances.available || account.balances.current,
+          account.balances.iso_currency_code
+        ),
         transactions: account.transactions!.length,
         daysAvailable: account.days_available!,
       };
