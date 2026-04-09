@@ -1,0 +1,44 @@
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+/// Typed access to environment variables loaded from .env at startup.
+class EnvConfig {
+  EnvConfig._();
+
+  static late final EnvConfig instance;
+
+  static Future<void> load() async {
+    await dotenv.load(fileName: '.env');
+    final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
+    final supabaseKey = dotenv.env['SUPABASE_KEY'] ?? '';
+    final demoUserId = dotenv.env['DEMO_USER_ID'] ?? '';
+    final backendApiKey = dotenv.env['BACKEND_API_KEY'] ?? '';
+    if (supabaseUrl.isEmpty || supabaseKey.isEmpty) {
+      throw StateError(
+        'Missing SUPABASE_URL or SUPABASE_KEY. Set them in ssdemo_1/.env.',
+      );
+    }
+    if (demoUserId.isEmpty || backendApiKey.isEmpty) {
+      throw StateError(
+        'Missing DEMO_USER_ID or BACKEND_API_KEY. Set them in ssdemo_1/.env.',
+      );
+    }
+    instance = EnvConfig._()
+      .._supabaseUrl = supabaseUrl
+      .._supabaseKey = supabaseKey
+      .._demoUserId = demoUserId
+      .._backendApiKey = backendApiKey
+      .._backendUrl = dotenv.env['BACKEND_URL'] ?? 'http://127.0.0.1:8000';
+  }
+
+  late final String _supabaseUrl;
+  late final String _supabaseKey;
+  late final String _demoUserId;
+  late final String _backendApiKey;
+  late final String _backendUrl;
+
+  String get supabaseUrl => _supabaseUrl;
+  String get supabaseKey => _supabaseKey;
+  String get demoUserId => _demoUserId;
+  String get backendApiKey => _backendApiKey;
+  String get backendUrl => _backendUrl;
+}

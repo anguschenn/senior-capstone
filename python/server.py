@@ -32,6 +32,9 @@ from plaid.model.institutions_get_by_id_request import InstitutionsGetByIdReques
 from plaid.api import plaid_api
 
 from supabase import create_client
+from ai.chat_service import ChatService
+from ai.predict_service import PredictService
+from ai.validators import SimpleRateLimiter, clamp_str
 
 load_dotenv()
 
@@ -62,6 +65,8 @@ def empty_to_none(field):
 
 GEMINI_API_KEY = empty_to_none('GEMINI_API_KEY')
 GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-2.0-flash')
+APP_VERSION = os.getenv('APP_VERSION', '')
+GIT_SHA = os.getenv('GIT_SHA', '')
 
 try:
     import certifi
@@ -97,6 +102,10 @@ SPENDING_SNAPSHOT_CACHE_TTL_SECONDS = int(
 )
 _SPENDING_SNAPSHOT_CACHE = {}
 _SPENDING_SNAPSHOT_CACHE_LOCK = threading.Lock()
+AI_RATE_LIMITER = SimpleRateLimiter(
+    max_requests=int(os.getenv("AI_RATE_LIMIT_MAX_REQUESTS", "30")),
+    window_seconds=int(os.getenv("AI_RATE_LIMIT_WINDOW_SECONDS", "60")),
+)
 
 
 def _require_demo_identity():
@@ -128,7 +137,7 @@ def _get_stored_item_credentials():
     return access_token, item_id
 
 
-def _generate_gemini_reply(prompt):
+def _generate_gemini_reply(prompt, generation_config=None):
     if not GEMINI_API_KEY:
         raise RuntimeError("Missing GEMINI_API_KEY")
     endpoint = (
@@ -143,6 +152,8 @@ def _generate_gemini_reply(prompt):
             }
         ]
     }
+    if isinstance(generation_config, dict) and generation_config:
+        payload["generationConfig"] = generation_config
     req = urllib.request.Request(
         endpoint,
         data=json.dumps(payload).encode("utf-8"),
@@ -265,145 +276,17 @@ def _get_cached_spending_snapshot(user_id):
     return snapshot
 
 
-def _clamp_str(value, max_len):
-    if not isinstance(value, str):
-        return ""
-    return value.strip()[:max_len]
+def _ai_rate_key(endpoint_name):
+    remote = request.headers.get("x-forwarded-for", request.remote_addr or "unknown")
+    user_id = request.headers.get("x-user-id", DEMO_USER_ID or "demo")
+    return f"{endpoint_name}:{remote}:{user_id}"
 
 
-def _to_float(value, default=0.0):
-    try:
-        if isinstance(value, (int, float)):
-            return float(value)
-        return float(str(value))
-    except Exception:
-        return default
-
-
-def _sanitize_client_spending_summary(summary):
-    if not isinstance(summary, dict):
-        return None
-
-    cleaned = {}
-    cleaned["scope"] = _clamp_str(summary.get("scope", ""), 32)
-    cleaned["generated_at"] = _clamp_str(summary.get("generated_at", ""), 40)
-    window_days = int(_to_float(summary.get("window_days", 30), 30))
-    cleaned["window_days"] = max(1, min(window_days, 90))
-
-    totals = summary.get("totals")
-    if isinstance(totals, dict):
-        cleaned["totals"] = {
-            "income_30d": max(0.0, _to_float(totals.get("income_30d", 0))),
-            "expenses_30d": max(0.0, _to_float(totals.get("expenses_30d", 0))),
-            "net_30d": _to_float(totals.get("net_30d", 0)),
-            "tx_count_30d": max(0, int(_to_float(totals.get("tx_count_30d", 0)))),
-            "expense_tx_count_30d": max(0, int(_to_float(totals.get("expense_tx_count_30d", 0)))),
-            "income_month": max(0.0, _to_float(totals.get("income_month", 0))),
-            "expenses_month": max(0.0, _to_float(totals.get("expenses_month", 0))),
-            "net_month": _to_float(totals.get("net_month", 0)),
-        }
-
-    cleaned_categories = []
-    categories = summary.get("top_expense_categories")
-    if isinstance(categories, list):
-        for item in categories[:5]:
-            if not isinstance(item, dict):
-                continue
-            name = _clamp_str(item.get("category", ""), 64)
-            amount = max(0.0, _to_float(item.get("amount", 0)))
-            if not name:
-                continue
-            cleaned_categories.append({
-                "category": name,
-                "amount": amount,
-            })
-    cleaned["top_expense_categories"] = cleaned_categories
-
-    cleaned_recent = []
-    recent = summary.get("recent_transactions")
-    if isinstance(recent, list):
-        for item in recent[:5]:
-            if not isinstance(item, dict):
-                continue
-            date = _clamp_str(item.get("date", ""), 16)
-            name = _clamp_str(item.get("name", ""), 80)
-            category = _clamp_str(item.get("category", ""), 64)
-            amount = _to_float(item.get("amount", 0))
-            if not name:
-                continue
-            cleaned_recent.append({
-                "date": date,
-                "name": name,
-                "category": category,
-                "amount": amount,
-            })
-    cleaned["recent_transactions"] = cleaned_recent
-
-    cleaned_alerts = []
-    alerts = summary.get("budget_alerts")
-    if isinstance(alerts, list):
-        for item in alerts[:5]:
-            if not isinstance(item, dict):
-                continue
-            category = _clamp_str(item.get("category", ""), 64)
-            spent = max(0.0, _to_float(item.get("spent", 0)))
-            limit = max(0.0, _to_float(item.get("limit", 0)))
-            ratio = max(0.0, _to_float(item.get("ratio", 0)))
-            if not category:
-                continue
-            cleaned_alerts.append({
-                "category": category,
-                "spent": spent,
-                "limit": limit,
-                "ratio": ratio,
-            })
-    cleaned["budget_alerts"] = cleaned_alerts
-
-    has_signal = bool(
-        cleaned.get("totals")
-        or cleaned_categories
-        or cleaned_recent
-        or cleaned_alerts
-    )
-    return cleaned if has_signal else None
-
-
-def _format_client_summary_for_prompt(summary):
-    totals = summary.get("totals") or {}
-    categories = summary.get("top_expense_categories") or []
-    recent = summary.get("recent_transactions") or []
-    alerts = summary.get("budget_alerts") or []
-    scope = summary.get("scope", "unknown")
-    window_days = summary.get("window_days", 30)
-
-    category_text = "\n".join(
-        f"- {c.get('category')}: ${c.get('amount', 0):.2f}" for c in categories
-    ) or "- none"
-    recent_text = "\n".join(
-        f"- {r.get('date')} | {r.get('name')} | ${abs(r.get('amount', 0)):.2f} | {r.get('category') or 'Uncategorized'}"
-        for r in recent
-    ) or "- none"
-    alert_text = "\n".join(
-        f"- {a.get('category')}: spent ${a.get('spent', 0):.2f} / limit ${a.get('limit', 0):.2f} (ratio {a.get('ratio', 0):.2f})"
-        for a in alerts
-    ) or "- none"
-
-    return (
-        f"Snapshot source: frontend_summary\n"
-        f"- Scope: {scope}\n"
-        f"- Window: last {window_days} days\n"
-        f"- Income (30d): ${totals.get('income_30d', 0):.2f}\n"
-        f"- Expenses (30d): ${totals.get('expenses_30d', 0):.2f}\n"
-        f"- Net (30d): ${totals.get('net_30d', 0):.2f}\n"
-        f"- Transactions (30d): {totals.get('tx_count_30d', 0)}\n"
-        f"- Expense transactions (30d): {totals.get('expense_tx_count_30d', 0)}\n"
-        f"- Income (month): ${totals.get('income_month', 0):.2f}\n"
-        f"- Expenses (month): ${totals.get('expenses_month', 0):.2f}\n"
-        f"- Net (month): ${totals.get('net_month', 0):.2f}\n"
-        f"Top expense categories:\n{category_text}\n"
-        f"Recent transactions:\n{recent_text}\n"
-        f"Budget alerts:\n{alert_text}"
-    )
+_chat_service = ChatService(
+    generate_reply=_generate_gemini_reply,
+    get_detailed_snapshot=_get_cached_spending_snapshot,
+)
+_predict_service = PredictService(generate_reply=_generate_gemini_reply)
 
 
 @app.before_request
@@ -752,59 +635,91 @@ def item():
 
 @app.route('/api/ai/chat', methods=['POST'])
 def ai_chat():
+    if not AI_RATE_LIMITER.allow(_ai_rate_key("chat")):
+        return jsonify({"error": "Rate limit exceeded"}), 429
     body = request.get_json(silent=True) or {}
-    prompt = (body.get("prompt") or "").strip()
-    if not prompt:
-        return jsonify({"error": "Missing prompt"}), 400
-    if len(prompt) > 4000:
-        return jsonify({"error": "Prompt too long"}), 400
     try:
         user_id, _ = _require_demo_identity()
-        client_summary = _sanitize_client_spending_summary(body.get("spending_summary"))
-        if client_summary is not None:
-            spending_snapshot = _format_client_summary_for_prompt(client_summary)
-            context_source = "frontend_summary"
-        else:
-            spending_snapshot = _get_cached_spending_snapshot(user_id)
-            context_source = "server_snapshot"
-        enhanced_prompt = (
-            "You are a personal finance assistant for the app user. "
-            "Use the provided spending snapshot as the primary context. "
-            "Be concise, practical, and specific. If data is missing, say so clearly. "
-            "Do not claim access to data outside this snapshot. "
-            "Do not ask the user to provide spending data again. "
-            "If the snapshot is sparse, still provide best-effort guidance from available fields. "
-            "Respond in the same language as the user question.\n\n"
-            "Output format:\n"
-            "Insights:\n"
-            "1) ...\n"
-            "2) ...\n"
-            "3) ...\n"
-            "Actions:\n"
-            "1) ...\n"
-            "2) ...\n"
-            "3) ...\n"
-            "Keep each bullet short.\n\n"
-            "[SPENDING_SNAPSHOT]\n"
-            f"{spending_snapshot}\n\n"
-            "[CONTEXT_SOURCE]\n"
-            f"{context_source}\n\n"
-            "[USER_QUESTION]\n"
-            f"{prompt}"
-        )
-        reply = _generate_gemini_reply(enhanced_prompt)
-        return jsonify({"reply": reply, "context_source": context_source})
-    except urllib.error.HTTPError as e:
-        detail = ""
-        try:
-            detail = e.read().decode("utf-8")
-        except Exception:
-            detail = "<unreadable>"
-        print(f"Gemini HTTP error {e.code}: {detail}")
-        return jsonify({"error": "Gemini request failed"}), 502
+        response = _chat_service.handle_chat(body, user_id=user_id)
+        return jsonify(response)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
-        print(f"/api/ai/chat error: {e}")
-        return jsonify({"error": "Internal server error"}), 500
+        print(f"/api/ai/chat error: {type(e).__name__}: {e}")
+        return jsonify(
+            {
+                "reply": "I cannot process this request right now. Please try again.",
+                "intent": "general",
+                "context_source": "rule_fallback",
+                "used_summary": False,
+                "summary_meta": {"tx_count_30d": 0, "summary_empty": True},
+            }
+        ), 200
+
+
+@app.route('/api/ai/budget_suggest', methods=['POST'])
+def ai_budget_suggest():
+    # Compatibility adapter for existing Flutter callers.
+    if not AI_RATE_LIMITER.allow(_ai_rate_key("budget_suggest")):
+        return jsonify({"error": "Rate limit exceeded"}), 429
+    body = request.get_json(silent=True) or {}
+    predict_payload = {
+        "type": "budget_overrun_forecast",
+        "view_mode": clamp_str(body.get("view_mode", "month"), 16) or "month",
+        "spending_summary": body.get("spending_summary"),
+        "budget_progress": body.get("budget_progress"),
+    }
+    try:
+        response = _predict_service.handle_predict(predict_payload)
+        suggestions = {
+            "copy": response.get("copy", ""),
+            "alerts": response.get("alerts", []),
+            "actions": response.get("next_actions", []),
+            "confidence": response.get("confidence", 0.0),
+        }
+        context_source = "rule_fallback" if response.get("fallback_used") else "frontend_summary"
+        return jsonify({"suggestions": suggestions, "context_source": context_source})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        print(f"/api/ai/budget_suggest error: {type(e).__name__}: {e}")
+        return jsonify(
+            {
+                "suggestions": {
+                    "copy": "Unable to generate prediction now.",
+                    "alerts": [],
+                    "actions": [{"id": "retry", "label": "Retry in a moment"}],
+                    "confidence": 0.0,
+                },
+                "context_source": "rule_fallback",
+            }
+        ), 200
+
+
+@app.route('/api/ai/predict', methods=['POST'])
+def ai_predict():
+    if not AI_RATE_LIMITER.allow(_ai_rate_key("predict")):
+        return jsonify({"error": "Rate limit exceeded"}), 429
+    body = request.get_json(silent=True) or {}
+    try:
+        response = _predict_service.handle_predict(body)
+        return jsonify(response)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        print(f"/api/ai/predict error: {type(e).__name__}: {e}")
+        return jsonify(
+            {
+                "type": clamp_str((body or {}).get("type", "unknown"), 48) or "unknown",
+                "forecast": {},
+                "copy": "Unable to generate prediction now.",
+                "why": ["Unexpected internal failure."],
+                "alerts": [],
+                "next_actions": [{"id": "retry", "label": "Retry in a moment"}],
+                "confidence": 0.0,
+                "fallback_used": True,
+            }
+        ), 200
 
 
 @app.route('/api/ai/ping', methods=['GET'])
@@ -838,6 +753,16 @@ def ai_ping():
         }), 500
 
 
+@app.route('/api/health', methods=['GET'])
+def health():
+    return jsonify({
+        "ok": True,
+        "version": APP_VERSION,
+        "git_sha": GIT_SHA,
+        "model": GEMINI_MODEL,
+    })
+
+
 # ------------------------------------------------------------------ #
 #  Utilities                                                           #
 # ------------------------------------------------------------------ #
@@ -869,4 +794,7 @@ def format_error(e):
 
 
 if __name__ == '__main__':
-    app.run(port=int(os.getenv('PORT', 8000)))
+    app.run(
+        host=os.getenv('HOST', '127.0.0.1'),
+        port=int(os.getenv('PORT', 8000)),
+    )

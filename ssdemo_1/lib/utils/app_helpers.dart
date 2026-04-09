@@ -3,40 +3,9 @@ import 'package:flutter/material.dart';
 import '../constants/app_constants.dart';
 import '../models/app_models.dart';
 
-// Formats currency using the app's convention: positive spend, negative income.
-String formatMoney(double amount, {bool signed = true}) {
-  final absAmount = amount.abs().toStringAsFixed(2);
-  if (!signed) {
-    return '\$$absAmount';
-  }
-  final isIncome = amount < 0;
-  return '${isIncome ? '+' : '-'} \$$absAmount';
-}
+// Re-export formatters so existing imports keep working.
+export 'formatters.dart';
 
-// Short date formatter shared by transaction, subscription, and budget UIs.
-String shortDate(DateTime value, {bool alwaysShowYear = false}) {
-  const months = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
-  final now = DateTime.now();
-  final showYear = alwaysShowYear || value.year != now.year;
-  return showYear
-      ? '${months[value.month - 1]} ${value.day}, ${value.year}'
-      : '${months[value.month - 1]} ${value.day}';
-}
-
-// Keyword-based icon mapping for transaction rows.
 IconData iconForTransaction(String category, String merchant) {
   final key = '$category $merchant'.toLowerCase();
   if (key.contains('uber') || key.contains('transport') || key.contains('taxi')) {
@@ -57,7 +26,6 @@ IconData iconForTransaction(String category, String merchant) {
   return Icons.shopping_cart;
 }
 
-// Shared color mapping so category-related UI stays visually consistent.
 Color colorForDetailedCategory(String detailedCategory) {
   final key = detailedCategory.toLowerCase().trim();
   if (key.contains('food') || key.contains('drink') || key.contains('restaurant')) {
@@ -104,12 +72,6 @@ IconData iconForBudgetCategory(String category) {
   }
 }
 
-// Normalizes category labels so reviewed names and DB labels compare cleanly.
-String normalizeCategoryKey(String raw) {
-  return raw.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
-}
-
-// Resolves the masked account ending shown in transaction lists.
 String accountEndingForId(String accountId, List<AccountOption> accounts) {
   for (final account in accounts) {
     if (account.accountId == accountId) return account.ending;
@@ -118,19 +80,6 @@ String accountEndingForId(String accountId, List<AccountOption> accounts) {
   return '----';
 }
 
-// Converts machine-style category keys into user-facing labels.
-String prettifyCategoryLabel(String raw) {
-  final cleaned = raw.trim();
-  if (cleaned.isEmpty) return 'Uncategorized';
-  final spaced = cleaned.replaceAll('_', ' ').toLowerCase();
-  return spaced
-      .split(RegExp(r'\s+'))
-      .where((part) => part.isNotEmpty)
-      .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
-      .join(' ');
-}
-
-// Maps detailed Plaid/Supabase categories into the app's simplified budget buckets.
 String budgetCategoryFromPfc({
   required String pfcDetailed,
   required String pfcPrimary,
@@ -139,9 +88,7 @@ String budgetCategoryFromPfc({
   final primary = pfcPrimary.toLowerCase();
   final key = '$detailed $primary';
 
-  if (key.contains('airline') || key.contains('flight')) {
-    return 'Other';
-  }
+  if (key.contains('airline') || key.contains('flight')) return 'Other';
   if (key.contains('food') || key.contains('drink') || key.contains('restaurant')) {
     return 'Food';
   }
@@ -160,7 +107,6 @@ String budgetCategoryFromPfc({
   return 'Other';
 }
 
-// Bottom sheet used when the user manually re-categorizes a transaction.
 Future<void> showTransactionCategoryPicker({
   required BuildContext context,
   required AppTransaction tx,

@@ -16,3 +16,7 @@ BACKEND_URL=http://localhost:8000
 - Never commit your actual .env file
 - `BACKEND_URL` is the Python service base URL used by the Flutter app
 - access_token in plaid_items is sensitive, never log or expose it
+
+## Local backend
+Start the backend with the repo script so you always use the correct virtualenv:
+`./scripts/dev_backend.sh`
