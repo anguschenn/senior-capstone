@@ -10,8 +10,7 @@ import '../pages/cash_flow_page.dart';
 import '../pages/home_page.dart';
 import '../pages/subscriptions_page.dart';
 import '../pages/transactions_page.dart';
-import '../services/ai_summary_service.dart';
-import '../services/budget_service.dart';
+import '../services/financial_snapshot_service.dart';
 import '../widgets/ai_assistant/ai_assistant_button.dart';
 import '../widgets/ai_assistant/ai_assistant_panel.dart';
 
@@ -24,6 +23,18 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   final _ctrl = MainScreenController();
+
+  List<DateTime> _monthOptions(List<AppTransaction> txs) {
+    final monthSet = <DateTime>{};
+    for (final tx in txs) {
+      monthSet.add(DateTime(tx.date.year, tx.date.month, 1));
+    }
+    monthSet.add(
+      DateTime(_ctrl.selectedMonth.year, _ctrl.selectedMonth.month, 1),
+    );
+    final sorted = monthSet.toList()..sort((a, b) => b.compareTo(a));
+    return sorted;
+  }
 
   @override
   void initState() {
@@ -45,99 +56,73 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     final c = _ctrl;
-    final visibleTransactions = c.selectedAccountId == kAllAccountsId
-        ? c.liveTransactions
-        : c.liveTransactions
-              .where((tx) => tx.accountId == c.selectedAccountId)
-              .toList();
-    final visibleSubscriptions = c.liveSubscriptions;
-    final now = DateTime.now();
-    final visibleBudgetProgress = c.selectedAccountId == kAllAccountsId
-        ? c.liveBudgetProgress
-        : BudgetService.instance.presetBudgetProgress(
-            visibleTransactions, now, false, c.reviewedCategoryByTxId);
-    final visibleBudgetProgressYear = c.selectedAccountId == kAllAccountsId
-        ? c.liveBudgetProgressYear
-        : BudgetService.instance.presetBudgetProgress(
-            visibleTransactions, now, true, c.reviewedCategoryByTxId);
-    final visibleBudgetProgressAll = c.selectedAccountId == kAllAccountsId
-        ? c.liveBudgetProgressAll
-        : BudgetService.instance.presetBudgetProgressAllTime(
-            visibleTransactions, now, c.reviewedCategoryByTxId);
-
-    double visibleIncome = 0;
-    double visibleExpenses = 0;
-    for (final tx in visibleTransactions) {
-      if (tx.date.year == now.year && tx.date.month == now.month) {
-        if (tx.amount < 0) {
-          visibleIncome += tx.amount.abs();
-        } else {
-          visibleExpenses += tx.amount;
-        }
-      }
-    }
-    final selectedBalance = c.selectedAccountId == kAllAccountsId
-        ? c.liveStats.totalBalance
-        : (() {
-            for (final account in c.liveAccountOptions) {
-              if (account.accountId == c.selectedAccountId) {
-                return account.balance;
-              }
-            }
-            return 0.0;
-          })();
-    final visibleStats = DashboardStats(
-      totalBalance: selectedBalance,
-      monthlyIncome: visibleIncome,
-      monthlyExpenses: visibleExpenses,
-      netThisMonth: visibleIncome - visibleExpenses,
+    final snapshot = FinancialSnapshotService.instance.build(
+      c,
+      targetMonth: c.selectedMonth,
     );
+    final visibleTransactions = snapshot.transactions;
+    final visibleSubscriptions = snapshot.subscriptions;
+    final visibleBudgetProgress = snapshot.budgetProgress;
+    final visibleBudgetProgressYear = snapshot.budgetProgressYear;
+    final visibleBudgetProgressAll = snapshot.budgetProgressAll;
+    final visibleStats = snapshot.stats;
+    final spendingSummary = snapshot.spendingSummary;
+    final monthOptions = _monthOptions(visibleTransactions);
 
     final body = switch (c.tabIndex) {
       0 => HomePage(
-          transactions: visibleTransactions.take(3).toList(),
-          lowConfidenceTransactions: visibleTransactions,
-          subscriptions: visibleSubscriptions.take(3).toList(),
-          monthlySubscriptionTotal: visibleSubscriptions.fold<double>(
-            0,
-            (sum, item) => sum + item.amount,
-          ),
-          stats: visibleStats,
-          syncing: c.syncing,
-          syncStatus: c.syncStatus,
-          onConnectPlaid: c.connectPlaidAndPullData,
-          onRefreshLiveData: c.refreshLiveDataOnly,
-          onClearLiveData: c.clearLiveData,
-          accountOptions: c.liveAccountOptions,
-          selectedAccountId: c.selectedAccountId,
-          reviewedCategoryByTxId: c.reviewedCategoryByTxId,
-          confirmedReviewTxIds: c.confirmedReviewTxIds,
-          onAccountChanged: c.selectAccount,
-          onTransactionCategorySelected: c.onTransactionCategorySelected,
-          onReviewConfirm: c.confirmReviewedCategory,
+        transactions: visibleTransactions,
+        lowConfidenceTransactions: visibleTransactions,
+        subscriptions: visibleSubscriptions.take(3).toList(),
+        monthlySubscriptionTotal: visibleSubscriptions.fold<double>(
+          0,
+          (sum, item) => sum + item.amount,
         ),
-      1 => CashFlowPage(transactions: visibleTransactions),
+        stats: visibleStats,
+        syncing: c.syncing,
+        syncStatus: c.syncStatus,
+        onConnectPlaid: c.connectPlaidAndPullData,
+        onRefreshLiveData: c.refreshLiveDataOnly,
+        onClearLiveData: c.clearLiveData,
+        accountOptions: c.liveAccountOptions,
+        selectedAccountId: c.selectedAccountId,
+        reviewedCategoryByTxId: c.reviewedCategoryByTxId,
+        confirmedReviewTxIds: c.confirmedReviewTxIds,
+        onAccountChanged: c.selectAccount,
+        selectedMonth: c.selectedMonth,
+        monthOptions: monthOptions,
+        onMonthChanged: c.selectMonth,
+        onTransactionCategorySelected: c.onTransactionCategorySelected,
+        onReviewConfirm: c.confirmReviewedCategory,
+      ),
+      1 => CashFlowPage(
+        transactions: visibleTransactions,
+        selectedMonth: c.selectedMonth,
+        monthOptions: monthOptions,
+        onMonthChanged: c.selectMonth,
+      ),
       2 => TransactionsPage(
-          transactions: visibleTransactions,
-          accountOptions: c.liveAccountOptions,
-          reviewedCategoryByTxId: c.reviewedCategoryByTxId,
-          onTransactionCategorySelected: c.onTransactionCategorySelected,
-        ),
+        transactions: visibleTransactions,
+        accountOptions: c.liveAccountOptions,
+        selectedMonth: c.selectedMonth,
+        monthOptions: monthOptions,
+        onMonthChanged: c.selectMonth,
+        reviewedCategoryByTxId: c.reviewedCategoryByTxId,
+        onTransactionCategorySelected: c.onTransactionCategorySelected,
+      ),
       3 => BudgetPage(
-          stats: visibleStats,
-          budgetProgress: visibleBudgetProgress,
-          budgetProgressYear: visibleBudgetProgressYear,
-          budgetProgressAll: visibleBudgetProgressAll,
-          onUpdateBudgetLimit: c.updateBudgetLimit,
-          aiBudgetSuggestApiUri: ApiConfig.instance.aiBudgetSuggestUri,
-          apiKey: EnvConfig.instance.backendApiKey,
-          spendingSummary: AiSummaryService.instance.build(
-            transactions: visibleTransactions,
-            budgetProgress: visibleBudgetProgress,
-            stats: visibleStats,
-            selectedAccountId: c.selectedAccountId,
-          ),
-        ),
+        stats: visibleStats,
+        budgetProgress: visibleBudgetProgress,
+        budgetProgressYear: visibleBudgetProgressYear,
+        budgetProgressAll: visibleBudgetProgressAll,
+        onUpdateBudgetLimit: c.updateBudgetLimit,
+        aiBudgetSuggestApiUri: ApiConfig.instance.aiBudgetSuggestUri,
+        apiKey: EnvConfig.instance.backendApiKey,
+        spendingSummary: spendingSummary,
+        selectedMonth: c.selectedMonth,
+        monthOptions: monthOptions,
+        onMonthChanged: c.selectMonth,
+      ),
       _ => SubscriptionsPage(subscriptions: visibleSubscriptions),
     };
 
@@ -150,15 +135,22 @@ class _MainScreenState extends State<MainScreen> {
             onDestinationSelected: c.selectTab,
             destinations: const [
               NavigationDestination(
-                  icon: Icon(Icons.home_outlined), label: 'Home'),
+                icon: Icon(Icons.home_outlined),
+                label: 'Home',
+              ),
+              NavigationDestination(icon: Icon(Icons.bar_chart), label: 'Flow'),
               NavigationDestination(
-                  icon: Icon(Icons.bar_chart), label: 'Flow'),
+                icon: Icon(Icons.receipt_long),
+                label: 'Activity',
+              ),
               NavigationDestination(
-                  icon: Icon(Icons.receipt_long), label: 'Activity'),
+                icon: Icon(Icons.pie_chart_outline),
+                label: 'Budget',
+              ),
               NavigationDestination(
-                  icon: Icon(Icons.pie_chart_outline), label: 'Budget'),
-              NavigationDestination(
-                  icon: Icon(Icons.subscriptions_outlined), label: 'Subs'),
+                icon: Icon(Icons.subscriptions_outlined),
+                label: 'Subs',
+              ),
             ],
           ),
         ),
@@ -167,6 +159,27 @@ class _MainScreenState extends State<MainScreen> {
           bottom: 96,
           child: AIAssistantButton(
             onTap: () {
+              final summariesByAccount = <String, Map<String, dynamic>>{
+                kAllAccountsId: FinancialSnapshotService.instance
+                    .buildForAccount(
+                      c,
+                      kAllAccountsId,
+                      targetMonth: c.selectedMonth,
+                      useLinkedAccounts: true,
+                    )
+                    .spendingSummary,
+              };
+              for (final option in c.liveAccountOptions) {
+                summariesByAccount[option.accountId] = FinancialSnapshotService
+                    .instance
+                    .buildForAccount(
+                      c,
+                      option.accountId,
+                      targetMonth: c.selectedMonth,
+                      useLinkedAccounts: true,
+                    )
+                    .spendingSummary;
+              }
               showModalBottomSheet(
                 context: context,
                 isScrollControlled: true,
@@ -174,12 +187,9 @@ class _MainScreenState extends State<MainScreen> {
                 builder: (context) => AIAssistantPanel(
                   chatApiUri: ApiConfig.instance.aiChatUri,
                   apiKey: EnvConfig.instance.backendApiKey,
-                  spendingSummary: AiSummaryService.instance.build(
-                    transactions: visibleTransactions,
-                    budgetProgress: visibleBudgetProgress,
-                    stats: visibleStats,
-                    selectedAccountId: c.selectedAccountId,
-                  ),
+                  accountOptions: c.liveAccountOptions,
+                  initialAccountId: c.selectedAccountId,
+                  spendingSummaryByAccount: summariesByAccount,
                 ),
               );
             },

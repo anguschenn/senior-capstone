@@ -1,5 +1,3 @@
-import 'package:flutter/material.dart';
-
 import '../utils/app_helpers.dart';
 
 // Normalized transaction model used by the UI after reading raw Supabase rows.
@@ -165,6 +163,7 @@ class AccountOption {
     required this.ending,
     required this.balance,
     required this.txCount,
+    required this.linkedAccountIds,
   });
 
   final String accountId;
@@ -172,37 +171,5 @@ class AccountOption {
   final String ending;
   final double balance;
   final int txCount;
-}
-
-// Reusable pill tag used to show or edit a transaction category.
-class TransactionCategoryTag extends StatelessWidget {
-  const TransactionCategoryTag({
-    super.key,
-    required this.label,
-    this.colorKey,
-  });
-
-  final String label;
-  final String? colorKey;
-
-  @override
-  Widget build(BuildContext context) {
-    final tone = colorForDetailedCategory(colorKey ?? label);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: tone.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: tone.withValues(alpha: 0.3)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: tone,
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
+  final List<String> linkedAccountIds;
 }

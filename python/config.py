@@ -5,7 +5,9 @@ import threading
 
 from dotenv import load_dotenv
 
-load_dotenv()
+# Ensure project-local python/.env values win over inherited shell variables.
+# This avoids accidental overrides from global env placeholders (e.g. SUPABASE_KEY=placeholder_key).
+load_dotenv(override=True)
 
 
 def _empty_to_none(field: str):
@@ -31,9 +33,9 @@ PLAID_PRODUCTS = os.getenv("PLAID_PRODUCTS", "transactions").split(",")
 PLAID_COUNTRY_CODES = os.getenv("PLAID_COUNTRY_CODES", "US").split(",")
 PLAID_REDIRECT_URI = _empty_to_none("PLAID_REDIRECT_URI")
 
-# ── Gemini ───────────────────────────────────────────────────────────
-GEMINI_API_KEY = _empty_to_none("GEMINI_API_KEY")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+# ── AI model providers ───────────────────────────────────────────────
+OLLAMA_MODEL = _empty_to_none("OLLAMA_MODEL") or "llama3"
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
 
 # ── Demo identity ────────────────────────────────────────────────────
 DEMO_USER_ID = _empty_to_none("DEMO_USER_ID")
@@ -50,3 +52,8 @@ _SPENDING_SNAPSHOT_CACHE_LOCK = threading.Lock()
 # ── Rate limiting ────────────────────────────────────────────────────
 AI_RATE_LIMIT_PER_MINUTE = int(os.getenv("AI_RATE_LIMIT_PER_MINUTE", "12"))
 AI_MAX_REQUEST_BYTES = int(os.getenv("AI_MAX_REQUEST_BYTES", "16384"))  # 16 KB
+
+# ── App metadata / runtime ───────────────────────────────────────────
+APP_VERSION = os.getenv("APP_VERSION", "")
+GIT_SHA = os.getenv("GIT_SHA", "")
+HOST = os.getenv("HOST", "127.0.0.1")

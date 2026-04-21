@@ -26,6 +26,11 @@ class MainScreenController extends ChangeNotifier {
   Map<String, String> reviewedCategoryByTxId = const {};
   Set<String> confirmedReviewTxIds = const {};
   String selectedAccountId = kAllAccountsId;
+  DateTime selectedMonth = DateTime(
+    DateTime.now().year,
+    DateTime.now().month,
+    1,
+  );
   DashboardStats liveStats = const DashboardStats(
     totalBalance: 0,
     monthlyIncome: 0,
@@ -45,17 +50,24 @@ class MainScreenController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void selectMonth(DateTime month) {
+    selectedMonth = DateTime(month.year, month.month, 1);
+    notifyListeners();
+  }
+
   Future<void> refreshLiveDataOnly() async {
     if (syncing) return;
     syncing = true;
     syncStatus = 'Refreshing from DB...';
     notifyListeners();
     try {
-      final result = await SyncService.instance
-          .refreshFromSupabase(reviewedCategoryByTxId);
+      final result = await SyncService.instance.refreshFromSupabase(
+        reviewedCategoryByTxId,
+      );
       _applySyncResult(result);
-      syncStatus =
-          result.hasData ? 'Connected: using database data' : 'No DB data yet';
+      syncStatus = result.hasData
+          ? 'Connected: using database data'
+          : 'No DB data yet';
     } catch (e) {
       syncStatus = 'Refresh failed: $e';
     } finally {
@@ -73,8 +85,9 @@ class MainScreenController extends ChangeNotifier {
     await SyncService.instance.triggerPlaidSync();
 
     try {
-      final result = await SyncService.instance
-          .refreshFromSupabase(reviewedCategoryByTxId);
+      final result = await SyncService.instance.refreshFromSupabase(
+        reviewedCategoryByTxId,
+      );
       _applySyncResult(result);
       syncStatus = result.hasData
           ? 'Connected: using database data'
@@ -98,6 +111,7 @@ class MainScreenController extends ChangeNotifier {
     reviewedCategoryByTxId = const {};
     confirmedReviewTxIds = const {};
     selectedAccountId = kAllAccountsId;
+    selectedMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
     liveStats = const DashboardStats(
       totalBalance: 0,
       monthlyIncome: 0,
@@ -180,11 +194,22 @@ class MainScreenController extends ChangeNotifier {
 
   void _rebuildBudgetProgress() {
     final now = DateTime.now();
-    liveBudgetProgress = BudgetService.instance
-        .presetBudgetProgress(liveTransactions, now, false, reviewedCategoryByTxId);
-    liveBudgetProgressYear = BudgetService.instance
-        .presetBudgetProgress(liveTransactions, now, true, reviewedCategoryByTxId);
-    liveBudgetProgressAll = BudgetService.instance
-        .presetBudgetProgressAllTime(liveTransactions, now, reviewedCategoryByTxId);
+    liveBudgetProgress = BudgetService.instance.presetBudgetProgress(
+      liveTransactions,
+      now,
+      false,
+      reviewedCategoryByTxId,
+    );
+    liveBudgetProgressYear = BudgetService.instance.presetBudgetProgress(
+      liveTransactions,
+      now,
+      true,
+      reviewedCategoryByTxId,
+    );
+    liveBudgetProgressAll = BudgetService.instance.presetBudgetProgressAllTime(
+      liveTransactions,
+      now,
+      reviewedCategoryByTxId,
+    );
   }
 }

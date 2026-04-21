@@ -1,7 +1,7 @@
 import datetime as dt
-import json
 
 from .explainers import build_predict_explainer_prompt
+from .parsers import extract_json_object
 from .schemas import build_predict_response
 from .validators import (
     sanitize_spending_summary,
@@ -14,29 +14,13 @@ from .validators import (
 
 
 class PredictService:
+    """Builds deterministic forecasts and optional AI explanations."""
+
     def __init__(self, generate_reply):
         self.generate_reply = generate_reply
 
-    def _extract_json_object(self, text):
-        if not isinstance(text, str):
-            return None
-        stripped = text.strip()
-        if not stripped:
-            return None
-        try:
-            return json.loads(stripped)
-        except Exception:
-            pass
-        start = stripped.find("{")
-        end = stripped.rfind("}")
-        if start >= 0 and end > start:
-            try:
-                return json.loads(stripped[start : end + 1])
-            except Exception:
-                return None
-        return None
-
     def _data_score(self, summary, mode):
+        """Estimate data coverage quality from transaction counts."""
         totals = (summary or {}).get("totals") or {}
         annual = (summary or {}).get("annual_summary") or {}
         annual_totals = annual.get("totals") if isinstance(annual, dict) else {}
@@ -61,22 +45,27 @@ class PredictService:
             return 0.6
         return 0.3
 
-    def _budget_overrun(self, view_mode, summary, budget_progress):
+    def _budget_overrun(self, view_mode, budget_progress):
+        """Compute budget overrun risk from category spend/limit ratios."""
         ranked = sorted(budget_progress or [], key=lambda x: x.get("ratio", 0), reverse=True)
         at_risk = []
         estimated_overrun = 0.0
         max_ratio = 0.0
+        has_spend_signal = False
         for item in ranked[:10]:
+            spent = max(0.0, to_float(item.get("spent", 0)))
             ratio = max(0.0, to_float(item.get("ratio", 0)))
+            if spent > 0:
+                has_spend_signal = True
             max_ratio = max(max_ratio, ratio)
             if ratio >= 0.8:
-                overrun = max(0.0, to_float(item.get("spent", 0)) - to_float(item.get("limit", 0)))
+                overrun = max(0.0, spent - to_float(item.get("limit", 0)))
                 estimated_overrun += overrun
                 at_risk.append(
                     {
                         "category": item.get("category"),
                         "ratio": round(ratio, 2),
-                        "spent": round(to_float(item.get("spent", 0)), 2),
+                        "spent": round(spent, 2),
                         "limit": round(to_float(item.get("limit", 0)), 2),
                     }
                 )
@@ -98,15 +87,22 @@ class PredictService:
             {"id": f"cap_{item['category'].lower().replace(' ', '_')}", "label": f"Cap {item['category']} spending this week"}
             for item in at_risk[:3]
         ]
+        if not next_actions and has_spend_signal:
+            # Baseline actions for low-risk periods: still actionable without overreacting.
+            next_actions = [
+                {"id": "monitor_weekly", "label": "Monitor top category weekly"},
+                {"id": "review_before_cycle", "label": "Review top spending category before next cycle"},
+            ]
         why = [
             "Forecast uses deterministic budget ratio thresholds.",
             "Categories at or above 80% are treated as at-risk.",
         ]
         signal = min(1.0, max(0.2, max_ratio / 1.2))
-        sufficient = len(at_risk) > 0 or len(budget_progress) >= 3
+        sufficient = has_spend_signal or len(at_risk) > 0
         return forecast, why, alerts, next_actions, signal, sufficient
 
     def _subscription_cost(self, summary, subscriptions):
+        """Normalize recurring charges to monthly/annual cost projections."""
         factors = {"monthly": 1.0, "yearly": 1.0 / 12.0, "weekly": 52.0 / 12.0, "daily": 30.0}
         monthly_total = 0.0
         top = []
@@ -144,6 +140,7 @@ class PredictService:
         return forecast, why, alerts[:3], next_actions[:3], signal, sufficient
 
     def _savings_goal(self, summary, goal):
+        """Project goal timeline using deterministic contribution pace."""
         target_amount = to_float(goal.get("target_amount", 0))
         current_savings = to_float(goal.get("current_savings", 0))
         monthly_contribution = to_float(goal.get("monthly_contribution", 0))
@@ -200,7 +197,14 @@ class PredictService:
         return forecast, why, alerts[:3], next_actions[:3], signal, sufficient
 
     def _rule_explanation(self, predict_type, forecast):
+        """Rule-based explanation used in simplified mode and as fallback."""
         if predict_type == "budget_overrun_forecast":
+            at_risk_count = int(forecast.get("at_risk_count", 0) or 0)
+            if at_risk_count <= 0:
+                return (
+                    "Current budget overrun risk is low; no categories are near the warning threshold.",
+                    ["No category has reached the 80% budget-usage risk threshold."],
+                )
             return (
                 f"At-risk categories: {forecast.get('at_risk_count', 0)}; "
                 f"estimated overrun ${forecast.get('estimated_overrun_total', 0):.0f}.",
@@ -217,8 +221,10 @@ class PredictService:
         )
 
     def handle_predict(self, payload):
+        """Main predict pipeline: sanitize input, forecast, optionally LLM-explain."""
         payload = payload or {}
         predict_type = clamp_str(payload.get("type", ""), 48)
+        simplified = bool(payload.get("simplified", False))
         if predict_type not in (
             "budget_overrun_forecast",
             "subscription_cost_forecast",
@@ -237,7 +243,7 @@ class PredictService:
 
         if predict_type == "budget_overrun_forecast":
             forecast, why, alerts, next_actions, signal_strength, sufficient = self._budget_overrun(
-                view_mode, summary, budget_progress
+                view_mode, budget_progress
             )
         elif predict_type == "subscription_cost_forecast":
             forecast, why, alerts, next_actions, signal_strength, sufficient = self._subscription_cost(
@@ -251,7 +257,18 @@ class PredictService:
         data_score = self._data_score(summary, view_mode)
         confidence = round(max(0.0, min(1.0, data_score * signal_strength)), 2)
 
-        if not sufficient or confidence < 0.2:
+        has_budget_spend_signal = any(
+            to_float(item.get("spent", 0)) > 0 for item in budget_progress
+        )
+        allow_low_confidence_budget_summary = (
+            simplified
+            and predict_type == "budget_overrun_forecast"
+            and len(budget_progress) >= 1
+            and has_budget_spend_signal
+        )
+
+        if not sufficient or (confidence < 0.2 and not allow_low_confidence_budget_summary):
+            # Deterministic low-data guardrail: return safe response instead of overconfident advice.
             copy = "Not enough data to generate a reliable forecast for this request."
             return build_predict_response(
                 predict_type=predict_type,
@@ -272,29 +289,32 @@ class PredictService:
             "confidence": confidence,
         }
 
-        fallback_used = False
+        fallback_used = simplified
         copy, why_out = self._rule_explanation(predict_type, forecast)
-        try:
-            prompt = build_predict_explainer_prompt(
-                predict_type=predict_type,
-                deterministic_payload=deterministic_payload,
-                summary=summary,
-                view_mode=view_mode,
-            )
-            reply = self.generate_reply(
-                prompt,
-                generation_config={"temperature": 0.2, "maxOutputTokens": 220, "responseMimeType": "application/json"},
-            )
-            parsed = self._extract_json_object(reply)
-            if isinstance(parsed, dict):
-                maybe_copy = clamp_str(parsed.get("copy", ""), 220)
-                if maybe_copy:
-                    copy = maybe_copy
-                raw_why = parsed.get("why")
-                if isinstance(raw_why, list):
-                    why_out = [clamp_str(item, 160) for item in raw_why if isinstance(item, str) and item.strip()][:3] or why_out
-        except Exception:
-            fallback_used = True
+        if not simplified:
+            try:
+                # Non-simplified mode asks the model to rewrite deterministic outputs in natural language.
+                prompt = build_predict_explainer_prompt(
+                    predict_type=predict_type,
+                    deterministic_payload=deterministic_payload,
+                    summary=summary,
+                    view_mode=view_mode,
+                )
+                reply = self.generate_reply(
+                    prompt,
+                    generation_config={"temperature": 0.2, "maxOutputTokens": 220, "responseMimeType": "application/json"},
+                )
+                parsed = extract_json_object(reply)
+                if isinstance(parsed, dict):
+                    maybe_copy = clamp_str(parsed.get("copy", ""), 220)
+                    if maybe_copy:
+                        copy = maybe_copy
+                    raw_why = parsed.get("why")
+                    if isinstance(raw_why, list):
+                        why_out = [clamp_str(item, 160) for item in raw_why if isinstance(item, str) and item.strip()][:3] or why_out
+            except Exception:
+                # Keep deterministic output when LLM rewrite fails.
+                fallback_used = True
 
         return build_predict_response(
             predict_type=predict_type,
@@ -306,4 +326,3 @@ class PredictService:
             confidence=confidence,
             fallback_used=fallback_used,
         )
-

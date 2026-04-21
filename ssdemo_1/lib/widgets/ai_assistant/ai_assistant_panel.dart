@@ -1,57 +1,18 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
 
-/// Structured AI response — both chat and budget use this shape.
-class _AiResponse {
-  _AiResponse({
-    required this.copy,
-    this.insights = const [],
-    this.actions = const [],
-    this.confidence = 'medium',
-    this.contextSource = '',
-  });
-
-  final String copy;
-  final List<String> insights;
-  final List<String> actions;
-  final String confidence;
-  final String contextSource;
-
-  static const int maxFieldLength = 500;
-
-  static _AiResponse fromJson(Map<String, dynamic> json) {
-    return _AiResponse(
-      copy: _clamp(json['copy']?.toString() ?? '', maxFieldLength),
-      insights: _parseList(json['insights']),
-      actions: _parseList(json['actions']),
-      confidence: json['confidence']?.toString() ?? 'medium',
-      contextSource: json['context_source']?.toString() ?? '',
-    );
-  }
-
-  static String _clamp(String s, int maxLen) =>
-      s.length > maxLen ? '${s.substring(0, maxLen)}…' : s;
-
-  static List<String> _parseList(dynamic raw) {
-    if (raw is! List) return const [];
-    return raw
-        .whereType<String>()
-        .where((s) => s.trim().isNotEmpty)
-        .take(3)
-        .map((s) => _clamp(s.trim(), 200))
-        .toList();
-  }
-}
+import '../../constants/app_constants.dart';
+import '../../models/ai/ai_models.dart';
+import '../../models/app_models.dart';
+import '../../services/ai_api_client.dart';
+import 'ai_response_card.dart';
 
 /// Single chat turn: user prompt + optional structured response.
 class _ChatTurn {
   _ChatTurn({required this.prompt, this.response, this.error});
 
   final String prompt;
-  final _AiResponse? response;
+  final AiChatResponse? response;
   final String? error;
 }
 
@@ -60,28 +21,111 @@ class AIAssistantPanel extends StatefulWidget {
     super.key,
     required this.chatApiUri,
     required this.apiKey,
-    required this.spendingSummary,
+    required this.accountOptions,
+    required this.initialAccountId,
+    required this.spendingSummaryByAccount,
   });
 
   final Uri chatApiUri;
   final String apiKey;
-  final Map<String, dynamic> spendingSummary;
+  final List<AccountOption> accountOptions;
+  final String initialAccountId;
+  final Map<String, Map<String, dynamic>> spendingSummaryByAccount;
 
   @override
   State<AIAssistantPanel> createState() => _AIAssistantPanelState();
 }
 
 class _AIAssistantPanelState extends State<AIAssistantPanel> {
+  static const int _maxCachedTurns = 6;
+  static const Duration _cacheTtl = Duration(minutes: 20);
+  static final Map<String, List<_ChatTurn>> _cachedTurnsByKey =
+      <String, List<_ChatTurn>>{};
+  static final Map<String, DateTime> _cachedAtByKey = <String, DateTime>{};
+  static const _client = AiApiClient();
+
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final List<_ChatTurn> _turns = [];
+  String? _selectedAccountId;
   bool _sending = false;
 
   @override
+  void initState() {
+    super.initState();
+    _selectedAccountId =
+        widget.spendingSummaryByAccount.containsKey(widget.initialAccountId)
+        ? widget.initialAccountId
+        : kAllAccountsId;
+    _restoreTurnsFromCache();
+  }
+
+  @override
   void dispose() {
+    _persistTurnsToCache();
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _restoreTurnsFromCache() {
+    final key = _cacheKey;
+    final cachedTurns = _cachedTurnsByKey[key];
+    final cachedAt = _cachedAtByKey[key];
+    if (cachedTurns == null || cachedAt == null) return;
+    if (DateTime.now().difference(cachedAt) > _cacheTtl) {
+      _cachedTurnsByKey.remove(key);
+      _cachedAtByKey.remove(key);
+      return;
+    }
+    _turns
+      ..clear()
+      ..addAll(cachedTurns);
+    _scrollToBottom();
+  }
+
+  void _persistTurnsToCache() {
+    final key = _cacheKey;
+    final successfulTurns = _turns
+        .where((turn) => turn.response != null)
+        .toList();
+    final start = successfulTurns.length > _maxCachedTurns
+        ? successfulTurns.length - _maxCachedTurns
+        : 0;
+    _cachedTurnsByKey[key] = successfulTurns.sublist(start);
+    _cachedAtByKey[key] = DateTime.now();
+  }
+
+  String get _resolvedAccountId {
+    final candidate = _selectedAccountId;
+    if (candidate != null &&
+        widget.spendingSummaryByAccount.containsKey(candidate)) {
+      return candidate;
+    }
+    return kAllAccountsId;
+  }
+
+  String get _cacheKey => '${widget.chatApiUri.origin}|$_resolvedAccountId';
+
+  Map<String, dynamic> get _activeSummary {
+    return widget.spendingSummaryByAccount[_resolvedAccountId] ??
+        widget.spendingSummaryByAccount[kAllAccountsId] ??
+        const <String, dynamic>{};
+  }
+
+  List<AiChatMessage> _buildHistoryPayload() {
+    final history = <AiChatMessage>[];
+    for (final turn in _turns) {
+      history.add(AiChatMessage(role: 'user', text: turn.prompt));
+      final reply = turn.response?.copy;
+      if (reply != null && reply.trim().isNotEmpty) {
+        history.add(AiChatMessage(role: 'assistant', text: reply));
+      }
+    }
+    if (history.length > 12) {
+      return history.sublist(history.length - 12);
+    }
+    return history;
   }
 
   void _scrollToBottom() {
@@ -99,59 +143,256 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
   Future<void> _sendPrompt() async {
     final prompt = _controller.text.trim();
     if (prompt.isEmpty || _sending) return;
+    final historyPayload = _buildHistoryPayload();
 
     final turn = _ChatTurn(prompt: prompt);
     setState(() {
       _turns.add(turn);
       _sending = true;
     });
+    _persistTurnsToCache();
     _controller.clear();
     _scrollToBottom();
 
     try {
-      final response = await http
-          .post(
-            widget.chatApiUri,
-            headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': widget.apiKey,
-            },
-            body: jsonEncode({
-              'prompt': prompt,
-              'spending_summary': widget.spendingSummary,
-            }),
-          )
-          .timeout(const Duration(seconds: 30));
-
-      final parsed =
-          jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final aiResp = _AiResponse.fromJson(parsed);
-        setState(() {
-          _turns[_turns.length - 1] = _ChatTurn(prompt: prompt, response: aiResp);
-        });
-      } else {
-        setState(() {
-          _turns[_turns.length - 1] = _ChatTurn(
-            prompt: prompt,
-            error: (parsed['error'] ?? 'Request failed').toString(),
-          );
-        });
-      }
+      final aiRespRaw = await _client.sendChat(
+        uri: widget.chatApiUri,
+        apiKey: widget.apiKey,
+        prompt: prompt,
+        history: historyPayload,
+        spendingSummary: _activeSummary,
+      );
+      final localOverride = _localAmountOverride(prompt, _activeSummary);
+      final aiResp = localOverride == null
+          ? aiRespRaw
+          : AiChatResponse(
+              copy: localOverride,
+              insights: aiRespRaw.insights,
+              actions: aiRespRaw.actions,
+              confidence: aiRespRaw.confidence,
+              citations: aiRespRaw.citations,
+              contextSource: aiRespRaw.contextSource,
+              intent: aiRespRaw.intent,
+            );
+      setState(() {
+        _turns[_turns.length - 1] = _ChatTurn(prompt: prompt, response: aiResp);
+      });
+      _persistTurnsToCache();
     } catch (e) {
       setState(() {
         _turns[_turns.length - 1] = _ChatTurn(
           prompt: prompt,
-          error: 'Failed to reach AI service.',
+          error: e is AiApiException
+              ? e.message
+              : 'Failed to reach AI service.',
         );
       });
+      _persistTurnsToCache();
     } finally {
       if (mounted) {
         setState(() => _sending = false);
         _scrollToBottom();
       }
     }
+  }
+
+  bool _asksAmount(String prompt) {
+    final text = prompt.toLowerCase();
+    if (text.contains('how much') ||
+        text.contains('what did i spend') ||
+        text.contains('amount') ||
+        text.contains('total spent') ||
+        text.contains('spending total')) {
+      return true;
+    }
+
+    if (RegExp(r'(\$|usd|dollar|dollars)').hasMatch(text)) {
+      return true;
+    }
+
+    final hasMoneyVerb = RegExp(
+      r'\b(spend|spent|spending|expense|expenses|cost|costs|pay|paid)\b',
+    ).hasMatch(text);
+    final hasTimeRef = _extractDateKey(prompt) != null ||
+        _extractMonthKey(prompt, DateTime.now().year) != null ||
+        RegExp(r'\b20\d{2}\b').hasMatch(text) ||
+        text.contains('this month') ||
+        text.contains('last month') ||
+        text.contains('this year') ||
+        text.contains('last 30 days') ||
+        text.contains('30 days');
+
+    return hasMoneyVerb && hasTimeRef;
+  }
+
+  bool _asksMonthRanking(String prompt) {
+    final text = prompt.toLowerCase();
+    final hasMonthWord = text.contains('month') || text.contains('months');
+    final hasRankingWord = text.contains('which') ||
+        text.contains('highest') ||
+        text.contains('top') ||
+        text.contains('most');
+    final hasSpendingWord = text.contains('spend') ||
+        text.contains('spent') ||
+        text.contains('spending') ||
+        text.contains('expense') ||
+        text.contains('expenses');
+    return hasMonthWord && hasRankingWord && hasSpendingWord;
+  }
+
+  String? _extractMonthKey(String prompt, int defaultYear) {
+    final text = prompt.toLowerCase();
+    final direct = RegExp(r'\b(20\d{2})-(\d{2})\b').firstMatch(text);
+    if (direct != null) {
+      return '${direct.group(1)}-${direct.group(2)}';
+    }
+    final ym = RegExp(r'\b(20\d{2})[/-](\d{1,2})\b').firstMatch(text);
+    if (ym != null) {
+      final year = int.tryParse(ym.group(1) ?? '');
+      final month = int.tryParse(ym.group(2) ?? '');
+      if (year != null && month != null && month >= 1 && month <= 12) {
+        return '$year-${month.toString().padLeft(2, '0')}';
+      }
+    }
+    const monthMap = <String, int>{
+      'january': 1,
+      'february': 2,
+      'march': 3,
+      'april': 4,
+      'may': 5,
+      'june': 6,
+      'july': 7,
+      'august': 8,
+      'september': 9,
+      'october': 10,
+      'november': 11,
+      'december': 12,
+      'jan': 1,
+      'feb': 2,
+      'mar': 3,
+      'apr': 4,
+      'jun': 6,
+      'jul': 7,
+      'aug': 8,
+      'sep': 9,
+      'sept': 9,
+      'oct': 10,
+      'nov': 11,
+      'dec': 12,
+    };
+    for (final entry in monthMap.entries) {
+      if (RegExp('\\b${entry.key}\\b').hasMatch(text)) {
+        return '$defaultYear-${entry.value.toString().padLeft(2, '0')}';
+      }
+    }
+    return null;
+  }
+
+  String? _extractDateKey(String prompt) {
+    final text = prompt.toLowerCase();
+    final m = RegExp(r'\b(20\d{2}-\d{2}-\d{2})\b').firstMatch(text);
+    return m?.group(1);
+  }
+
+  String? _localAmountOverride(String prompt, Map<String, dynamic> summary) {
+    final lower = prompt.toLowerCase();
+    final scopeLabel = (summary['scope_label'] ?? 'this scope').toString();
+    final annual = (summary['annual_summary'] is Map)
+        ? (summary['annual_summary'] as Map).cast<String, dynamic>()
+        : const <String, dynamic>{};
+    final annualTotals = (annual['totals'] is Map)
+        ? (annual['totals'] as Map).cast<String, dynamic>()
+        : const <String, dynamic>{};
+    final timeAnchor = (summary['time_anchor'] is Map)
+        ? (summary['time_anchor'] as Map).cast<String, dynamic>()
+        : const <String, dynamic>{};
+    final monthIndex = (summary['month_index'] is Map)
+        ? (summary['month_index'] as Map).cast<String, dynamic>()
+        : const <String, dynamic>{};
+    final dayIndex = (summary['day_index_recent'] is Map)
+        ? (summary['day_index_recent'] as Map).cast<String, dynamic>()
+        : const <String, dynamic>{};
+    final rankings = (summary['rankings'] is Map)
+        ? (summary['rankings'] as Map).cast<String, dynamic>()
+        : const <String, dynamic>{};
+
+    if (_asksMonthRanking(prompt)) {
+      final topMonths = (rankings['highest_spending_months'] is List)
+          ? (rankings['highest_spending_months'] as List)
+          : const [];
+      final entries = <String>[];
+      for (final item in topMonths) {
+        if (item is! Map) continue;
+        final row = item.cast<String, dynamic>();
+        final month = (row['month'] ?? '').toString();
+        final amount = ((row['expenses'] as num?) ?? 0).toDouble();
+        if (month.isEmpty) continue;
+        entries.add('$month (\$${amount.toStringAsFixed(2)})');
+        if (!lower.contains('months') && entries.isNotEmpty) {
+          break;
+        }
+        if (entries.length >= 3) break;
+      }
+      if (entries.isEmpty) {
+        final sorted = monthIndex.entries.where((e) => e.value is Map).toList()
+          ..sort((a, b) {
+            final av = (a.value as Map).cast<String, dynamic>();
+            final bv = (b.value as Map).cast<String, dynamic>();
+            final aa = ((av['expenses'] as num?) ?? 0).toDouble();
+            final bb = ((bv['expenses'] as num?) ?? 0).toDouble();
+            return bb.compareTo(aa);
+          });
+        for (final e in sorted.take(lower.contains('months') ? 3 : 1)) {
+          final row = (e.value as Map).cast<String, dynamic>();
+          final amount = ((row['expenses'] as num?) ?? 0).toDouble();
+          entries.add('${e.key} (\$${amount.toStringAsFixed(2)})');
+        }
+      }
+      if (entries.isEmpty) return null;
+      if (lower.contains('months')) {
+        return 'Highest spending months for $scopeLabel: ${entries.join(', ')}.';
+      }
+      return 'Highest spending month for $scopeLabel: ${entries.first}.';
+    }
+
+    if (!_asksAmount(prompt)) return null;
+
+    final dateKey = _extractDateKey(prompt);
+    if (dateKey != null) {
+      final row = (dayIndex[dateKey] is Map)
+          ? (dayIndex[dateKey] as Map).cast<String, dynamic>()
+          : const <String, dynamic>{};
+      final amount = ((row['expenses'] as num?) ?? 0).toDouble();
+      return 'For $dateKey, total expenses for $scopeLabel are \$${amount.toStringAsFixed(2)}.';
+    }
+
+    final selectedYear =
+        ((timeAnchor['selected_year'] as num?) ??
+                (annual['year'] as num?) ??
+                DateTime.now().year)
+            .toInt();
+    final monthKey = _extractMonthKey(prompt, selectedYear);
+    if (monthKey != null) {
+      final selectedMonthKey = (timeAnchor['selected_month'] ?? '').toString();
+      if (monthKey == selectedMonthKey &&
+          (timeAnchor['selected_month_expenses'] as num?) != null) {
+        final amount = (timeAnchor['selected_month_expenses'] as num)
+            .toDouble();
+        return 'For $monthKey, total expenses for $scopeLabel are \$${amount.toStringAsFixed(2)}.';
+      }
+      final row = (monthIndex[monthKey] is Map)
+          ? (monthIndex[monthKey] as Map).cast<String, dynamic>()
+          : const <String, dynamic>{};
+      final amount = ((row['expenses'] as num?) ?? 0).toDouble();
+      return 'For $monthKey, total expenses for $scopeLabel are \$${amount.toStringAsFixed(2)}.';
+    }
+
+    if (lower.contains('this year') || lower.contains('year')) {
+      final year = ((annual['year'] as num?) ?? selectedYear).toInt();
+      final amount = ((annualTotals['expenses_year'] as num?) ?? 0).toDouble();
+      return 'For $year, total expenses for $scopeLabel are \$${amount.toStringAsFixed(2)}.';
+    }
+    return null;
   }
 
   Widget _buildTurn(_ChatTurn turn) {
@@ -197,134 +438,19 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
               ),
             ),
 
-          if (turn.response != null) _buildStructuredResponse(turn.response!),
+          if (turn.response != null) AiResponseCard(response: turn.response!),
         ],
       ),
     );
-  }
-
-  Widget _buildStructuredResponse(_AiResponse resp) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.grey.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Confidence + source badges
-          Row(
-            children: [
-              _badge(resp.confidence, _confidenceColor(resp.confidence)),
-              if (resp.contextSource.isNotEmpty) ...[
-                const SizedBox(width: 6),
-                _badge(resp.contextSource, Colors.black38),
-              ],
-            ],
-          ),
-          const SizedBox(height: 8),
-
-          // Copy (main answer)
-          if (resp.copy.isNotEmpty)
-            Text(
-              resp.copy,
-              style: const TextStyle(fontSize: 13.5, height: 1.4),
-            ),
-
-          // Insights
-          if (resp.insights.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            const Text(
-              'Insights',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: Colors.black54,
-              ),
-            ),
-            const SizedBox(height: 4),
-            ...resp.insights.map(
-              (s) => Padding(
-                padding: const EdgeInsets.only(bottom: 3),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('• ', style: TextStyle(fontSize: 13)),
-                    Expanded(
-                      child: Text(s, style: const TextStyle(fontSize: 13, height: 1.3)),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-
-          // Actions
-          if (resp.actions.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            const Text(
-              'Actions',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: Colors.black54,
-              ),
-            ),
-            const SizedBox(height: 4),
-            ...resp.actions.map(
-              (s) => Padding(
-                padding: const EdgeInsets.only(bottom: 3),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('→ ', style: TextStyle(fontSize: 13, color: Colors.green)),
-                    Expanded(
-                      child: Text(s, style: const TextStyle(fontSize: 13, height: 1.3)),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _badge(String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color),
-      ),
-    );
-  }
-
-  Color _confidenceColor(String confidence) {
-    switch (confidence) {
-      case 'high':
-        return Colors.green;
-      case 'medium':
-        return Colors.orange;
-      case 'low':
-        return Colors.redAccent;
-      default:
-        return Colors.grey;
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
     final screenH = media.size.height;
-    final panelHeight =
-        (screenH * 0.58).clamp(360.0, (screenH * 0.82).clamp(360.0, 620.0)).toDouble();
+    final panelHeight = (screenH * 0.58)
+        .clamp(360.0, (screenH * 0.82).clamp(360.0, 620.0))
+        .toDouble();
 
     return SafeArea(
       child: AnimatedPadding(
@@ -350,9 +476,53 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
                     SizedBox(width: 10),
                     Text(
                       'AI Assistant',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Choose an account scope first, then ask your question.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.black.withValues(alpha: 0.6),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  initialValue: _selectedAccountId,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                    labelText: 'Account scope',
+                  ),
+                  items: [
+                    const DropdownMenuItem<String>(
+                      value: kAllAccountsId,
+                      child: Text('Overall (All Accounts)'),
+                    ),
+                    ...widget.accountOptions.map(
+                      (account) => DropdownMenuItem<String>(
+                        value: account.accountId,
+                        child: Text(account.label),
+                      ),
+                    ),
+                  ],
+                  onChanged: _sending
+                      ? null
+                      : (value) {
+                          if (value == null || value == _selectedAccountId) {
+                            return;
+                          }
+                          setState(() {
+                            _selectedAccountId = value;
+                            _turns.clear();
+                          });
+                          _restoreTurnsFromCache();
+                        },
                 ),
                 const SizedBox(height: 12),
 
@@ -367,7 +537,7 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
                           padding: EdgeInsets.only(top: 80),
                           child: Center(
                             child: Text(
-                              'Ask me about your spending, budgets, or savings goals.',
+                              'Which account should I use? Choose Overall or a specific account, then ask your question.',
                               style: TextStyle(color: Colors.black45),
                               textAlign: TextAlign.center,
                             ),
@@ -407,7 +577,9 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
                             ? const SizedBox(
                                 width: 16,
                                 height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               )
                             : const Icon(Icons.send),
                       ),

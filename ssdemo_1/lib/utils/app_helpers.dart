@@ -74,7 +74,9 @@ IconData iconForBudgetCategory(String category) {
 
 String accountEndingForId(String accountId, List<AccountOption> accounts) {
   for (final account in accounts) {
-    if (account.accountId == accountId) return account.ending;
+    if (account.accountId == accountId || account.linkedAccountIds.contains(accountId)) {
+      return account.ending;
+    }
   }
   if (accountId.length >= 4) return accountId.substring(accountId.length - 4);
   return '----';

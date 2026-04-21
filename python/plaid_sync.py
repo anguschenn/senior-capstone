@@ -35,6 +35,16 @@ from config import (
 )
 from supabase_repo import supabase
 
+
+class IdentityStateError(RuntimeError):
+    DEMO_IDENTITY_MISSING = "demo_identity_missing"
+    STORED_ITEM_NOT_FOUND = "stored_item_not_found"
+    STORED_ACCESS_TOKEN_MISSING = "stored_access_token_missing"
+
+    def __init__(self, reason: str, message: str):
+        super().__init__(message)
+        self.reason = reason
+
 # ── Plaid client setup ───────────────────────────────────────────────
 
 host = plaid.Environment.Sandbox
@@ -59,7 +69,8 @@ products = [Products(p) for p in PLAID_PRODUCTS]
 
 def require_demo_identity() -> tuple[str, str]:
     if not DEMO_USER_ID or not DEMO_PLAID_ITEM_ID:
-        raise RuntimeError(
+        raise IdentityStateError(
+            IdentityStateError.DEMO_IDENTITY_MISSING,
             "Missing DEMO_USER_ID or DEMO_PLAID_ITEM_ID. Set both in python/.env."
         )
     return DEMO_USER_ID, DEMO_PLAID_ITEM_ID
@@ -76,12 +87,18 @@ def get_stored_item_credentials() -> tuple[str, str]:
         .execute()
     )
     if not row.data:
-        raise RuntimeError("No stored plaid_items record for configured demo identity")
+        raise IdentityStateError(
+            IdentityStateError.STORED_ITEM_NOT_FOUND,
+            "No stored plaid_items record for configured demo identity",
+        )
     record = row.data[0]
     access_token = record.get("access_token")
     item_id = record.get("item_id")
     if not access_token:
-        raise RuntimeError("Stored Plaid access token is missing")
+        raise IdentityStateError(
+            IdentityStateError.STORED_ACCESS_TOKEN_MISSING,
+            "Stored Plaid access token is missing",
+        )
     return access_token, item_id
 
 
@@ -125,15 +142,18 @@ def sync_transactions_to_supabase(
             supabase.table("plaid_items")
             .select("cursor")
             .eq("id", plaid_item_id)
+            .eq("user_id", user_id)
             .execute()
         )
         if item_row.data and item_row.data[0].get("cursor"):
             cursor = item_row.data[0]["cursor"]
     except Exception as e:
-        print(f"Could not retrieve cursor: {e}")
+        print(f"Could not retrieve cursor for user {user_id}: {type(e).__name__}: {e}")
 
     added, modified, removed = [], [], []
     has_more = True
+    empty_cursor_retries = 0
+    max_empty_cursor_retries = 5
 
     while has_more:
         sync_request = TransactionsSyncRequest(
@@ -142,8 +162,12 @@ def sync_transactions_to_supabase(
         response = client.transactions_sync(sync_request).to_dict()
         cursor = response["next_cursor"]
         if cursor == "":
+            empty_cursor_retries += 1
+            if empty_cursor_retries >= max_empty_cursor_retries:
+                raise RuntimeError("transactions_sync returned empty next_cursor repeatedly")
             time.sleep(2)
             continue
+        empty_cursor_retries = 0
         added.extend(response["added"])
         modified.extend(response["modified"])
         removed.extend(response["removed"])
@@ -196,7 +220,7 @@ def sync_transactions_to_supabase(
 
     supabase.table("plaid_items").update(
         {"cursor": cursor, "last_synced_at": dt.datetime.now().isoformat()}
-    ).eq("id", plaid_item_id).execute()
+    ).eq("id", plaid_item_id).eq("user_id", user_id).execute()
 
     return {"added": len(added), "modified": len(modified), "removed": len(removed)}
 
@@ -204,13 +228,26 @@ def sync_transactions_to_supabase(
 # ── Plaid utilities ──────────────────────────────────────────────────
 
 
+def _safe_api_exception_body(error: plaid.ApiException) -> dict:
+    body = {}
+    raw_body = getattr(error, "body", None)
+    if isinstance(raw_body, str):
+        try:
+            parsed = json.loads(raw_body)
+            if isinstance(parsed, dict):
+                body = parsed
+        except Exception:
+            body = {}
+    return body
+
+
 def poll_with_retries(request_callback, ms=1000, retries_left=20):
     while retries_left > 0:
         try:
             return request_callback()
         except plaid.ApiException as e:
-            response = json.loads(e.body)
-            if response["error_code"] != "PRODUCT_NOT_READY":
+            response = _safe_api_exception_body(e)
+            if response.get("error_code") != "PRODUCT_NOT_READY":
                 raise e
             retries_left -= 1
             if retries_left == 0:
@@ -219,13 +256,13 @@ def poll_with_retries(request_callback, ms=1000, retries_left=20):
 
 
 def format_error(e):
-    response = json.loads(e.body)
+    response = _safe_api_exception_body(e)
     return {
         "error": {
             "status_code": e.status,
-            "display_message": response["error_message"],
-            "error_code": response["error_code"],
-            "error_type": response["error_type"],
+            "display_message": response.get("error_message"),
+            "error_code": response.get("error_code", "PLAID_API_ERROR"),
+            "error_type": response.get("error_type", "API_ERROR"),
         }
     }
 

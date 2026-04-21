@@ -10,9 +10,15 @@ class CashFlowPage extends StatefulWidget {
   const CashFlowPage({
     super.key,
     required this.transactions,
+    required this.selectedMonth,
+    required this.monthOptions,
+    required this.onMonthChanged,
   });
 
   final List<AppTransaction> transactions;
+  final DateTime selectedMonth;
+  final List<DateTime> monthOptions;
+  final ValueChanged<DateTime> onMonthChanged;
 
   @override
   State<CashFlowPage> createState() => _CashFlowPageState();
@@ -22,19 +28,17 @@ class _CashFlowPageState extends State<CashFlowPage> {
   // Controls which time range feeds the chart and summary calculations.
   FlowViewMode viewMode = FlowViewMode.month;
 
-  DateTime get _now {
-    final now = DateTime.now();
-    return DateTime(now.year, now.month, now.day);
-  }
+  DateTime get _focusMonth =>
+      DateTime(widget.selectedMonth.year, widget.selectedMonth.month, 1);
 
   List<AppTransaction> get _periodTransactions {
-    final now = _now;
+    final focus = _focusMonth;
     return widget.transactions.where((tx) {
       if (viewMode == FlowViewMode.month) {
-        return tx.date.year == now.year && tx.date.month == now.month;
+        return tx.date.year == focus.year && tx.date.month == focus.month;
       }
       if (viewMode == FlowViewMode.year) {
-        return tx.date.year == now.year;
+        return tx.date.year == focus.year;
       }
       return true;
     }).toList();
@@ -59,14 +63,14 @@ class _CashFlowPageState extends State<CashFlowPage> {
   double get _periodNet => _periodIncome - _periodExpenses;
 
   List<MonthlyFlowPoint> get _activeSeries {
-    final now = _now;
+    final focus = _focusMonth;
     if (viewMode == FlowViewMode.month) {
-      return _buildCurrentMonthWeeklySeries(now);
+      return _buildCurrentMonthWeeklySeries(focus);
     }
     if (viewMode == FlowViewMode.year) {
-      return _buildCurrentYearSeries(now);
+      return _buildCurrentYearSeries(focus);
     }
-    return _buildRecentAllTimeSeries(now, 12);
+    return _buildRecentAllTimeSeries(focus, 12);
   }
 
   // -------------------------------------------------------------------------
@@ -159,7 +163,10 @@ class _CashFlowPageState extends State<CashFlowPage> {
         padding: const EdgeInsets.all(20),
         children: [
           // Time-range controls and summary cards share the same filtered transaction set.
-          const Text('Cash Flow', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+          const Text(
+            'Cash Flow',
+            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 8),
           const Text('Track money in and out'),
           const SizedBox(height: 12),
@@ -167,11 +174,11 @@ class _CashFlowPageState extends State<CashFlowPage> {
             segments: const [
               ButtonSegment<FlowViewMode>(
                 value: FlowViewMode.month,
-                label: Text('This Month'),
+                label: Text('By Month'),
               ),
               ButtonSegment<FlowViewMode>(
                 value: FlowViewMode.year,
-                label: Text('This Year'),
+                label: Text('By Year'),
               ),
               ButtonSegment<FlowViewMode>(
                 value: FlowViewMode.all,
@@ -184,6 +191,41 @@ class _CashFlowPageState extends State<CashFlowPage> {
               setState(() => viewMode = selection.first);
             },
           ),
+          if (viewMode != FlowViewMode.all) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Text('Month', style: TextStyle(color: Colors.black54)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: DropdownButtonFormField<DateTime>(
+                    key: ValueKey(
+                      'flow-month-${_focusMonth.year}-${_focusMonth.month}',
+                    ),
+                    initialValue: _focusMonth,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    items: widget.monthOptions
+                        .map(
+                          (m) => DropdownMenuItem<DateTime>(
+                            value: DateTime(m.year, m.month, 1),
+                            child: Text(
+                              '${kMonthShortLabels[m.month - 1]} ${m.year}',
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      widget.onMonthChanged(value);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 20),
           Container(
             width: double.infinity,
@@ -197,7 +239,10 @@ class _CashFlowPageState extends State<CashFlowPage> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Income', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const Text(
+                      'Income',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                     Text(formatMoney(_periodIncome, signed: false)),
                   ],
                 ),
@@ -205,7 +250,10 @@ class _CashFlowPageState extends State<CashFlowPage> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Expenses', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const Text(
+                      'Expenses',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                     Text(formatMoney(_periodExpenses, signed: false)),
                   ],
                 ),
@@ -213,7 +261,10 @@ class _CashFlowPageState extends State<CashFlowPage> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Net', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const Text(
+                      'Net',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                     Text(
                       '${_periodNet >= 0 ? '+' : '-'} \$${_periodNet.abs().toStringAsFixed(2)}',
                     ),
@@ -262,7 +313,10 @@ class _CashFlowPageState extends State<CashFlowPage> {
                     SizedBox(width: 8),
                     Text(
                       'Trend Summary',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ],
                 ),
@@ -270,11 +324,11 @@ class _CashFlowPageState extends State<CashFlowPage> {
                 Text(_monthCompareText()),
                 const SizedBox(height: 6),
                 Text(
-                  '• ${viewMode == FlowViewMode.month ? 'This month' : (viewMode == FlowViewMode.year ? 'This year' : 'All time')} income: ${formatMoney(_periodIncome, signed: false)}',
+                  '• ${viewMode == FlowViewMode.month ? '${kMonthShortLabels[_focusMonth.month - 1]} ${_focusMonth.year}' : (viewMode == FlowViewMode.year ? '${_focusMonth.year}' : 'All time')} income: ${formatMoney(_periodIncome, signed: false)}',
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '• ${viewMode == FlowViewMode.month ? 'This month' : (viewMode == FlowViewMode.year ? 'This year' : 'All time')} expenses: ${formatMoney(_periodExpenses, signed: false)}',
+                  '• ${viewMode == FlowViewMode.month ? '${kMonthShortLabels[_focusMonth.month - 1]} ${_focusMonth.year}' : (viewMode == FlowViewMode.year ? '${_focusMonth.year}' : 'All time')} expenses: ${formatMoney(_periodExpenses, signed: false)}',
                 ),
               ],
             ),

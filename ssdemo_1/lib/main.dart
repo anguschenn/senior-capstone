@@ -5,6 +5,7 @@ import 'core/config/api_config.dart';
 import 'core/config/env_config.dart';
 import 'core/config/supabase_client.dart';
 
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await EnvConfig.load();
@@ -12,3 +13,4 @@ Future<void> main() async {
   ApiConfig.init();
   runApp(const SmartSpendApp());
 }
+

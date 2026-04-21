@@ -23,8 +23,9 @@ class BudgetService {
           .select('id,category_id')
           .eq('user_id', userId)
           .eq('month_year', monthYear);
-      final existing =
-          (rows as List).whereType<Map<String, dynamic>>().toList();
+      final existing = (rows as List)
+          .whereType<Map<String, dynamic>>()
+          .toList();
       final hasBudgetByCategory = <String>{};
       for (final row in existing) {
         final categoryId = (row['category_id'] as String?)?.trim();
@@ -83,8 +84,10 @@ class BudgetService {
       if (amount <= 0) {
         continue;
       }
-      final bucket =
-          _categoryService.budgetBucketForRawTransaction(row, reviewedCategoryByTxId);
+      final bucket = _categoryService.budgetBucketForRawTransaction(
+        row,
+        reviewedCategoryByTxId,
+      );
       final bucketKey = normalizeCategoryKey(bucket);
       spentByCategoryName[bucketKey] =
           (spentByCategoryName[bucketKey] ?? 0) + amount;
@@ -138,8 +141,10 @@ class BudgetService {
       } else {
         if (tx.date.year != now.year || tx.date.month != now.month) continue;
       }
-      final bucket =
-          _categoryService.budgetBucketFor(tx, reviewedCategoryByTxId);
+      final bucket = _categoryService.budgetBucketFor(
+        tx,
+        reviewedCategoryByTxId,
+      );
       spentMap[bucket] = (spentMap[bucket] ?? 0) + tx.amount;
     }
     return preset
@@ -164,8 +169,10 @@ class BudgetService {
     final spentMap = <String, double>{for (final p in preset) p: 0};
     for (final tx in txs) {
       if (tx.amount <= 0) continue;
-      final bucket =
-          _categoryService.budgetBucketFor(tx, reviewedCategoryByTxId);
+      final bucket = _categoryService.budgetBucketFor(
+        tx,
+        reviewedCategoryByTxId,
+      );
       spentMap[bucket] = (spentMap[bucket] ?? 0) + tx.amount;
     }
 
@@ -190,5 +197,49 @@ class BudgetService {
           ),
         )
         .toList();
+  }
+
+  List<BudgetCategoryProgress> rebasedProgressFromTemplate({
+    required List<BudgetCategoryProgress> template,
+    required List<AppTransaction> txs,
+    required DateTime focusMonth,
+    required bool yearly,
+    required bool allTime,
+    required Map<String, String> reviewedCategoryByTxId,
+  }) {
+    if (template.isEmpty) return const <BudgetCategoryProgress>[];
+    final spentByCategory = <String, double>{};
+    for (final tx in txs) {
+      if (tx.amount <= 0) continue;
+      if (!allTime) {
+        if (yearly) {
+          if (tx.date.year != focusMonth.year) continue;
+        } else {
+          if (tx.date.year != focusMonth.year ||
+              tx.date.month != focusMonth.month) {
+            continue;
+          }
+        }
+      }
+      final bucket = _categoryService.budgetBucketFor(
+        tx,
+        reviewedCategoryByTxId,
+      );
+      final key = normalizeCategoryKey(bucket);
+      spentByCategory[key] = (spentByCategory[key] ?? 0) + tx.amount;
+    }
+    final rebased = template
+        .map(
+          (item) => BudgetCategoryProgress(
+            budgetId: item.budgetId,
+            categoryId: item.categoryId,
+            title: item.title,
+            spent: spentByCategory[normalizeCategoryKey(item.title)] ?? 0,
+            limit: item.limit,
+          ),
+        )
+        .toList();
+    rebased.sort((a, b) => b.ratio.compareTo(a.ratio));
+    return rebased;
   }
 }

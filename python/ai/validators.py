@@ -90,10 +90,150 @@ def sanitize_spending_summary(summary):
         return None
 
     cleaned = {
+        "version": max(1, min(int(to_float(summary.get("version", 1), 1)), 9)),
         "scope": clamp_str(summary.get("scope", ""), 32),
+        "scope_label": clamp_str(summary.get("scope_label", ""), 64),
         "generated_at": clamp_str(summary.get("generated_at", ""), 40),
         "window_days": max(1, min(int(to_float(summary.get("window_days", 30), 30)), 365)),
     }
+
+    time_anchor = summary.get("time_anchor")
+    if isinstance(time_anchor, dict):
+        cleaned["time_anchor"] = {
+            "selected_month": clamp_str(time_anchor.get("selected_month", ""), 16),
+            "selected_year": max(2000, min(2100, int(to_float(time_anchor.get("selected_year", 2026), 2026)))),
+            "selected_month_expenses": max(0.0, to_float(time_anchor.get("selected_month_expenses", 0))),
+            "selected_month_income": max(0.0, to_float(time_anchor.get("selected_month_income", 0))),
+            "tz": clamp_str(time_anchor.get("tz", ""), 64),
+        }
+
+    windows = summary.get("windows")
+    if isinstance(windows, dict):
+        cleaned_windows = {}
+        for key in ("last_7d", "last_30d", "last_90d"):
+            item = windows.get(key)
+            if not isinstance(item, dict):
+                continue
+            cleaned_windows[key] = {
+                "income": max(0.0, to_float(item.get("income", 0))),
+                "expenses": max(0.0, to_float(item.get("expenses", 0))),
+                "tx_count": max(0, int(to_float(item.get("tx_count", 0)))),
+            }
+            if key == "last_30d":
+                cleaned_windows[key]["expense_tx_count"] = max(
+                    0, int(to_float(item.get("expense_tx_count", 0)))
+                )
+        if cleaned_windows:
+            cleaned["windows"] = cleaned_windows
+
+    year_index = summary.get("year_index")
+    if isinstance(year_index, dict):
+        cleaned_year_index = {}
+        for year_key, item in list(year_index.items())[:10]:
+            year_text = clamp_str(year_key, 8)
+            if not year_text or not isinstance(item, dict):
+                continue
+            cleaned_year_index[year_text] = {
+                "income": max(0.0, to_float(item.get("income", 0))),
+                "expenses": max(0.0, to_float(item.get("expenses", 0))),
+                "tx_count": max(0, int(to_float(item.get("tx_count", 0)))),
+            }
+        if cleaned_year_index:
+            cleaned["year_index"] = cleaned_year_index
+
+    month_index = summary.get("month_index")
+    if isinstance(month_index, dict):
+        cleaned_month_index = {}
+        for month_key, item in list(month_index.items())[:48]:
+            month_text = clamp_str(month_key, 16)
+            if not month_text or not isinstance(item, dict):
+                continue
+            top_category = item.get("top_category")
+            cleaned_top = None
+            if isinstance(top_category, dict):
+                top_name = clamp_str(top_category.get("name", ""), 64)
+                if top_name:
+                    cleaned_top = {
+                        "name": top_name,
+                        "amount": max(0.0, to_float(top_category.get("amount", 0))),
+                    }
+            cleaned_month_index[month_text] = {
+                "income": max(0.0, to_float(item.get("income", 0))),
+                "expenses": max(0.0, to_float(item.get("expenses", 0))),
+                "tx_count": max(0, int(to_float(item.get("tx_count", 0)))),
+                "expense_tx_count": max(0, int(to_float(item.get("expense_tx_count", 0)))),
+                "top_category": cleaned_top,
+            }
+        if cleaned_month_index:
+            cleaned["month_index"] = cleaned_month_index
+
+    day_index_recent = summary.get("day_index_recent")
+    if isinstance(day_index_recent, dict):
+        cleaned_day_index = {}
+        for day_key, item in list(day_index_recent.items())[:180]:
+            day_text = clamp_str(day_key, 16)
+            if not day_text or not isinstance(item, dict):
+                continue
+            cleaned_day_index[day_text] = {
+                "income": max(0.0, to_float(item.get("income", 0))),
+                "expenses": max(0.0, to_float(item.get("expenses", 0))),
+                "tx_count": max(0, int(to_float(item.get("tx_count", 0)))),
+            }
+        if cleaned_day_index:
+            cleaned["day_index_recent"] = cleaned_day_index
+
+    month_day_index = summary.get("month_day_index")
+    if isinstance(month_day_index, dict):
+        cleaned_month_day = {}
+        for month_key, rows in list(month_day_index.items())[:12]:
+            month_text = clamp_str(month_key, 16)
+            if not month_text or not isinstance(rows, list):
+                continue
+            cleaned_rows = []
+            for item in rows[:40]:
+                if not isinstance(item, dict):
+                    continue
+                day_text = clamp_str(item.get("date", ""), 16)
+                if not day_text:
+                    continue
+                cleaned_rows.append(
+                    {
+                        "date": day_text,
+                        "income": max(0.0, to_float(item.get("income", 0))),
+                        "expenses": max(0.0, to_float(item.get("expenses", 0))),
+                        "tx_count": max(0, int(to_float(item.get("tx_count", 0)))),
+                    }
+                )
+            if cleaned_rows:
+                cleaned_month_day[month_text] = cleaned_rows
+        if cleaned_month_day:
+            cleaned["month_day_index"] = cleaned_month_day
+
+    rankings = summary.get("rankings")
+    if isinstance(rankings, dict):
+        highest_spending_months = rankings.get("highest_spending_months")
+        highest_spending_days_recent = rankings.get("highest_spending_days_recent")
+        cleaned_rankings = {}
+        if isinstance(highest_spending_months, list):
+            cleaned_rankings["highest_spending_months"] = [
+                {
+                    "month": clamp_str(item.get("month", ""), 16),
+                    "expenses": max(0.0, to_float(item.get("expenses", 0))),
+                }
+                for item in highest_spending_months[:24]
+                if isinstance(item, dict) and clamp_str(item.get("month", ""), 16)
+            ]
+        if isinstance(highest_spending_days_recent, list):
+            cleaned_rankings["highest_spending_days_recent"] = [
+                {
+                    "date": clamp_str(item.get("date", ""), 16),
+                    "expenses": max(0.0, to_float(item.get("expenses", 0))),
+                }
+                for item in highest_spending_days_recent[:40]
+                if isinstance(item, dict) and clamp_str(item.get("date", ""), 16)
+            ]
+        if cleaned_rankings:
+            cleaned["rankings"] = cleaned_rankings
 
     totals = summary.get("totals")
     if isinstance(totals, dict):
@@ -151,6 +291,10 @@ def sanitize_spending_summary(summary):
         annual_totals = annual.get("totals") if isinstance(annual.get("totals"), dict) else {}
         monthly = annual.get("monthly_breakdown") if isinstance(annual.get("monthly_breakdown"), list) else []
         categories_year = annual.get("top_expense_categories_year") if isinstance(annual.get("top_expense_categories_year"), list) else []
+        monthly_expense_ranking = annual.get("monthly_expense_ranking") if isinstance(annual.get("monthly_expense_ranking"), list) else []
+        monthly_expense_trend = annual.get("monthly_expense_trend") if isinstance(annual.get("monthly_expense_trend"), list) else []
+        monthly_top_categories = annual.get("monthly_top_categories") if isinstance(annual.get("monthly_top_categories"), list) else []
+        daily_expense_totals = annual.get("daily_expense_totals") if isinstance(annual.get("daily_expense_totals"), list) else []
         cleaned["annual_summary"] = {
             "year": max(2000, min(2100, int(to_float(annual.get("year", 2026), 2026)))),
             "totals": {
@@ -178,6 +322,42 @@ def sanitize_spending_summary(summary):
                 for item in categories_year[:10]
                 if isinstance(item, dict) and clamp_str(item.get("category", ""), 64)
             ],
+            "monthly_expense_ranking": [
+                {
+                    "month": clamp_str(item.get("month", ""), 16),
+                    "expenses": max(0.0, to_float(item.get("expenses", 0))),
+                }
+                for item in monthly_expense_ranking[:24]
+                if isinstance(item, dict) and clamp_str(item.get("month", ""), 16)
+            ],
+            "monthly_expense_trend": [
+                {
+                    "month": clamp_str(item.get("month", ""), 16),
+                    "expenses": max(0.0, to_float(item.get("expenses", 0))),
+                    "mom_change_pct": to_float(item.get("mom_change_pct", 0)),
+                }
+                for item in monthly_expense_trend[:24]
+                if isinstance(item, dict) and clamp_str(item.get("month", ""), 16)
+            ],
+            "monthly_top_categories": [
+                {
+                    "month": clamp_str(item.get("month", ""), 16),
+                    "category": clamp_str(item.get("category", ""), 64),
+                    "amount": max(0.0, to_float(item.get("amount", 0))),
+                }
+                for item in monthly_top_categories[:24]
+                if isinstance(item, dict)
+                and clamp_str(item.get("month", ""), 16)
+                and clamp_str(item.get("category", ""), 64)
+            ],
+            "daily_expense_totals": [
+                {
+                    "date": clamp_str(item.get("date", ""), 16),
+                    "amount": max(0.0, to_float(item.get("amount", 0))),
+                }
+                for item in daily_expense_totals[:400]
+                if isinstance(item, dict) and clamp_str(item.get("date", ""), 16)
+            ],
         }
 
     if not any(
@@ -186,6 +366,9 @@ def sanitize_spending_summary(summary):
             cleaned.get("top_expense_categories"),
             cleaned.get("recent_transactions"),
             cleaned.get("annual_summary"),
+            cleaned.get("month_index"),
+            cleaned.get("day_index_recent"),
+            cleaned.get("year_index"),
         )
     ):
         return None
@@ -208,4 +391,3 @@ class SimpleRateLimiter:
             return False
         bucket.append(now)
         return True
-

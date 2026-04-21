@@ -24,10 +24,27 @@ if command -v lsof >/dev/null 2>&1; then
   PIDS="$(lsof -ti :8000 2>/dev/null || true)"
   if [[ -n "$PIDS" ]]; then
     echo "Stopping existing process(es) on :8000: $PIDS"
-    kill -9 $PIDS || true
+    for PID in $PIDS; do
+      kill "$PID" 2>/dev/null || true
+    done
+    sleep 0.3
+    STILL_RUNNING="$(lsof -ti :8000 2>/dev/null || true)"
+    if [[ -n "$STILL_RUNNING" ]]; then
+      for PID in $STILL_RUNNING; do
+        kill -9 "$PID" 2>/dev/null || true
+      done
+      sleep 0.3
+      STILL_RUNNING="$(lsof -ti :8000 2>/dev/null || true)"
+      if [[ -n "$STILL_RUNNING" ]]; then
+        echo "Port 8000 is still in use by: $STILL_RUNNING"
+        echo "Unable to stop existing process(es)."
+        echo "Stop them manually, then retry:"
+        echo "  lsof -ti :8000 | xargs kill -9"
+        exit 1
+      fi
+    fi
   fi
 fi
 
 echo "Starting backend on http://127.0.0.1:8000 using $PY_BIN"
 exec "$PY_BIN" server.py
-
