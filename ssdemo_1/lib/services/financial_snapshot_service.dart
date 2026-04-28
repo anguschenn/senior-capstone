@@ -2,6 +2,7 @@ import '../constants/app_constants.dart';
 import '../controllers/main_screen_controller.dart';
 import '../models/app_models.dart';
 import '../models/finance/financial_snapshot.dart';
+import '../utils/app_helpers.dart';
 import 'ai_summary_service.dart';
 import 'budget_service.dart';
 
@@ -13,11 +14,13 @@ class FinancialSnapshotService {
   FinancialSnapshot build(
     MainScreenController controller, {
     DateTime? targetMonth,
+    Map<String, dynamic>? precomputedSummary,
   }) {
     return buildForAccount(
       controller,
       controller.selectedAccountId,
       targetMonth: targetMonth ?? controller.selectedMonth,
+      precomputedSummary: precomputedSummary,
     );
   }
 
@@ -25,12 +28,11 @@ class FinancialSnapshotService {
     MainScreenController controller,
     String targetAccountId, {
     DateTime? targetMonth,
+    Map<String, dynamic>? precomputedSummary,
     bool useLinkedAccounts = true,
   }) {
-    final focusMonth = DateTime(
-      (targetMonth ?? controller.selectedMonth).year,
-      (targetMonth ?? controller.selectedMonth).month,
-      1,
+    final focusMonth = normalizedMonthOption(
+      targetMonth ?? controller.selectedMonth,
     );
     AccountOption? selectedOption;
     for (final option in controller.liveAccountOptions) {
@@ -53,7 +55,7 @@ class FinancialSnapshotService {
       template: controller.liveBudgetProgress,
       txs: visibleTransactions,
       focusMonth: focusMonth,
-      yearly: false,
+      yearly: isAllYearOption(focusMonth),
       allTime: false,
       reviewedCategoryByTxId: controller.reviewedCategoryByTxId,
     );
@@ -77,13 +79,9 @@ class FinancialSnapshotService {
     double visibleIncome = 0;
     double visibleExpenses = 0;
     for (final tx in visibleTransactions) {
-      if (tx.date.year == focusMonth.year &&
-          tx.date.month == focusMonth.month) {
-        if (tx.amount < 0) {
-          visibleIncome += tx.amount.abs();
-        } else {
-          visibleExpenses += tx.amount;
-        }
+      if (transactionInSelectedPeriod(tx, focusMonth)) {
+        visibleIncome += tx.incomeAmount;
+        visibleExpenses += tx.expenseAmount;
       }
     }
 
@@ -103,6 +101,8 @@ class FinancialSnapshotService {
       budgetProgress: visibleBudgetProgress,
       stats: stats,
       selectedAccountId: targetAccountId,
+      precomputedSummary: precomputedSummary,
+      reviewedCategoryByTxId: controller.reviewedCategoryByTxId,
       scopeLabel: targetAccountId == kAllAccountsId
           ? 'Overall (All Accounts)'
           : (useLinkedAccounts

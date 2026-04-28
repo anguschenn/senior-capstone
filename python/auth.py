@@ -5,8 +5,10 @@ import threading
 import time
 
 from flask import request, jsonify
+from supabase import Client
 
 from config import INTERNAL_API_KEY, AI_RATE_LIMIT_PER_MINUTE
+from supabase_repo import supabase
 
 # ── Simple in-memory sliding-window rate limiter ─────────────────────
 _rate_buckets: dict[str, list[float]] = {}
@@ -44,3 +46,26 @@ def require_api_key():
     if not hmac.compare_digest(provided, INTERNAL_API_KEY):
         return jsonify({"error": "Unauthorized"}), 401
     return None
+
+
+class UserAuthError(RuntimeError):
+    pass
+
+
+def require_supabase_user_id() -> str:
+    auth_header = request.headers.get("Authorization") or ""
+    token = ""
+    if auth_header.lower().startswith("bearer "):
+        token = auth_header[7:].strip()
+    if not token:
+        token = (request.headers.get("x-supabase-access-token") or "").strip()
+    if not token:
+        raise UserAuthError("Missing Supabase access token")
+
+    auth_client: Client = supabase
+    response = auth_client.auth.get_user(token)
+    user = getattr(response, "user", None)
+    user_id = getattr(user, "id", None)
+    if not user_id:
+        raise UserAuthError("Invalid Supabase access token")
+    return user_id

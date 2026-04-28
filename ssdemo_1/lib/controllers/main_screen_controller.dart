@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../constants/app_constants.dart';
-import '../core/config/env_config.dart';
 import '../models/app_models.dart';
+import '../services/auth_service.dart';
 import '../services/budget_service.dart';
+import '../services/category_service.dart';
 import '../services/sync_service.dart';
+import '../utils/app_helpers.dart';
 
 /// Owns all mutable state for the main screen and exposes actions for the UI.
 class MainScreenController extends ChangeNotifier {
@@ -24,7 +26,9 @@ class MainScreenController extends ChangeNotifier {
   List<CategoryOption> liveCategoryOptions = const [];
   List<AccountOption> liveAccountOptions = const [];
   Map<String, String> reviewedCategoryByTxId = const {};
+  Set<String> manualReviewedTxIds = const {};
   Set<String> confirmedReviewTxIds = const {};
+  Set<String> lowConfidenceReviewTxIds = const {};
   String selectedAccountId = kAllAccountsId;
   DateTime selectedMonth = DateTime(
     DateTime.now().year,
@@ -51,7 +55,7 @@ class MainScreenController extends ChangeNotifier {
   }
 
   void selectMonth(DateTime month) {
-    selectedMonth = DateTime(month.year, month.month, 1);
+    selectedMonth = normalizedMonthOption(month);
     notifyListeners();
   }
 
@@ -76,13 +80,13 @@ class MainScreenController extends ChangeNotifier {
     }
   }
 
-  Future<void> connectPlaidAndPullData() async {
+  Future<void> connectBankAndPullData() async {
     if (syncing) return;
     syncing = true;
     syncStatus = 'Syncing...';
     notifyListeners();
 
-    await SyncService.instance.triggerPlaidSync();
+    await SyncService.instance.triggerBankSync();
 
     try {
       final result = await SyncService.instance.refreshFromSupabase(
@@ -109,7 +113,9 @@ class MainScreenController extends ChangeNotifier {
     liveCategoryOptions = const [];
     liveAccountOptions = const [];
     reviewedCategoryByTxId = const {};
+    manualReviewedTxIds = const {};
     confirmedReviewTxIds = const {};
+    lowConfidenceReviewTxIds = const {};
     selectedAccountId = kAllAccountsId;
     selectedMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
     liveStats = const DashboardStats(
@@ -123,12 +129,22 @@ class MainScreenController extends ChangeNotifier {
   }
 
   void onTransactionCategorySelected(AppTransaction tx, String category) {
-    if (tx.amount < 0) return;
+    if (!tx.isExpense) return;
+    final currentCategory = reviewedCategoryByTxId[tx.id] ??
+        CategoryService.instance.budgetBucketFor(
+          tx,
+          const <String, String>{},
+        );
+    if (currentCategory.trim() == category.trim()) {
+      return;
+    }
     final reviewedNext = Map<String, String>.from(reviewedCategoryByTxId);
     reviewedNext[tx.id] = category;
+    final manualNext = Set<String>.from(manualReviewedTxIds)..add(tx.id);
     final confirmedNext = Set<String>.from(confirmedReviewTxIds);
     confirmedNext.remove(tx.id);
     reviewedCategoryByTxId = reviewedNext;
+    manualReviewedTxIds = manualNext;
     confirmedReviewTxIds = confirmedNext;
     _rebuildBudgetProgress();
     notifyListeners();
@@ -137,33 +153,60 @@ class MainScreenController extends ChangeNotifier {
   void confirmReviewedCategory(String txId) {
     confirmedReviewTxIds = Set<String>.from(confirmedReviewTxIds)..add(txId);
     notifyListeners();
+    AppTransaction? tx;
+    for (final item in liveTransactions) {
+      if (item.id == txId) {
+        tx = item;
+        break;
+      }
+    }
+    if (tx == null) return;
+    final category = reviewedCategoryByTxId[txId] ??
+        CategoryService.instance.budgetBucketFor(
+          tx,
+          reviewedCategoryByTxId,
+        );
+    final ruleKey = CategoryService.instance.ruleKeyForTransaction(tx);
+    CategoryService.instance.saveAutoCategoryRule(
+      userId: AuthService.instance.currentUserId,
+      ruleKey: ruleKey,
+      category: category,
+      confidence: 'high',
+    );
   }
 
   Future<void> updateBudgetLimit(String budgetId, double monthlyLimit) async {
     if (monthlyLimit <= 0) return;
     if (budgetId.startsWith('preset_')) {
-      liveBudgetProgress = liveBudgetProgress
-          .map(
-            (b) => b.budgetId == budgetId
-                ? BudgetCategoryProgress(
-                    budgetId: b.budgetId,
-                    categoryId: b.categoryId,
-                    title: b.title,
-                    spent: b.spent,
-                    limit: monthlyLimit,
-                  )
-                : b,
-          )
-          .toList();
-      notifyListeners();
+      try {
+        final item = liveBudgetProgress.firstWhere((b) => b.budgetId == budgetId);
+        final month = normalizedMonthOption(selectedMonth);
+        final monthYear =
+            '${month.year.toString().padLeft(4, '0')}-${month.month.toString().padLeft(2, '0')}';
+        await BudgetService.instance.upsertMonthlyBudgetByCategoryTitle(
+          userId: AuthService.instance.currentUserId,
+          categoryTitle: item.title,
+          monthlyLimit: monthlyLimit,
+          monthYear: monthYear,
+        );
+        await refreshLiveDataOnly();
+      } catch (e) {
+        syncStatus = 'Update budget failed: $e';
+        notifyListeners();
+      }
       return;
     }
-    await BudgetService.instance.updateBudgetLimit(
-      budgetId,
-      monthlyLimit,
-      EnvConfig.instance.demoUserId,
-    );
-    await refreshLiveDataOnly();
+    try {
+      await BudgetService.instance.updateBudgetLimit(
+        budgetId,
+        monthlyLimit,
+        AuthService.instance.currentUserId,
+      );
+      await refreshLiveDataOnly();
+    } catch (e) {
+      syncStatus = 'Update budget failed: $e';
+      notifyListeners();
+    }
   }
 
   // --- Private helpers ---
@@ -179,11 +222,22 @@ class MainScreenController extends ChangeNotifier {
     liveAccountOptions = result.accountOptions;
     liveStats = result.stats;
     reviewedCategoryByTxId = {
+      ...result.autoReviewedCategoryByTxId,
       for (final entry in reviewedCategoryByTxId.entries)
         if (txIdSet.contains(entry.key)) entry.key: entry.value,
     };
+    manualReviewedTxIds = {
+      for (final txId in manualReviewedTxIds)
+        if (txIdSet.contains(txId)) txId,
+    };
     confirmedReviewTxIds = {
+      ...result.autoConfirmedReviewTxIds,
       for (final txId in confirmedReviewTxIds)
+        if (txIdSet.contains(txId)) txId,
+    };
+    lowConfidenceReviewTxIds = {
+      ...result.autoLowConfidenceReviewTxIds,
+      for (final txId in lowConfidenceReviewTxIds)
         if (txIdSet.contains(txId)) txId,
     };
     if (selectedAccountId != kAllAccountsId &&

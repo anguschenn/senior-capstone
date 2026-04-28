@@ -6,11 +6,16 @@ class AppTransaction {
     required this.dedupeKey,
     required this.id,
     required this.accountId,
+    required this.accountName,
     required this.name,
+    required this.description,
+    required this.transactionType,
     required this.category,
     required this.primaryCategory,
     required this.date,
     required this.amount,
+    required this.accountType,
+    required this.accountSubtype,
     required this.pending,
     required this.confidence,
   });
@@ -18,60 +23,154 @@ class AppTransaction {
   final String dedupeKey;
   final String id;
   final String accountId;
+  final String accountName;
   final String name;
+  final String description;
+  final String transactionType;
   final String category;
   final String primaryCategory;
   final DateTime date;
   final double amount;
+  final String accountType;
+  final String accountSubtype;
   final bool pending;
   final String confidence;
 
+  bool get usesCheckingSavingsPolarity => usesDepositoryPolarity(
+    accountName: accountName,
+    accountType: accountType,
+    accountSubtype: accountSubtype,
+  );
+
+  bool get isExpense =>
+      amount != 0 &&
+      (usesCheckingSavingsPolarity ? amount < 0 : amount > 0);
+
+  bool get isInflow => amount != 0 && !isExpense;
+
+  bool get isIncome =>
+      isInflow &&
+      isDepositIncomeSignal(
+        transactionType: transactionType,
+        category: category,
+        primaryCategory: primaryCategory,
+        name: name,
+        description: description,
+      );
+
+  bool get isNonIncomeInflow => isInflow && !isIncome;
+
+  double get displayAmount => amount.abs();
+
+  double get expenseAmount => isExpense ? displayAmount : 0;
+
+  double get incomeAmount => isIncome ? displayAmount : 0;
+
+  double get nonIncomeInflowAmount => isNonIncomeInflow ? displayAmount : 0;
+
   factory AppTransaction.fromMap(Map<String, dynamic> row) {
-    final merchant = (row['merchant_name'] as String?)?.trim();
+    final merchant =
+        ((row['counterparty_name'] as String?) ??
+                (row['merchant_name'] as String?))
+            ?.trim();
     final fallbackName = (row['name'] as String?)?.trim();
+    final description = (row['description'] as String?)?.trim();
     final name = (merchant?.isNotEmpty ?? false)
         ? merchant!
-        : ((fallbackName?.isNotEmpty ?? false) ? fallbackName! : 'Unknown');
-    final rawDetailedCategory = (row['pfc_detailed'] as String?)?.trim();
-    final rawCategory = (row['pfc_primary'] as String?)?.trim();
-    final legacyCategory = (row['category'] as String?)?.trim();
+        : ((fallbackName?.isNotEmpty ?? false)
+              ? fallbackName!
+              : ((description?.isNotEmpty ?? false)
+                    ? description!
+                    : 'Unknown'));
+    final rawDetailedCategory =
+        ((row['teller_category'] as String?) ?? (row['category'] as String?))
+            ?.trim();
+    final rawCategory = (row['transaction_type'] as String?)?.trim();
+    final transactionType = (row['transaction_type'] as String?)?.trim();
     final category = (rawDetailedCategory?.isNotEmpty ?? false)
         ? prettifyCategoryLabel(rawDetailedCategory!)
         : ((rawCategory?.isNotEmpty ?? false)
               ? prettifyCategoryLabel(rawCategory!)
-              : ((legacyCategory?.isNotEmpty ?? false)
-                    ? prettifyCategoryLabel(legacyCategory!)
+              : ((transactionType?.isNotEmpty ?? false)
+                    ? prettifyCategoryLabel(transactionType!)
                     : 'Uncategorized'));
     final primaryCategory = (rawCategory?.isNotEmpty ?? false)
         ? prettifyCategoryLabel(rawCategory!)
-        : ((legacyCategory?.isNotEmpty ?? false)
-              ? prettifyCategoryLabel(legacyCategory!)
+        : ((transactionType?.isNotEmpty ?? false)
+              ? prettifyCategoryLabel(transactionType!)
               : 'Uncategorized');
-    final rawDate = (row['date'] as String?) ?? DateTime.now().toIso8601String();
+    final rawDate =
+        (row['date'] as String?) ?? DateTime.now().toIso8601String();
     final date = DateTime.tryParse(rawDate) ?? DateTime.now();
     final amountRaw = row['amount'];
     final parsedAmount = amountRaw is num
         ? amountRaw.toDouble()
         : double.tryParse('$amountRaw') ?? 0;
     final amount = parsedAmount;
-    final plaidId = (row['plaid_transaction_id'] as String?)?.trim() ?? '';
-    final accountId = (row['plaid_account_id'] as String?)?.trim() ?? '';
-    final confidence = ((row['pfc_confidence'] as String?) ?? '').trim().toLowerCase();
-    final dedupeKey = plaidId.isNotEmpty
-        ? plaidId
+    final externalTransactionId =
+        ((row['teller_transaction_id'] as String?) ?? '').trim();
+    final providerId = externalTransactionId;
+    final externalAccountId = ((row['teller_account_id'] as String?) ?? '')
+        .trim();
+    final accountId = externalAccountId;
+    final accountName = ((row['account_name'] as String?) ?? '').trim();
+    final accountType = ((row['account_type'] as String?) ?? '').trim();
+    final accountSubtype = ((row['subtype'] as String?) ?? '').trim();
+    final processingStatus = ((row['processing_status'] as String?) ?? '')
+        .trim()
+        .toLowerCase();
+    final confidence = ((row['needs_review'] as bool?) ?? false)
+        ? 'low'
+        : (processingStatus == 'complete' ? 'high' : 'medium');
+    final status = ((row['status'] as String?) ?? '').trim().toLowerCase();
+    final dedupeKey = providerId.isNotEmpty
+        ? providerId
         : '${name.toLowerCase()}|${amount.toStringAsFixed(2)}|${date.toIso8601String().split("T").first}';
     return AppTransaction(
       dedupeKey: dedupeKey,
-      id: plaidId.isNotEmpty ? plaidId : dedupeKey,
+      id: providerId.isNotEmpty ? providerId : dedupeKey,
       accountId: accountId,
+      accountName: accountName,
       name: name,
+      description: description ?? '',
+      transactionType: transactionType ?? '',
       category: category,
       primaryCategory: primaryCategory,
       date: date,
       amount: amount,
-      pending: (row['pending'] as bool?) ?? false,
+      accountType: accountType,
+      accountSubtype: accountSubtype,
+      pending: ((row['pending'] as bool?) ?? false) || status == 'pending',
       confidence: confidence,
     );
+  }
+
+  static bool usesDepositoryPolarity({
+    required String accountName,
+    required String accountType,
+    required String accountSubtype,
+  }) {
+    final type = accountType.toLowerCase().trim();
+    final subtype = accountSubtype.toLowerCase().trim();
+    if (type == 'depository') return true;
+    if (type == 'credit' || type == 'loan') return false;
+    if (subtype == 'checking' || subtype == 'savings') return true;
+    if (subtype.contains('credit')) return false;
+    final key = accountName.toLowerCase();
+    if (key.contains('checking') || key.contains('saving')) return true;
+    if (key.contains('credit')) return false;
+    return false;
+  }
+
+  static bool isDepositIncomeSignal({
+    required String transactionType,
+    required String category,
+    required String primaryCategory,
+    required String name,
+    required String description,
+  }) {
+    final desc = description.toLowerCase().replaceAll('_', ' ');
+    return RegExp(r'\bdeposit\b', caseSensitive: false).hasMatch(desc);
   }
 }
 
@@ -103,6 +202,8 @@ class DashboardStats {
   final double monthlyIncome;
   final double monthlyExpenses;
   final double netThisMonth;
+
+  double get cashFlowNetThisMonth => netThisMonth;
 }
 
 // Single chart point for income/expense visualizations.
@@ -117,7 +218,7 @@ class MonthlyFlowPoint {
   final double income;
   final double expenses;
 
-  double get net => income - expenses;
+  double get cashFlowNet => income - expenses;
 }
 
 enum FlowViewMode { month, year, all }
@@ -146,10 +247,7 @@ class BudgetCategoryProgress {
 
 // Category option loaded from Supabase and reused by budget flows.
 class CategoryOption {
-  const CategoryOption({
-    required this.id,
-    required this.name,
-  });
+  const CategoryOption({required this.id, required this.name});
 
   final String id;
   final String name;

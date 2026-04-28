@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../constants/app_constants.dart';
 import '../models/ai/ai_models.dart';
 import '../models/app_models.dart';
 import '../services/ai_api_client.dart';
@@ -45,12 +44,33 @@ class BudgetPage extends StatefulWidget {
 class _BudgetPageState extends State<BudgetPage> {
   // Controls which budget aggregation window is visible.
   BudgetViewMode viewMode = BudgetViewMode.month;
+  final Map<String, int> _manualBudgetOrder = <String, int>{};
 
   bool _loadingAi = false;
   String _aiError = '';
   AiBudgetSuggestionResponse? _aiSuggestion;
   String _aiContextSource = '';
   static const _client = AiApiClient();
+  List<int> get _yearOptions {
+    final years = <int>{DateTime.now().year, widget.selectedMonth.year};
+    for (final m in widget.monthOptions) {
+      years.add(m.year);
+    }
+    final sorted = years.toList()..sort((a, b) => b.compareTo(a));
+    return sorted;
+  }
+
+  List<DateTime> get _monthOnlyOptions {
+    final seen = <String>{};
+    final out = <DateTime>[];
+    for (final m in widget.monthOptions) {
+      if (isAllYearOption(m)) continue;
+      final n = normalizedMonthOption(m);
+      final key = '${n.year}-${n.month}';
+      if (seen.add(key)) out.add(n);
+    }
+    return out;
+  }
 
   List<BudgetCategoryProgress> get activeBudgetProgress =>
       viewMode == BudgetViewMode.month
@@ -58,6 +78,19 @@ class _BudgetPageState extends State<BudgetPage> {
       : (viewMode == BudgetViewMode.year
             ? widget.budgetProgressYear
             : widget.budgetProgressAll);
+
+  List<BudgetCategoryProgress> get orderedBudgetProgress {
+    final ordered = [...activeBudgetProgress];
+    for (final item in ordered) {
+      _manualBudgetOrder.putIfAbsent(item.budgetId, () => _manualBudgetOrder.length);
+    }
+    ordered.sort((a, b) {
+      final ai = _manualBudgetOrder[a.budgetId] ?? 1 << 30;
+      final bi = _manualBudgetOrder[b.budgetId] ?? 1 << 30;
+      return ai.compareTo(bi);
+    });
+    return ordered;
+  }
 
   bool _hasEnoughAiData() {
     final totals = (widget.spendingSummary['totals'] is Map)
@@ -155,7 +188,11 @@ class _BudgetPageState extends State<BudgetPage> {
   }
 
   String _selectedRangeExpensesLabel() {
-    if (viewMode == BudgetViewMode.month) return 'Total monthly expenses';
+    if (viewMode == BudgetViewMode.month) {
+      return isAllYearOption(widget.selectedMonth)
+          ? 'Total yearly expenses'
+          : 'Total monthly expenses';
+    }
     if (viewMode == BudgetViewMode.year) return 'Total yearly expenses';
     return 'Total all-time expenses';
   }
@@ -170,6 +207,12 @@ class _BudgetPageState extends State<BudgetPage> {
   @override
   Widget build(BuildContext context) {
     // Budget page combines editable category limits with lightweight insight text.
+    final selectedMonth = normalizedMonthOption(widget.selectedMonth);
+    final monthSelectionValue = _monthOnlyOptions.any((m) => m == selectedMonth)
+        ? selectedMonth
+        : (_monthOnlyOptions.isNotEmpty
+              ? _monthOnlyOptions.first
+              : DateTime(selectedMonth.year, selectedMonth.month, 1));
     return SafeArea(
       child: ListView(
         padding: const EdgeInsets.all(20),
@@ -227,7 +270,7 @@ class _BudgetPageState extends State<BudgetPage> {
               });
             },
           ),
-          if (viewMode != BudgetViewMode.all) ...[
+          if (viewMode == BudgetViewMode.month) ...[
             const SizedBox(height: 10),
             Row(
               children: [
@@ -236,24 +279,18 @@ class _BudgetPageState extends State<BudgetPage> {
                 Expanded(
                   child: DropdownButtonFormField<DateTime>(
                     key: ValueKey(
-                      'budget-month-${widget.selectedMonth.year}-${widget.selectedMonth.month}',
+                      'budget-month-${widget.selectedMonth.year}-${widget.selectedMonth.month}-${widget.selectedMonth.day}',
                     ),
-                    initialValue: DateTime(
-                      widget.selectedMonth.year,
-                      widget.selectedMonth.month,
-                      1,
-                    ),
+                    initialValue: monthSelectionValue,
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
                       isDense: true,
                     ),
-                    items: widget.monthOptions
+                    items: _monthOnlyOptions
                         .map(
                           (m) => DropdownMenuItem<DateTime>(
-                            value: DateTime(m.year, m.month, 1),
-                            child: Text(
-                              '${kMonthShortLabels[m.month - 1]} ${m.year}',
-                            ),
+                            value: normalizedMonthOption(m),
+                            child: Text(monthOptionLabel(m)),
                           ),
                         )
                         .toList(),
@@ -266,9 +303,39 @@ class _BudgetPageState extends State<BudgetPage> {
               ],
             ),
           ],
+          if (viewMode == BudgetViewMode.year) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Text('Year', style: TextStyle(color: Colors.black54)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: DropdownButtonFormField<int>(
+                    initialValue: widget.selectedMonth.year,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    items: _yearOptions
+                        .map(
+                          (y) => DropdownMenuItem<int>(
+                            value: y,
+                            child: Text('$y'),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      widget.onMonthChanged(DateTime(value, 1, 2));
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 8),
           Text(
-            '${kMonthShortLabels[widget.selectedMonth.month - 1]} ${widget.selectedMonth.year} net: ${widget.stats.netThisMonth >= 0 ? '+ ' : '- '}\$${widget.stats.netThisMonth.abs().toStringAsFixed(2)}',
+            '${periodLabelForSelection(widget.selectedMonth)} cash flow: ${widget.stats.cashFlowNetThisMonth >= 0 ? '+ ' : '- '}\$${widget.stats.cashFlowNetThisMonth.abs().toStringAsFixed(2)}',
           ),
           const SizedBox(height: 20),
           // Insight card summarizes the highest-risk budget category at a glance.
@@ -302,7 +369,7 @@ class _BudgetPageState extends State<BudgetPage> {
               ),
               child: const Text('No budgets configured for this view yet.'),
             ),
-          if (activeBudgetProgress.isNotEmpty) ..._budgetListWidgets(context),
+          if (activeBudgetProgress.isNotEmpty) _budgetList(context),
           const SizedBox(height: 18),
           BudgetAiAnalysisCard(
             loading: _loadingAi,
@@ -321,16 +388,33 @@ class _BudgetPageState extends State<BudgetPage> {
   }
 
   // Builds the visible list of budget cards for the selected time scope.
-  List<Widget> _budgetListWidgets(BuildContext context) {
-    final widgets = <Widget>[];
-    for (int i = 0; i < activeBudgetProgress.length; i++) {
-      final item = activeBudgetProgress[i];
-      widgets.add(_budgetItem(context, item));
-      if (i != activeBudgetProgress.length - 1) {
-        widgets.add(const SizedBox(height: 14));
-      }
-    }
-    return widgets;
+  Widget _budgetList(BuildContext context) {
+    final items = orderedBudgetProgress;
+    return ReorderableListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: items.length,
+      buildDefaultDragHandles: false,
+      onReorder: (oldIndex, newIndex) {
+        setState(() {
+          if (newIndex > oldIndex) newIndex -= 1;
+          final next = [...items];
+          final moved = next.removeAt(oldIndex);
+          next.insert(newIndex, moved);
+          for (int i = 0; i < next.length; i++) {
+            _manualBudgetOrder[next[i].budgetId] = i;
+          }
+        });
+      },
+      itemBuilder: (context, index) {
+        final item = items[index];
+        return Padding(
+          key: ValueKey('budget-item-${item.budgetId}'),
+          padding: EdgeInsets.only(bottom: index == items.length - 1 ? 0 : 14),
+          child: _budgetItem(context, item, index),
+        );
+      },
+    );
   }
 
   // -------------------------------------------------------------------------
@@ -418,9 +502,7 @@ class _BudgetPageState extends State<BudgetPage> {
 
   // Bulk editor for DB-backed budgets only.
   Future<void> _showBulkEditBudgetDialog(BuildContext context) async {
-    final editableBudgets = activeBudgetProgress
-        .where((b) => !b.budgetId.startsWith('preset_'))
-        .toList();
+    final editableBudgets = activeBudgetProgress.toList();
     if (editableBudgets.isEmpty) return;
     BudgetCategoryProgress selected = editableBudgets.first;
     final controller = TextEditingController(
@@ -539,7 +621,11 @@ class _BudgetPageState extends State<BudgetPage> {
   // -------------------------------------------------------------------------
 
   // Visual card for one budget category and its current usage.
-  Widget _budgetItem(BuildContext context, BudgetCategoryProgress item) {
+  Widget _budgetItem(
+    BuildContext context,
+    BudgetCategoryProgress item,
+    int index,
+  ) {
     final icon = iconForBudgetCategory(item.title);
     final tone = colorForDetailedCategory(item.title);
     final amount =
@@ -592,6 +678,10 @@ class _BudgetPageState extends State<BudgetPage> {
                   _showEditBudgetDialog(context, item);
                 },
                 icon: Icon(Icons.tune, size: 20, color: tone),
+              ),
+              ReorderableDragStartListener(
+                index: index,
+                child: Icon(Icons.drag_indicator, size: 20, color: tone),
               ),
               const SizedBox(width: 12),
               Text(amount, style: const TextStyle(fontWeight: FontWeight.w600)),

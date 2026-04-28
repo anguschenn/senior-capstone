@@ -5,10 +5,27 @@ String formatMoney(double amount, {bool signed = true}) {
   return '${isIncome ? '+' : '-'} \$$absAmount';
 }
 
+String formatTransactionMoney({
+  required double amount,
+  required bool isIncome,
+}) {
+  return '${isIncome ? '+' : '-'} \$${amount.abs().toStringAsFixed(2)}';
+}
+
 String shortDate(DateTime value, {bool alwaysShowYear = false}) {
   const months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
   final now = DateTime.now();
   final showYear = alwaysShowYear || value.year != now.year;

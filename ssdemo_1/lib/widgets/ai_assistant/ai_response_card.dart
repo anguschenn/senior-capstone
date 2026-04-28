@@ -9,11 +9,6 @@ class AiResponseCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final confidencePct = (response.confidence * 100).round().clamp(0, 100);
-    final showConfidence = response.confidence > 0;
-    final lowConfidence = response.confidence > 0 && response.confidence < 0.5;
-    final citations = response.citations.where((item) => item.trim().isNotEmpty).toList();
-
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -23,52 +18,6 @@ class AiResponseCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (showConfidence)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                'Confidence: $confidencePct%',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: lowConfidence ? Colors.orange.shade700 : Colors.black54,
-                ),
-              ),
-            ),
-          if (lowConfidence)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                'Data may be limited. Sync transactions for a more precise answer.',
-                style: TextStyle(fontSize: 11, color: Colors.orange.shade700),
-              ),
-            ),
-          if (citations.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  for (final citation in citations)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.06),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        citation,
-                        style: const TextStyle(
-                          fontSize: 10,
-                          color: Colors.black54,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
           if (response.copy.isNotEmpty)
             Text(
               response.copy,

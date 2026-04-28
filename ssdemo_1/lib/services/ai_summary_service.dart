@@ -6,6 +6,53 @@ class AiSummaryService {
   const AiSummaryService._();
   static const instance = AiSummaryService._();
 
+  T? _asTyped<T>(dynamic value) => value is T ? value : null;
+
+  Map<String, dynamic> _mergeWithPrecomputed(
+    Map<String, dynamic> computed,
+    Map<String, dynamic>? precomputed,
+  ) {
+    if (precomputed == null || precomputed.isEmpty) return computed;
+    final merged = Map<String, dynamic>.from(computed);
+
+    // Prefer frontend pre-aggregated blocks when available.
+    for (final key in [
+      'totals',
+      'windows',
+      'year_index',
+      'month_index',
+      'day_index_recent',
+      'month_day_index',
+      'rankings',
+      'top_expense_categories',
+      'recent_transactions',
+      'budget_alerts',
+      'annual_summary',
+      'time_anchor',
+    ]) {
+      final value = precomputed[key];
+      if (value != null) {
+        merged[key] = value;
+      }
+    }
+
+    // Prefer metadata overrides if caller explicitly provides them.
+    for (final key in [
+      'version',
+      'generated_at',
+      'scope',
+      'scope_label',
+      'window_days',
+    ]) {
+      final value = precomputed[key];
+      if (value != null) {
+        merged[key] = value;
+      }
+    }
+
+    return merged;
+  }
+
   bool _isTransferLikeCategory(String category) {
     final text = category.toLowerCase();
     return text.contains('transfer') ||
@@ -37,6 +84,8 @@ class AiSummaryService {
     required DashboardStats stats,
     required String selectedAccountId,
     required String scopeLabel,
+    Map<String, dynamic>? precomputedSummary,
+    Map<String, String> reviewedCategoryByTxId = const <String, String>{},
     DateTime? focusMonth,
   }) {
     final anchor = DateTime(
@@ -77,7 +126,14 @@ class AiSummaryService {
     final annualCategoryTotals = <String, double>{};
     final annualExpensesOnly = <AppTransaction>[];
 
+    String effectiveCategoryFor(AppTransaction tx) {
+      final reviewed = (reviewedCategoryByTxId[tx.id] ?? '').trim();
+      if (reviewed.isNotEmpty) return reviewed;
+      return tx.category;
+    }
+
     for (final tx in transactions) {
+      final effectiveCategory = effectiveCategoryFor(tx);
       final dateKey = _dateKey(tx.date);
       final monthKey = _monthKey(tx.date);
       final monthBucket = monthTotals.putIfAbsent(
@@ -103,8 +159,8 @@ class AiSummaryService {
         txCount90d += 1;
       }
 
-      if (tx.amount < 0) {
-        final income = tx.amount.abs();
+      if (tx.isIncome) {
+        final income = tx.incomeAmount;
         monthBucket['income'] = (monthBucket['income'] as double) + income;
         dayBucket['income'] = (dayBucket['income'] as double) + income;
         yearlyBucket['income'] = (yearlyBucket['income'] as double) + income;
@@ -120,57 +176,58 @@ class AiSummaryService {
         if (tx.date.year == annualYear) {
           annualIncome += income;
         }
-      } else {
-        monthBucket['expenses'] =
-            (monthBucket['expenses'] as double) + tx.amount;
+      } else if (tx.isExpense) {
+        final expense = tx.expenseAmount;
+        monthBucket['expenses'] = (monthBucket['expenses'] as double) + expense;
         monthBucket['expense_tx_count'] =
             (monthBucket['expense_tx_count'] as int) + 1;
-        dayBucket['expenses'] = (dayBucket['expenses'] as double) + tx.amount;
+        dayBucket['expenses'] = (dayBucket['expenses'] as double) + expense;
         yearlyBucket['expenses'] =
-            (yearlyBucket['expenses'] as double) + tx.amount;
+            (yearlyBucket['expenses'] as double) + expense;
 
         if (!tx.date.isBefore(cutoff30d)) {
-          expenses30d += tx.amount;
+          expenses30d += expense;
           expenseTxCount30d += 1;
         }
         if (!tx.date.isBefore(cutoff7d)) {
-          expenses7d += tx.amount;
+          expenses7d += expense;
         }
         if (!tx.date.isBefore(cutoff90d)) {
-          expenses90d += tx.amount;
+          expenses90d += expense;
         }
         if (tx.date.year == annualYear) {
-          annualExpenses += tx.amount;
+          annualExpenses += expense;
           annualExpenseTxCount += 1;
           annualExpensesOnly.add(tx);
         }
 
-        if (_isTransferLikeCategory(tx.category)) continue;
+        if (_isTransferLikeCategory(effectiveCategory)) continue;
 
         final monthCategoryBucket = monthCategoryTotals.putIfAbsent(
           monthKey,
           () => <String, double>{},
         );
-        monthCategoryBucket[tx.category] =
-            (monthCategoryBucket[tx.category] ?? 0) + tx.amount;
+        monthCategoryBucket[effectiveCategory] =
+            (monthCategoryBucket[effectiveCategory] ?? 0) + expense;
 
         if (!tx.date.isBefore(cutoff30d)) {
-          categoryTotals30d[tx.category] =
-              (categoryTotals30d[tx.category] ?? 0) + tx.amount;
+          categoryTotals30d[effectiveCategory] =
+              (categoryTotals30d[effectiveCategory] ?? 0) + expense;
         }
         if (tx.date.year == annualYear) {
-          annualCategoryTotals[tx.category] =
-              (annualCategoryTotals[tx.category] ?? 0) + tx.amount;
+          annualCategoryTotals[effectiveCategory] =
+              (annualCategoryTotals[effectiveCategory] ?? 0) + expense;
         }
       }
     }
 
     for (final tx in transactions.take(3)) {
+      final effectiveCategory = effectiveCategoryFor(tx);
       recent.add({
         'date': _dateKey(tx.date),
         'name': tx.name,
         'amount': tx.amount,
-        'category': tx.category,
+        'category': effectiveCategory,
       });
     }
 
@@ -356,16 +413,17 @@ class AiSummaryService {
       final rankedExpenses = [...annualExpensesOnly]
         ..sort((a, b) => b.amount.compareTo(a.amount));
       for (final tx in rankedExpenses.take(5)) {
+        final effectiveCategory = effectiveCategoryFor(tx);
         anomalies.add({
           'date': _dateKey(tx.date),
           'name': tx.name,
           'amount': tx.amount,
-          'category': tx.category,
+          'category': effectiveCategory,
         });
       }
     }
 
-    return {
+    final computed = {
       'version': 2,
       'generated_at': now.toIso8601String(),
       'scope': selectedAccountId == kAllAccountsId
@@ -453,5 +511,9 @@ class AiSummaryService {
         'anomalies_top': anomalies,
       },
     };
+    return _mergeWithPrecomputed(
+      computed,
+      _asTyped<Map<String, dynamic>>(precomputedSummary),
+    );
   }
 }

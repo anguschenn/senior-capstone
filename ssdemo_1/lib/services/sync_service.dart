@@ -5,6 +5,7 @@ import '../core/config/env_config.dart';
 import '../core/config/supabase_client.dart';
 import '../models/app_models.dart';
 import 'account_service.dart';
+import 'auth_service.dart';
 import 'budget_service.dart';
 import 'category_service.dart';
 
@@ -20,6 +21,9 @@ class SyncResult {
     required this.accountOptions,
     required this.stats,
     required this.hasData,
+    required this.autoReviewedCategoryByTxId,
+    required this.autoConfirmedReviewTxIds,
+    required this.autoLowConfidenceReviewTxIds,
   });
 
   final List<AppTransaction> transactions;
@@ -31,9 +35,12 @@ class SyncResult {
   final List<AccountOption> accountOptions;
   final DashboardStats stats;
   final bool hasData;
+  final Map<String, String> autoReviewedCategoryByTxId;
+  final Set<String> autoConfirmedReviewTxIds;
+  final Set<String> autoLowConfidenceReviewTxIds;
 }
 
-/// Orchestrates Plaid sync trigger and Supabase data loading.
+/// Orchestrates bank sync trigger and Supabase data loading.
 class SyncService {
   const SyncService._();
   static const instance = SyncService._();
@@ -41,15 +48,26 @@ class SyncService {
   String _monthKey(DateTime date) =>
       '${date.year}-${date.month.toString().padLeft(2, '0')}';
 
-  /// Triggers the backend Plaid sync endpoint (best-effort).
-  Future<void> triggerPlaidSync() async {
+  Map<String, String> _backendHeaders() {
+    final headers = <String, String>{
+      'x-api-key': EnvConfig.instance.backendApiKey,
+    };
+    final accessToken = AuthService.instance.currentAccessToken;
+    if (accessToken != null && accessToken.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $accessToken';
+    }
+    return headers;
+  }
+
+  /// Triggers the backend bank sync endpoint (best-effort).
+  Future<void> triggerBankSync() async {
     try {
       await http
           .get(
             ApiConfig.instance.transactionsUri,
-            headers: {'x-api-key': EnvConfig.instance.backendApiKey},
+            headers: _backendHeaders(),
           )
-          .timeout(const Duration(seconds: 4));
+          .timeout(const Duration(seconds: 30));
     } catch (_) {}
   }
 
@@ -57,21 +75,37 @@ class SyncService {
   Future<SyncResult> refreshFromSupabase(
     Map<String, String> reviewedCategoryByTxId,
   ) async {
-    final userId = EnvConfig.instance.demoUserId;
+    final userId = AuthService.instance.currentUserId;
     final now = DateTime.now();
     final monthYear = _monthKey(now);
 
     final accountsRows = await AccountService.instance.fetchAccountRows(userId);
-    final userCategories =
-        await CategoryService.instance.ensureBaseCategories(userId);
-    await BudgetService.instance
-        .initializeBudgetsTo500(userCategories, monthYear, userId);
+    final accountMetaById = {
+      for (final row in accountsRows)
+        ((row['teller_account_id'] as String?) ?? '').trim():
+            {
+              'account_name': ((row['name'] as String?) ?? '').trim(),
+              'account_type': ((row['account_type'] as String?) ?? '').trim(),
+              'subtype': ((row['subtype'] as String?) ?? '').trim(),
+            },
+    }..remove('');
+    final userCategories = await CategoryService.instance.ensureBaseCategories(
+      userId,
+    );
+    final autoRules = await CategoryService.instance.fetchAutoCategoryRules(
+      userId,
+    );
+    await BudgetService.instance.initializeBudgetsTo500(
+      userCategories,
+      monthYear,
+      userId,
+    );
 
     final budgetRows = await AppSupabase.client
         .from('budgets')
-        .select('id,category_id,monthly_limit,month_year')
+        .select('id,category_id,monthly_limit,month')
         .eq('user_id', userId)
-        .eq('month_year', monthYear);
+        .eq('month', monthYear);
 
     final subscriptionRows = await AppSupabase.client
         .from('subscriptions')
@@ -81,23 +115,83 @@ class SyncService {
         .limit(500);
 
     final rows = await AppSupabase.client
-        .from('transactions')
+        .from('teller_transactions')
         .select(
-          'plaid_transaction_id,plaid_account_id,merchant_name,name,category,pfc_primary,pfc_detailed,pfc_confidence,date,amount,pending,user_id',
+          'teller_transaction_id,teller_account_id,counterparty_name,description,teller_category,transaction_type,processing_status,status,date,amount,is_debit,needs_review,user_id',
         )
         .eq('user_id', userId)
         .order('date', ascending: false)
         .limit(1000);
 
     // Parse and de-duplicate transactions.
-    final txRows =
-        (rows as List).whereType<Map<String, dynamic>>().toList();
+    final txRows = (rows as List).whereType<Map<String, dynamic>>().map((row) {
+      final accountId = ((row['teller_account_id'] as String?) ?? '').trim();
+      final meta = accountMetaById[accountId] ?? const <String, String>{};
+      return {
+        ...row,
+        'account_name': meta['account_name'] ?? '',
+        'account_type': meta['account_type'] ?? '',
+        'subtype': meta['subtype'] ?? '',
+      };
+    }).toList();
     final parsed = txRows.map(AppTransaction.fromMap).toList();
     final deduped = <AppTransaction>[];
     final seen = <String>{};
     for (final tx in parsed) {
       if (seen.add(tx.dedupeKey)) deduped.add(tx);
     }
+
+    // Seed existing transaction combinations into auto-category rules so
+    // future refreshes can immediately reuse the same mapping.
+    // Only insert missing keys to avoid rewriting the same rules every refresh.
+    final seedRulesByKey = <String, AutoCategoryRule>{};
+    for (int i = 0; i < txRows.length && i < parsed.length; i++) {
+      final tx = parsed[i];
+      if (!tx.isExpense) continue;
+      final key = CategoryService.instance.ruleKeyForRawTransaction(txRows[i]);
+      if (key.isEmpty) continue;
+      if (autoRules.containsKey(key)) continue;
+      final mapped = CategoryService.instance.budgetBucketForRawTransaction(
+        txRows[i],
+        const <String, String>{},
+      );
+      if (mapped.isEmpty) continue;
+      final confidence = CategoryService.instance.inferSeedRuleConfidence(
+        row: txRows[i],
+        category: mapped,
+      );
+      seedRulesByKey.putIfAbsent(
+        key,
+        () => AutoCategoryRule(category: mapped, confidence: confidence),
+      );
+    }
+    if (seedRulesByKey.isNotEmpty) {
+      await CategoryService.instance.saveAutoCategoryRulesBatch(
+        userId: userId,
+        rulesByKey: seedRulesByKey,
+      );
+    }
+
+    final autoReviewedCategoryByTxId = <String, String>{};
+    final autoConfirmedReviewTxIds = <String>{};
+    final autoLowConfidenceReviewTxIds = <String>{};
+    if (autoRules.isNotEmpty) {
+      for (int i = 0; i < txRows.length && i < parsed.length; i++) {
+        final key = CategoryService.instance.ruleKeyForRawTransaction(txRows[i]);
+        final rule = autoRules[key];
+        if (rule == null || rule.category.isEmpty) continue;
+        autoReviewedCategoryByTxId[parsed[i].id] = rule.category;
+        if (rule.confidence == 'high') {
+          autoConfirmedReviewTxIds.add(parsed[i].id);
+        } else if (rule.confidence == 'low') {
+          autoLowConfidenceReviewTxIds.add(parsed[i].id);
+        }
+      }
+    }
+    final effectiveReviewedCategoryByTxId = <String, String>{
+      ...autoReviewedCategoryByTxId,
+      ...reviewedCategoryByTxId,
+    };
 
     // Build subscriptions.
     final dbSubscriptions = <DetectedSubscription>[];
@@ -115,8 +209,8 @@ class SyncService {
       if (nextDate == null) continue;
       final frequency =
           ((row['frequency'] as String?)?.trim().isNotEmpty ?? false)
-              ? (row['frequency'] as String).trim()
-              : 'monthly';
+          ? (row['frequency'] as String).trim()
+          : 'monthly';
       final dedupeKey =
           '${merchant.toLowerCase()}|${amount.toStringAsFixed(2)}|${nextDate.toIso8601String().split("T").first}';
       if (!subSeen.add(dedupeKey)) continue;
@@ -135,15 +229,13 @@ class SyncService {
     double monthlyExpenses = 0;
     for (final tx in deduped) {
       if (tx.date.year == now.year && tx.date.month == now.month) {
-        if (tx.amount < 0) {
-          monthlyIncome += tx.amount.abs();
-        } else {
-          monthlyExpenses += tx.amount;
-        }
+        monthlyIncome += tx.incomeAmount;
+        monthlyExpenses += tx.expenseAmount;
       }
     }
-    final totalBalance =
-        AccountService.instance.computeTotalBalance(accountsRows);
+    final totalBalance = AccountService.instance.computeTotalBalance(
+      accountsRows,
+    );
 
     // Account options.
     final txCountByAccount = <String, int>{};
@@ -152,20 +244,23 @@ class SyncService {
       txCountByAccount[tx.accountId] =
           (txCountByAccount[tx.accountId] ?? 0) + 1;
     }
-    final accountOptions = AccountService.instance
-        .buildAccountOptions(accountsRows, txCountByAccount);
+    final accountOptions = AccountService.instance.buildAccountOptions(
+      accountsRows,
+      txCountByAccount,
+    );
 
     // Budget progress.
     final categoryMap = {for (final c in userCategories) c.id: c.name};
-    final budgetRowsList =
-        (budgetRows as List).whereType<Map<String, dynamic>>().toList();
+    final budgetRowsList = (budgetRows as List)
+        .whereType<Map<String, dynamic>>()
+        .toList();
     final budgetProgress = BudgetService.instance.buildProgressFromRows(
       budgetRows: budgetRowsList,
       categoryMap: categoryMap,
       txRows: txRows,
       now: now,
       yearly: false,
-      reviewedCategoryByTxId: reviewedCategoryByTxId,
+      reviewedCategoryByTxId: effectiveReviewedCategoryByTxId,
     );
     final budgetProgressYear = BudgetService.instance.buildProgressFromRows(
       budgetRows: budgetRowsList,
@@ -173,18 +268,30 @@ class SyncService {
       txRows: txRows,
       now: now,
       yearly: true,
-      reviewedCategoryByTxId: reviewedCategoryByTxId,
+      reviewedCategoryByTxId: effectiveReviewedCategoryByTxId,
     );
     final effectiveBudgetProgress = budgetProgress.isNotEmpty
         ? budgetProgress
-        : BudgetService.instance
-              .presetBudgetProgress(deduped, now, false, reviewedCategoryByTxId);
+        : BudgetService.instance.presetBudgetProgress(
+            deduped,
+            now,
+            false,
+            effectiveReviewedCategoryByTxId,
+          );
     final effectiveBudgetProgressYear = budgetProgressYear.isNotEmpty
         ? budgetProgressYear
-        : BudgetService.instance
-              .presetBudgetProgress(deduped, now, true, reviewedCategoryByTxId);
+        : BudgetService.instance.presetBudgetProgress(
+            deduped,
+            now,
+            true,
+            effectiveReviewedCategoryByTxId,
+          );
     final effectiveBudgetProgressAll = BudgetService.instance
-        .presetBudgetProgressAllTime(deduped, now, reviewedCategoryByTxId);
+        .presetBudgetProgressAllTime(
+          deduped,
+          now,
+          effectiveReviewedCategoryByTxId,
+        );
 
     return SyncResult(
       transactions: deduped,
@@ -200,7 +307,11 @@ class SyncService {
         monthlyExpenses: monthlyExpenses,
         netThisMonth: monthlyIncome - monthlyExpenses,
       ),
-      hasData: deduped.isNotEmpty ||
+      autoReviewedCategoryByTxId: autoReviewedCategoryByTxId,
+      autoConfirmedReviewTxIds: autoConfirmedReviewTxIds,
+      autoLowConfidenceReviewTxIds: autoLowConfidenceReviewTxIds,
+      hasData:
+          deduped.isNotEmpty ||
           totalBalance > 0 ||
           effectiveBudgetProgress.isNotEmpty ||
           effectiveBudgetProgressYear.isNotEmpty ||

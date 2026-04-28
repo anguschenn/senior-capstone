@@ -16,7 +16,7 @@ class HomePage extends StatelessWidget {
     required this.stats,
     required this.syncing,
     required this.syncStatus,
-    required this.onConnectPlaid,
+    required this.onConnectBank,
     required this.onRefreshLiveData,
     required this.onClearLiveData,
     required this.accountOptions,
@@ -25,7 +25,9 @@ class HomePage extends StatelessWidget {
     required this.monthOptions,
     required this.onMonthChanged,
     required this.reviewedCategoryByTxId,
+    required this.manualReviewedTxIds,
     required this.confirmedReviewTxIds,
+    required this.lowConfidenceReviewTxIds,
     required this.onAccountChanged,
     required this.onTransactionCategorySelected,
     required this.onReviewConfirm,
@@ -38,7 +40,7 @@ class HomePage extends StatelessWidget {
   final DashboardStats stats;
   final bool syncing;
   final String syncStatus;
-  final VoidCallback onConnectPlaid;
+  final VoidCallback onConnectBank;
   final VoidCallback onRefreshLiveData;
   final VoidCallback onClearLiveData;
   final List<AccountOption> accountOptions;
@@ -47,7 +49,9 @@ class HomePage extends StatelessWidget {
   final List<DateTime> monthOptions;
   final ValueChanged<DateTime> onMonthChanged;
   final Map<String, String> reviewedCategoryByTxId;
+  final Set<String> manualReviewedTxIds;
   final Set<String> confirmedReviewTxIds;
+  final Set<String> lowConfidenceReviewTxIds;
   final ValueChanged<String> onAccountChanged;
   final void Function(AppTransaction tx, String category)
   onTransactionCategorySelected;
@@ -58,33 +62,29 @@ class HomePage extends StatelessWidget {
     double displayIncome = 0;
     double displayExpenses = 0;
     for (final tx in transactions) {
-      if (tx.date.year != selectedMonth.year ||
-          tx.date.month != selectedMonth.month) {
-        continue;
-      }
-      if (tx.amount < 0) {
-        displayIncome += tx.amount.abs();
-      } else {
-        displayExpenses += tx.amount;
-      }
+      if (!transactionInSelectedPeriod(tx, selectedMonth)) continue;
+      displayIncome += tx.incomeAmount;
+      displayExpenses += tx.expenseAmount;
     }
     final displayNet = displayIncome - displayExpenses;
-    final periodLabel =
-        '${kMonthShortLabels[selectedMonth.month - 1]} ${selectedMonth.year}';
+    final periodLabel = periodLabelForSelection(selectedMonth);
 
     final incomeTitle = 'Income ($periodLabel)';
     final expensesTitle = 'Expenses ($periodLabel)';
-    final netLabel = 'Net ($periodLabel)';
+    final cashFlowLabel = 'Cash Flow ($periodLabel)';
 
-    // Review queue focuses on spending transactions with low confidence
-    // or transactions the user manually changed but has not confirmed yet.
+    // Review queue only shows low-confidence spending transactions.
     final pendingReviewTransactions = lowConfidenceTransactions
         .where(
-          (tx) =>
-              !confirmedReviewTxIds.contains(tx.id) &&
-              tx.amount > 0 &&
-              (tx.confidence == 'low' ||
-                  reviewedCategoryByTxId.containsKey(tx.id)),
+          (tx) {
+            if (confirmedReviewTxIds.contains(tx.id) || !tx.isExpense) {
+              return false;
+            }
+            if (manualReviewedTxIds.contains(tx.id)) {
+              return true;
+            }
+            return lowConfidenceReviewTxIds.contains(tx.id);
+          },
         )
         .toList();
     return SafeArea(
@@ -103,7 +103,7 @@ class HomePage extends StatelessWidget {
             runSpacing: 8,
             children: [
               FilledButton.icon(
-                onPressed: syncing ? null : onConnectPlaid,
+                onPressed: syncing ? null : onConnectBank,
                 icon: syncing
                     ? const SizedBox(
                         width: 14,
@@ -188,21 +188,15 @@ class HomePage extends StatelessWidget {
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<DateTime>(
                       key: ValueKey(
-                        'home-month-${selectedMonth.year}-${selectedMonth.month}',
+                        'home-month-${selectedMonth.year}-${selectedMonth.month}-${selectedMonth.day}',
                       ),
                       isExpanded: true,
-                      value: DateTime(
-                        selectedMonth.year,
-                        selectedMonth.month,
-                        1,
-                      ),
+                      value: normalizedMonthOption(selectedMonth),
                       items: monthOptions
                           .map(
                             (m) => DropdownMenuItem<DateTime>(
-                              value: DateTime(m.year, m.month, 1),
-                              child: Text(
-                                '${kMonthShortLabels[m.month - 1]} ${m.year}',
-                              ),
+                              value: normalizedMonthOption(m),
+                              child: Text(monthOptionLabel(m)),
                             ),
                           )
                           .toList(),
@@ -228,7 +222,7 @@ class HomePage extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            '$netLabel: ${displayNet >= 0 ? '+ ' : '- '}\$${displayNet.abs().toStringAsFixed(2)}',
+            '$cashFlowLabel: ${displayNet >= 0 ? '+ ' : '- '}\$${displayNet.abs().toStringAsFixed(2)}',
             style: TextStyle(
               color: displayNet >= 0 ? Colors.green : Colors.red,
             ),
@@ -266,7 +260,7 @@ class HomePage extends StatelessWidget {
               child: Text('No transactions yet. Tap Connect or Refresh.'),
             ),
           ...transactions.take(3).map((tx) {
-            final effectiveCategory = tx.amount < 0
+            final effectiveCategory = tx.isIncome
                 ? 'Income'
                 : (reviewedCategoryByTxId[tx.id] ??
                       budgetCategoryFromPfc(
@@ -284,7 +278,7 @@ class HomePage extends StatelessWidget {
                   Text(shortDate(tx.date, alwaysShowYear: true)),
                   InkWell(
                     borderRadius: BorderRadius.circular(999),
-                    onTap: tx.amount < 0
+                    onTap: tx.isIncome
                         ? null
                         : () {
                             showTransactionCategoryPicker(
@@ -306,7 +300,12 @@ class HomePage extends StatelessWidget {
                   ),
                 ],
               ),
-              trailing: Text(formatMoney(tx.amount)),
+              trailing: Text(
+                formatTransactionMoney(
+                  amount: tx.displayAmount,
+                  isIncome: tx.isIncome,
+                ),
+              ),
             );
           }),
           const SizedBox(height: 16),
@@ -323,7 +322,7 @@ class HomePage extends StatelessWidget {
               style: TextStyle(color: Colors.black54),
             ),
           ...pendingReviewTransactions.map((tx) {
-            final selected = tx.amount < 0
+            final selected = tx.isIncome
                 ? 'Income'
                 : (reviewedCategoryByTxId[tx.id] ??
                       budgetCategoryFromPfc(
@@ -361,7 +360,7 @@ class HomePage extends StatelessWidget {
                             ),
                             InkWell(
                               borderRadius: BorderRadius.circular(999),
-                              onTap: tx.amount < 0
+                              onTap: tx.isIncome
                                   ? null
                                   : () {
                                       showTransactionCategoryPicker(
@@ -410,7 +409,10 @@ class HomePage extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    formatMoney(tx.amount),
+                    formatTransactionMoney(
+                      amount: tx.displayAmount,
+                      isIncome: tx.isIncome,
+                    ),
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 8),

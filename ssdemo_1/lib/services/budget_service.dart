@@ -10,6 +10,7 @@ class BudgetService {
   static const instance = BudgetService._();
 
   final _categoryService = CategoryService.instance;
+  static const _budgetMonthColumn = 'month';
 
   Future<void> initializeBudgetsTo500(
     List<CategoryOption> categories,
@@ -22,7 +23,7 @@ class BudgetService {
           .from('budgets')
           .select('id,category_id')
           .eq('user_id', userId)
-          .eq('month_year', monthYear);
+          .eq(_budgetMonthColumn, monthYear);
       final existing = (rows as List)
           .whereType<Map<String, dynamic>>()
           .toList();
@@ -37,9 +38,9 @@ class BudgetService {
         await AppSupabase.client.from('budgets').insert({
           'user_id': userId,
           'category_id': c.id,
-          'monthly_limit': 500,
+          'monthly_limit': 0,
           'rollover_amount': 0,
-          'month_year': monthYear,
+          _budgetMonthColumn: monthYear,
         });
       }
     } catch (_) {}
@@ -57,6 +58,73 @@ class BudgetService {
         .update({'monthly_limit': monthlyLimit})
         .eq('id', budgetId)
         .eq('user_id', userId);
+  }
+
+  Future<void> upsertMonthlyBudgetByCategoryTitle({
+    required String userId,
+    required String categoryTitle,
+    required double monthlyLimit,
+    required String monthYear,
+  }) async {
+    if (monthlyLimit <= 0 || categoryTitle.trim().isEmpty) return;
+    final normalizedTitle = normalizeCategoryKey(categoryTitle);
+
+    final categoriesRows = await AppSupabase.client
+        .from('categories')
+        .select('id,name,user_id')
+        .or('user_id.eq.$userId,user_id.is.null');
+    final categories = (categoriesRows as List).whereType<Map<String, dynamic>>();
+
+    String? categoryId;
+    for (final row in categories) {
+      final name = normalizeCategoryKey('${row['name'] ?? ''}');
+      if (name == normalizedTitle) {
+        categoryId = '${row['id']}';
+        break;
+      }
+    }
+
+    if (categoryId == null || categoryId.isEmpty) {
+      final inserted = await AppSupabase.client
+          .from('categories')
+          .insert({
+            'user_id': userId,
+            'name': categoryTitle.trim(),
+            'is_custom': false,
+          })
+          .select('id')
+          .limit(1);
+      final insertedRows = inserted.whereType<Map<String, dynamic>>().toList();
+      if (insertedRows.isNotEmpty) {
+        categoryId = '${insertedRows.first['id']}';
+      }
+    }
+    if (categoryId == null || categoryId.isEmpty) return;
+
+    final budgetRows = await AppSupabase.client
+        .from('budgets')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('category_id', categoryId)
+        .eq(_budgetMonthColumn, monthYear)
+        .limit(1);
+    final existing = (budgetRows as List).whereType<Map<String, dynamic>>().toList();
+    if (existing.isNotEmpty) {
+      await AppSupabase.client
+          .from('budgets')
+          .update({'monthly_limit': monthlyLimit})
+          .eq('id', '${existing.first['id']}')
+          .eq('user_id', userId);
+      return;
+    }
+
+    await AppSupabase.client.from('budgets').insert({
+      'user_id': userId,
+      'category_id': categoryId,
+      'monthly_limit': monthlyLimit,
+      'rollover_amount': 0,
+      _budgetMonthColumn: monthYear,
+    });
   }
 
   List<BudgetCategoryProgress> buildProgressFromRows({
@@ -81,16 +149,26 @@ class BudgetService {
       final amount = rawAmount is num
           ? rawAmount.toDouble()
           : double.tryParse('$rawAmount') ?? 0;
-      if (amount <= 0) {
+      final accountName = ((row['account_name'] as String?) ?? '').trim();
+      final accountType = ((row['account_type'] as String?) ?? '').trim();
+      final accountSubtype = ((row['subtype'] as String?) ?? '').trim();
+      final usesDepository = AppTransaction.usesDepositoryPolarity(
+        accountName: accountName,
+        accountType: accountType,
+        accountSubtype: accountSubtype,
+      );
+      final isExpense = usesDepository ? amount < 0 : amount > 0;
+      if (!isExpense) {
         continue;
       }
+      final expenseAmount = amount.abs();
       final bucket = _categoryService.budgetBucketForRawTransaction(
         row,
         reviewedCategoryByTxId,
       );
       final bucketKey = normalizeCategoryKey(bucket);
       spentByCategoryName[bucketKey] =
-          (spentByCategoryName[bucketKey] ?? 0) + amount;
+          (spentByCategoryName[bucketKey] ?? 0) + expenseAmount;
     }
 
     final progress = <BudgetCategoryProgress>[];
@@ -107,9 +185,6 @@ class BudgetService {
       final monthlyLimit = rawLimit is num
           ? rawLimit.toDouble()
           : double.tryParse('$rawLimit') ?? 0;
-      if (monthlyLimit <= 0) {
-        continue;
-      }
       final title = categoryMap[categoryId] ?? 'Unknown';
       final titleKey = normalizeCategoryKey(title);
       progress.add(
@@ -122,7 +197,6 @@ class BudgetService {
         ),
       );
     }
-    progress.sort((a, b) => b.ratio.compareTo(a.ratio));
     return progress;
   }
 
@@ -135,7 +209,7 @@ class BudgetService {
     const preset = kPresetBudgetCategories;
     final spentMap = <String, double>{for (final p in preset) p: 0};
     for (final tx in txs) {
-      if (tx.amount <= 0) continue;
+      if (!tx.isExpense) continue;
       if (yearly) {
         if (tx.date.year != now.year) continue;
       } else {
@@ -145,7 +219,7 @@ class BudgetService {
         tx,
         reviewedCategoryByTxId,
       );
-      spentMap[bucket] = (spentMap[bucket] ?? 0) + tx.amount;
+      spentMap[bucket] = (spentMap[bucket] ?? 0) + tx.expenseAmount;
     }
     return preset
         .map(
@@ -154,7 +228,7 @@ class BudgetService {
             categoryId: 'preset_${name.toLowerCase()}',
             title: name,
             spent: spentMap[name] ?? 0,
-            limit: yearly ? 500 * 12 : 500,
+            limit: 0,
           ),
         )
         .toList();
@@ -168,22 +242,12 @@ class BudgetService {
     const preset = kPresetBudgetCategories;
     final spentMap = <String, double>{for (final p in preset) p: 0};
     for (final tx in txs) {
-      if (tx.amount <= 0) continue;
+      if (!tx.isExpense) continue;
       final bucket = _categoryService.budgetBucketFor(
         tx,
         reviewedCategoryByTxId,
       );
-      spentMap[bucket] = (spentMap[bucket] ?? 0) + tx.amount;
-    }
-
-    int coveredMonths = 1;
-    if (txs.isNotEmpty) {
-      final earliest = txs
-          .map((e) => DateTime(e.date.year, e.date.month, 1))
-          .reduce((a, b) => a.isBefore(b) ? a : b);
-      coveredMonths =
-          (now.year - earliest.year) * 12 + (now.month - earliest.month) + 1;
-      if (coveredMonths < 1) coveredMonths = 1;
+      spentMap[bucket] = (spentMap[bucket] ?? 0) + tx.expenseAmount;
     }
 
     return preset
@@ -193,7 +257,7 @@ class BudgetService {
             categoryId: 'preset_${name.toLowerCase()}',
             title: name,
             spent: spentMap[name] ?? 0,
-            limit: 500.0 * coveredMonths,
+            limit: 0,
           ),
         )
         .toList();
@@ -210,7 +274,7 @@ class BudgetService {
     if (template.isEmpty) return const <BudgetCategoryProgress>[];
     final spentByCategory = <String, double>{};
     for (final tx in txs) {
-      if (tx.amount <= 0) continue;
+      if (!tx.isExpense) continue;
       if (!allTime) {
         if (yearly) {
           if (tx.date.year != focusMonth.year) continue;
@@ -226,7 +290,7 @@ class BudgetService {
         reviewedCategoryByTxId,
       );
       final key = normalizeCategoryKey(bucket);
-      spentByCategory[key] = (spentByCategory[key] ?? 0) + tx.amount;
+      spentByCategory[key] = (spentByCategory[key] ?? 0) + tx.expenseAmount;
     }
     final rebased = template
         .map(
@@ -239,7 +303,6 @@ class BudgetService {
           ),
         )
         .toList();
-    rebased.sort((a, b) => b.ratio.compareTo(a.ratio));
     return rebased;
   }
 }

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../constants/app_constants.dart';
 import '../models/app_models.dart';
 import '../utils/app_helpers.dart';
 import '../widgets/common/transaction_category_tag.dart';
@@ -33,15 +32,49 @@ class TransactionsPage extends StatefulWidget {
 class _TransactionsPageState extends State<TransactionsPage> {
   String query = '';
   ActivityViewMode viewMode = ActivityViewMode.month;
+  DateTimeRange? customRange;
+
+  List<int> get _yearOptions {
+    final years = <int>{DateTime.now().year, widget.selectedMonth.year};
+    for (final tx in widget.transactions) {
+      years.add(tx.date.year);
+    }
+    final sorted = years.toList()..sort((a, b) => b.compareTo(a));
+    return sorted;
+  }
+
+  String get _rangeLabel {
+    final selectedMonth = normalizedMonthOption(widget.selectedMonth);
+    if (viewMode == ActivityViewMode.month) return monthOptionLabel(selectedMonth);
+    if (viewMode == ActivityViewMode.year) return '${selectedMonth.year}';
+    if (customRange != null) {
+      return '${shortDate(customRange!.start, alwaysShowYear: true)} - ${shortDate(customRange!.end, alwaysShowYear: true)}';
+    }
+    return 'all time';
+  }
+
+  List<DateTime> get _monthOnlyOptions {
+    final seen = <String>{};
+    final out = <DateTime>[];
+    for (final m in widget.monthOptions) {
+      if (isAllYearOption(m)) continue;
+      final n = normalizedMonthOption(m);
+      final key = '${n.year}-${n.month}';
+      if (seen.add(key)) out.add(n);
+    }
+    return out;
+  }
 
   @override
   Widget build(BuildContext context) {
     // First filter by time range, then apply the text query.
-    final selectedMonth = DateTime(
-      widget.selectedMonth.year,
-      widget.selectedMonth.month,
-      1,
-    );
+    final selectedMonth = normalizedMonthOption(widget.selectedMonth);
+    final monthSelectionValue =
+        _monthOnlyOptions.any((m) => m == selectedMonth)
+        ? selectedMonth
+        : (_monthOnlyOptions.isNotEmpty
+              ? _monthOnlyOptions.first
+              : DateTime(selectedMonth.year, selectedMonth.month, 1));
     final periodTransactions = widget.transactions.where((tx) {
       if (viewMode == ActivityViewMode.month) {
         return tx.date.year == selectedMonth.year &&
@@ -49,6 +82,22 @@ class _TransactionsPageState extends State<TransactionsPage> {
       }
       if (viewMode == ActivityViewMode.year) {
         return tx.date.year == selectedMonth.year;
+      }
+      if (viewMode == ActivityViewMode.all && customRange != null) {
+        final start = DateTime(
+          customRange!.start.year,
+          customRange!.start.month,
+          customRange!.start.day,
+        );
+        final end = DateTime(
+          customRange!.end.year,
+          customRange!.end.month,
+          customRange!.end.day,
+          23,
+          59,
+          59,
+        );
+        return !tx.date.isBefore(start) && !tx.date.isAfter(end);
       }
       return true;
     }).toList();
@@ -69,29 +118,41 @@ class _TransactionsPageState extends State<TransactionsPage> {
           // Header filters let the user narrow the full activity list without re-querying.
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-            child: SegmentedButton<ActivityViewMode>(
-              segments: const [
-                ButtonSegment<ActivityViewMode>(
-                  value: ActivityViewMode.month,
-                  label: Text('By Month'),
-                ),
-                ButtonSegment<ActivityViewMode>(
-                  value: ActivityViewMode.year,
-                  label: Text('By Year'),
-                ),
-                ButtonSegment<ActivityViewMode>(
-                  value: ActivityViewMode.all,
-                  label: Text('All Time'),
+            child: Row(
+              children: [
+                const Text('Range', style: TextStyle(color: Colors.black54)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: DropdownButtonFormField<ActivityViewMode>(
+                    initialValue: viewMode,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: ActivityViewMode.month,
+                        child: Text('By Month'),
+                      ),
+                      DropdownMenuItem(
+                        value: ActivityViewMode.year,
+                        child: Text('By Year'),
+                      ),
+                      DropdownMenuItem(
+                        value: ActivityViewMode.all,
+                        child: Text('All Time / Custom'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() => viewMode = value);
+                    },
+                  ),
                 ),
               ],
-              selected: {viewMode},
-              onSelectionChanged: (selection) {
-                if (selection.isEmpty) return;
-                setState(() => viewMode = selection.first);
-              },
             ),
           ),
-          if (viewMode != ActivityViewMode.all)
+          if (viewMode == ActivityViewMode.month)
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
               child: Row(
@@ -101,20 +162,18 @@ class _TransactionsPageState extends State<TransactionsPage> {
                   Expanded(
                     child: DropdownButtonFormField<DateTime>(
                       key: ValueKey(
-                        'tx-month-${selectedMonth.year}-${selectedMonth.month}',
+                        'tx-month-${selectedMonth.year}-${selectedMonth.month}-${selectedMonth.day}',
                       ),
-                      initialValue: selectedMonth,
+                      initialValue: monthSelectionValue,
                       decoration: const InputDecoration(
                         border: OutlineInputBorder(),
                         isDense: true,
                       ),
-                      items: widget.monthOptions
+                      items: _monthOnlyOptions
                           .map(
                             (m) => DropdownMenuItem<DateTime>(
-                              value: DateTime(m.year, m.month, 1),
-                              child: Text(
-                                '${kMonthShortLabels[m.month - 1]} ${m.year}',
-                              ),
+                              value: normalizedMonthOption(m),
+                              child: Text(monthOptionLabel(m)),
                             ),
                           )
                           .toList(),
@@ -124,6 +183,74 @@ class _TransactionsPageState extends State<TransactionsPage> {
                       },
                     ),
                   ),
+                ],
+              ),
+            ),
+          if (viewMode == ActivityViewMode.year)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Row(
+                children: [
+                  const Text('Year', style: TextStyle(color: Colors.black54)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: DropdownButtonFormField<int>(
+                      initialValue: selectedMonth.year,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: _yearOptions
+                          .map(
+                            (y) => DropdownMenuItem<int>(
+                              value: y,
+                              child: Text('$y'),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        if (value == null) return;
+                        widget.onMonthChanged(DateTime(value, 1, 2));
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (viewMode == ActivityViewMode.all)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        final now = DateTime.now();
+                        final picked = await showDateRangePicker(
+                          context: context,
+                          firstDate: DateTime(now.year - 10, 1, 1),
+                          lastDate: DateTime(now.year + 1, 12, 31),
+                          initialDateRange: customRange,
+                        );
+                        if (picked == null) return;
+                        setState(() => customRange = picked);
+                      },
+                      icon: const Icon(Icons.date_range),
+                      label: Text(
+                        customRange == null
+                            ? 'Pick Custom Date Range (Optional)'
+                            : '${shortDate(customRange!.start, alwaysShowYear: true)} - ${shortDate(customRange!.end, alwaysShowYear: true)}',
+                      ),
+                    ),
+                  ),
+                  if (customRange != null) ...[
+                    const SizedBox(width: 8),
+                    IconButton(
+                      tooltip: 'Clear custom range',
+                      onPressed: () => setState(() => customRange = null),
+                      icon: const Icon(Icons.clear),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -149,7 +276,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                '${filtered.length} transactions (${viewMode == ActivityViewMode.month ? '${kMonthShortLabels[selectedMonth.month - 1]} ${selectedMonth.year}' : (viewMode == ActivityViewMode.year ? '${selectedMonth.year}' : 'all time')})',
+                '${filtered.length} transactions ($_rangeLabel)',
                 style: const TextStyle(color: Colors.black54),
               ),
             ),
@@ -163,7 +290,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
                     itemCount: filtered.length,
                     itemBuilder: (context, i) {
                       final tx = filtered[i];
-                      final effectiveCategory = tx.amount < 0
+                      final effectiveCategory = tx.isIncome
                           ? 'Income'
                           : (widget.reviewedCategoryByTxId[tx.id] ??
                                 budgetCategoryFromPfc(
@@ -183,7 +310,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
                             Text(shortDate(tx.date, alwaysShowYear: true)),
                             InkWell(
                               borderRadius: BorderRadius.circular(999),
-                              onTap: tx.amount < 0
+                              onTap: tx.isIncome
                                   ? null
                                   : () {
                                       showTransactionCategoryPicker(
@@ -211,7 +338,12 @@ class _TransactionsPageState extends State<TransactionsPage> {
                             ),
                           ],
                         ),
-                        trailing: Text(formatMoney(tx.amount)),
+                        trailing: Text(
+                          formatTransactionMoney(
+                            amount: tx.displayAmount,
+                            isIncome: tx.isIncome,
+                          ),
+                        ),
                       );
                     },
                   ),

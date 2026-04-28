@@ -12,8 +12,10 @@ class SpendingSnapshotService:
 
     def _build_spending_snapshot(self, user_id):
         rows = (
-            supabase.table("transactions")
-            .select("date,amount,merchant_name,name,pfc_primary,pfc_detailed,pending")
+            supabase.table("teller_transactions")
+            .select(
+                "date,amount,counterparty_name,description,teller_category,transaction_type,status,teller_account_id"
+            )
             .eq("user_id", user_id)
             .order("date", desc=True)
             .limit(400)
@@ -23,6 +25,34 @@ class SpendingSnapshotService:
         txs = rows.data or []
         if not txs:
             return "No transactions available."
+
+        account_ids = sorted(
+            {
+                row.get("teller_account_id")
+                for row in txs
+                if row.get("teller_account_id")
+            }
+        )
+        account_name_by_id = {}
+        account_meta_by_id = {}
+        if account_ids:
+            accounts = (
+                supabase.table("teller_accounts")
+                .select("teller_account_id,name,account_type,subtype")
+                .eq("user_id", user_id)
+                .in_("teller_account_id", account_ids)
+                .execute()
+            )
+            for row in (accounts.data or []):
+                account_id = row.get("teller_account_id")
+                if not account_id:
+                    continue
+                account_name_by_id[account_id] = row.get("name") or ""
+                account_meta_by_id[account_id] = {
+                    "name": row.get("name") or "",
+                    "account_type": row.get("account_type") or "",
+                    "subtype": row.get("subtype") or "",
+                }
 
         today = dt.date.today()
         cutoff = today - dt.timedelta(days=30)
@@ -41,24 +71,46 @@ class SpendingSnapshotService:
                     parsed_date = today
 
             raw_amount = row.get("amount")
-            amount = raw_amount if isinstance(raw_amount, (int, float)) else 0.0
-            amount = float(amount)
+            try:
+                amount = float(raw_amount)
+            except Exception:
+                amount = 0.0
+
+            account_meta = account_meta_by_id.get(row.get("teller_account_id"), {})
+            account_name = account_name_by_id.get(row.get("teller_account_id"), "")
+            uses_depository_sign = _uses_depository_polarity(
+                account_name=account_meta.get("name") or account_name,
+                account_type=account_meta.get("account_type") or "",
+                account_subtype=account_meta.get("subtype") or "",
+            )
+            is_expense = amount < 0 if uses_depository_sign else amount > 0
+            is_inflow = amount != 0 and not is_expense
+            is_income = is_inflow and _is_deposit_income_signal(row)
 
             if parsed_date >= cutoff:
-                if amount < 0:
+                if is_income:
                     income_30d += abs(amount)
-                else:
-                    expense_30d += amount
-                    detailed = (row.get("pfc_detailed") or "").strip()
-                    primary = (row.get("pfc_primary") or "").strip()
-                    category = detailed or primary or "Uncategorized"
-                    category_totals[category] = category_totals.get(category, 0.0) + amount
+                elif is_expense:
+                    expense_30d += abs(amount)
+                    category = (
+                        row.get("teller_category")
+                        or row.get("transaction_type")
+                        or "Uncategorized"
+                    )
+                    category = category.strip()
+                    category_totals[category] = (
+                        category_totals.get(category, 0.0) + abs(amount)
+                    )
 
             if len(recent_lines) < 12:
-                merchant = (row.get("merchant_name") or "").strip()
-                fallback_name = (row.get("name") or "").strip()
+                merchant = (row.get("counterparty_name") or "").strip()
+                fallback_name = (row.get("description") or "").strip()
                 label = merchant or fallback_name or "Unknown merchant"
-                direction = "income" if amount < 0 else "expense"
+                direction = (
+                    "income"
+                    if is_income
+                    else ("inflow_non_income" if is_inflow else "expense")
+                )
                 recent_lines.append(
                     f"- {parsed_date.isoformat()} | {label} | {direction} | ${abs(amount):.2f}"
                 )
@@ -101,3 +153,29 @@ class SpendingSnapshotService:
             "expires_at": now_ts + self.ttl_seconds,
         }
         return snapshot
+
+
+def _uses_depository_polarity(
+    account_name: str, account_type: str, account_subtype: str
+) -> bool:
+    account_type_key = (account_type or "").strip().lower()
+    subtype_key = (account_subtype or "").strip().lower()
+    if account_type_key == "depository":
+        return True
+    if account_type_key in {"credit", "loan"}:
+        return False
+    if subtype_key in {"checking", "savings"}:
+        return True
+    if "credit" in subtype_key:
+        return False
+    name_key = (account_name or "").lower()
+    if "checking" in name_key or "saving" in name_key:
+        return True
+    if "credit" in name_key:
+        return False
+    return False
+
+
+def _is_deposit_income_signal(row: dict) -> bool:
+    description = str(row.get("description") or "").lower().replace("_", " ")
+    return "deposit" in description

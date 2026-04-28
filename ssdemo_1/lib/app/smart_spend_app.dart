@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../pages/auth_page.dart';
+import '../services/auth_service.dart';
 import 'main_screen.dart';
 
 class SmartSpendApp extends StatelessWidget {
@@ -14,7 +16,16 @@ class SmartSpendApp extends StatelessWidget {
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
       ),
-      home: const MainScreen(),
+      home: StreamBuilder(
+        stream: AuthService.instance.authStateChanges,
+        builder: (context, snapshot) {
+          final user = AuthService.instance.currentUser;
+          if (user == null) {
+            return const AuthPage();
+          }
+          return const MainScreen();
+        },
+      ),
     );
   }
 }

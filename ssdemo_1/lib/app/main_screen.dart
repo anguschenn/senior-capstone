@@ -10,7 +10,9 @@ import '../pages/cash_flow_page.dart';
 import '../pages/home_page.dart';
 import '../pages/subscriptions_page.dart';
 import '../pages/transactions_page.dart';
+import '../services/auth_service.dart';
 import '../services/financial_snapshot_service.dart';
+import '../utils/app_helpers.dart';
 import '../widgets/ai_assistant/ai_assistant_button.dart';
 import '../widgets/ai_assistant/ai_assistant_panel.dart';
 
@@ -25,15 +27,17 @@ class _MainScreenState extends State<MainScreen> {
   final _ctrl = MainScreenController();
 
   List<DateTime> _monthOptions(List<AppTransaction> txs) {
-    final monthSet = <DateTime>{};
+    final years = <int>{DateTime.now().year, _ctrl.selectedMonth.year};
     for (final tx in txs) {
-      monthSet.add(DateTime(tx.date.year, tx.date.month, 1));
+      years.add(tx.date.year);
     }
-    monthSet.add(
-      DateTime(_ctrl.selectedMonth.year, _ctrl.selectedMonth.month, 1),
-    );
-    final sorted = monthSet.toList()..sort((a, b) => b.compareTo(a));
-    return sorted;
+    final sortedYears = years.toList()..sort((a, b) => b.compareTo(a));
+    return [
+      for (final year in sortedYears) ...[
+        allYearOptionFor(year),
+        for (int month = 12; month >= 1; month--) DateTime(year, month, 1),
+      ],
+    ];
   }
 
   @override
@@ -67,7 +71,7 @@ class _MainScreenState extends State<MainScreen> {
     final visibleBudgetProgressAll = snapshot.budgetProgressAll;
     final visibleStats = snapshot.stats;
     final spendingSummary = snapshot.spendingSummary;
-    final monthOptions = _monthOptions(visibleTransactions);
+    final monthOptions = _monthOptions(c.liveTransactions);
 
     final body = switch (c.tabIndex) {
       0 => HomePage(
@@ -81,13 +85,15 @@ class _MainScreenState extends State<MainScreen> {
         stats: visibleStats,
         syncing: c.syncing,
         syncStatus: c.syncStatus,
-        onConnectPlaid: c.connectPlaidAndPullData,
+        onConnectBank: c.connectBankAndPullData,
         onRefreshLiveData: c.refreshLiveDataOnly,
         onClearLiveData: c.clearLiveData,
         accountOptions: c.liveAccountOptions,
         selectedAccountId: c.selectedAccountId,
         reviewedCategoryByTxId: c.reviewedCategoryByTxId,
+        manualReviewedTxIds: c.manualReviewedTxIds,
         confirmedReviewTxIds: c.confirmedReviewTxIds,
+        lowConfidenceReviewTxIds: c.lowConfidenceReviewTxIds,
         onAccountChanged: c.selectAccount,
         selectedMonth: c.selectedMonth,
         monthOptions: monthOptions,
@@ -130,6 +136,13 @@ class _MainScreenState extends State<MainScreen> {
       children: [
         Scaffold(
           body: body,
+          floatingActionButton: FloatingActionButton.small(
+            heroTag: 'sign-out',
+            onPressed: () async {
+              await AuthService.instance.signOut();
+            },
+            child: const Icon(Icons.logout),
+          ),
           bottomNavigationBar: NavigationBar(
             selectedIndex: c.tabIndex,
             onDestinationSelected: c.selectTab,

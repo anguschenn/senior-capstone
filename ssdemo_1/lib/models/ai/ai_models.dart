@@ -12,7 +12,6 @@ class AiChatResponse {
     required this.copy,
     this.insights = const [],
     this.actions = const [],
-    this.confidence = 0.0,
     this.citations = const [],
     this.contextSource = '',
     this.intent = '',
@@ -21,14 +20,12 @@ class AiChatResponse {
   final String copy;
   final List<String> insights;
   final List<String> actions;
-  final double confidence;
   final List<String> citations;
   final String contextSource;
   final String intent;
 
   factory AiChatResponse.fromJson(Map<String, dynamic> json) {
     final mainText = (json['reply'] ?? json['copy'] ?? '').toString();
-    final confidenceRaw = _toDouble(json['confidence']);
     final insights = _parseStringList(json['insights'] ?? json['why']);
     final actions = _parseStringList(json['actions'] ?? json['next_actions']);
     final citations = _parseStringList(json['citations']);
@@ -36,7 +33,6 @@ class AiChatResponse {
       copy: _normalizeMainText(mainText),
       insights: insights,
       actions: actions,
-      confidence: confidenceRaw,
       citations: citations,
       contextSource: json['context_source']?.toString() ?? '',
       intent: json['intent']?.toString() ?? '',

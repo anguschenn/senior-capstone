@@ -3,6 +3,18 @@ import json
 
 # Intent-specific prompt headers used to slightly tune response framing.
 CHAT_PROMPTS = {
+    "amount_lookup": (
+        "Mode: Answer the requested amount directly and precisely."
+    ),
+    "top_category_lookup": (
+        "Mode: Answer the requested top spending category directly."
+    ),
+    "month_overview": (
+        "Mode: Summarize the key monthly spending ranking clearly."
+    ),
+    "compare_periods": (
+        "Mode: Compare periods using explicit numbers and assumptions."
+    ),
     "explain": (
         "Mode: Explain root cause clearly and directly."
     ),
@@ -51,7 +63,7 @@ def build_chat_prompt(intent, message, history, context_text):
         '{"reply":"direct conclusion","insights":["evidence 1"],"actions":["next step 1"]}\n'
         "Constraints:\n"
         "- reply must be a short plain-text conclusion (max 280 chars).\n"
-        "- insights max 3 items; each insight should include a concrete number from context when available.\n"
+        "- insights max 3 items; include concrete numbers only when directly present in context fields.\n"
         "- actions max 3 items; each action should be specific and time-bound (e.g., this week / next 14 days).\n"
         "- At least one action should include an expected savings impact range when enough data exists.\n"
         "- If transfer categories appear, do not treat them as discretionary spending advice targets.\n"
