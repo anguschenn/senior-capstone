@@ -42,13 +42,36 @@ supabase = create_client(
     os.getenv("SUPABASE_KEY")
 )
 
+# Declare globals FIRST before anything tries to use them
+access_token = None
+item_id      = None
+
+# Load access_token from Supabase on startup so we don't need to re-link
+def load_access_token():
+    global access_token, item_id
+    try:
+        result = supabase.table("plaid_items")\
+            .select("access_token, item_id")\
+            .eq("id", "9170e13e-f03c-455a-94a1-00c79d0064ab")\
+            .execute()
+        if result.data:
+            access_token = result.data[0]["access_token"]
+            item_id      = result.data[0]["item_id"]
+            print("Loaded access_token from Supabase ✓")
+        else:
+            print("No access_token found in Supabase — go through Link to connect a bank.")
+    except Exception as e:
+        print(f"Could not load access_token: {e}")
+
+load_access_token()
+
 # ------------------------------------------------------------------ #
 #  Plaid config                                                        #
 # ------------------------------------------------------------------ #
-PLAID_CLIENT_ID    = os.getenv('PLAID_CLIENT_ID')
-PLAID_SECRET       = os.getenv('PLAID_SECRET')
-PLAID_ENV          = os.getenv('PLAID_ENV', 'sandbox')
-PLAID_PRODUCTS     = os.getenv('PLAID_PRODUCTS', 'transactions').split(',')
+PLAID_CLIENT_ID     = os.getenv('PLAID_CLIENT_ID')
+PLAID_SECRET        = os.getenv('PLAID_SECRET')
+PLAID_ENV           = os.getenv('PLAID_ENV', 'sandbox')
+PLAID_PRODUCTS      = os.getenv('PLAID_PRODUCTS', 'transactions').split(',')
 PLAID_COUNTRY_CODES = os.getenv('PLAID_COUNTRY_CODES', 'US').split(',')
 
 def empty_to_none(field):
@@ -77,10 +100,6 @@ client     = plaid_api.PlaidApi(api_client)
 
 products = [Products(p) for p in PLAID_PRODUCTS]
 
-# In-memory token storage (sandbox only — Supabase replaces this in production)
-access_token = None
-item_id      = None
-
 # ------------------------------------------------------------------ #
 #  Supabase sync helpers                                               #
 # ------------------------------------------------------------------ #
@@ -95,23 +114,24 @@ def save_accounts_to_supabase(user_id, plaid_item_id):
         for a in accounts:
             balances = a.get('balances', {})
             rows.append({
-                "plaid_item_id":    plaid_item_id,
-                "user_id":          user_id,
-                "plaid_account_id": a.get('account_id'),
-                "name":             a.get('name'),
-                "official_name":    a.get('official_name'),
-                "account_type":     str(a.get('type', '')),
-                "subtype":          str(a.get('subtype', '')),
-                "current_balance":  balances.get('current'),
-                "available_balance":balances.get('available'),
-                "mask":             a.get('mask'),
-                "updated_at":       dt.datetime.now().isoformat(),
+                "plaid_item_id":     plaid_item_id,
+                "user_id":           user_id,
+                "plaid_account_id":  a.get('account_id'),
+                "name":              a.get('name'),
+                "official_name":     a.get('official_name'),
+                "account_type":      str(a.get('type', '')),
+                "subtype":           str(a.get('subtype', '')),
+                "current_balance":   balances.get('current'),
+                "available_balance": balances.get('available'),
+                "mask":              a.get('mask'),
+                "updated_at":        dt.datetime.now().isoformat(),
             })
 
         if rows:
             supabase.table("accounts").upsert(
                 rows, on_conflict="plaid_account_id"
             ).execute()
+            print(f"Saved {len(rows)} accounts to Supabase ✓")
 
         return len(rows)
     except Exception as e:
@@ -147,7 +167,6 @@ def sync_transactions_to_supabase(user_id, plaid_item_id):
         response = client.transactions_sync(sync_request).to_dict()
         cursor = response['next_cursor']
 
-        # Transactions not ready yet — wait and retry
         if cursor == '':
             time.sleep(2)
             continue
@@ -161,13 +180,16 @@ def sync_transactions_to_supabase(user_id, plaid_item_id):
     if added:
         rows = []
         for t in added:
-            pfc = t.get('personal_finance_category') or {}
-            loc = t.get('location') or {}
+            pfc    = t.get('personal_finance_category') or {}
+            loc    = t.get('location') or {}
+            amount = t.get('amount', 0)
             rows.append({
                 "plaid_account_id":     t.get('account_id'),
                 "user_id":              user_id,
                 "plaid_transaction_id": t.get('transaction_id'),
-                "amount":               t.get('amount'),
+                "amount":               amount,
+                "amount_abs":           abs(amount),
+                "is_debit":             amount > 0,   # True = money out
                 "date":                 str(t.get('date')),
                 "name":                 t.get('name'),
                 "merchant_name":        t.get('merchant_name'),
@@ -187,9 +209,12 @@ def sync_transactions_to_supabase(user_id, plaid_item_id):
 
     # --- UPDATE modified transactions ---
     for t in modified:
-        pfc = t.get('personal_finance_category') or {}
+        pfc    = t.get('personal_finance_category') or {}
+        amount = t.get('amount', 0)
         supabase.table("transactions").update({
-            "amount":       t.get('amount'),
+            "amount":       amount,
+            "amount_abs":   abs(amount),
+            "is_debit":     amount > 0,
             "pending":      t.get('pending'),
             "pfc_primary":  pfc.get('primary'),
             "pfc_detailed": pfc.get('detailed'),
@@ -202,13 +227,14 @@ def sync_transactions_to_supabase(user_id, plaid_item_id):
             .eq("plaid_transaction_id", t.get('transaction_id')) \
             .execute()
 
-    # --- Save updated cursor for next sync ---
+    # --- Save updated cursor ---
     supabase.table("plaid_items").update({
         "cursor":         cursor,
         "last_synced_at": dt.datetime.now().isoformat(),
     }).eq("id", plaid_item_id).execute()
 
     return {"added": len(added), "modified": len(modified), "removed": len(removed)}
+
 
 # ------------------------------------------------------------------ #
 #  Routes                                                              #
@@ -250,16 +276,11 @@ def get_access_token():
     """
     Exchange a Link public_token for an access_token and save the
     Plaid item + accounts to Supabase.
-
-    For sandbox testing, user_id and plaid_item_id are hardcoded below.
-    Replace with real values once auth is wired up.
     """
     global access_token, item_id
 
-    # ---- SANDBOX TEST IDs — replace with real auth later ---- #
-    TEST_USER_ID      = "e22c81ff-c63d-4f42-a67b-e6812ffed2a3"
+    TEST_USER_ID       = "e22c81ff-c63d-4f42-a67b-e6812ffed2a3"
     TEST_PLAID_ITEM_ID = "9170e13e-f03c-455a-94a1-00c79d0064ab"
-    # ---------------------------------------------------------- #
 
     public_token = request.form['public_token']
     try:
@@ -268,7 +289,7 @@ def get_access_token():
         access_token      = exchange_response['access_token']
         item_id           = exchange_response['item_id']
 
-        # Persist the item to Supabase
+        # Always upsert item (keeps access_token fresh in Supabase)
         supabase.table("plaid_items").upsert({
             "id":           TEST_PLAID_ITEM_ID,
             "user_id":      TEST_USER_ID,
@@ -276,7 +297,7 @@ def get_access_token():
             "item_id":      item_id,
         }, on_conflict="id").execute()
 
-        # Sync accounts straight away
+        # Always sync accounts on new link to keep plaid_account_ids fresh
         save_accounts_to_supabase(TEST_USER_ID, TEST_PLAID_ITEM_ID)
 
         return jsonify(exchange_response.to_dict())
@@ -310,16 +331,52 @@ def get_transactions():
             .limit(20) \
             .execute()
 
-        # Return both formats — quickstart frontend needs 'latest_transactions'
         return jsonify({
             "latest_transactions": data.data,
-            "transactions": data.data,
-            "sync": stats
+            "transactions":        data.data,
+            "sync":                stats
         })
     except plaid.ApiException as e:
+        print(f"PLAID ERROR: {e}")
         return jsonify(format_error(e))
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/transactions/categorize', methods=['POST'])
+def user_categorize():
+    transaction_id = request.json['transaction_id']
+    category_id    = request.json['category_id']
+    merchant_name  = request.json['merchant_name']
+    user_id        = request.json['user_id']
+
+    # Save the user's decision on this transaction
+    supabase.table("transactions").update({
+        "custom_category_id": category_id,
+        "category_source":    "user",
+        "needs_review":       False
+    }).eq("id", transaction_id).execute()
+
+    # Teach the system for future transactions from this merchant
+    supabase.table("merchant_category_rules").upsert({
+        "user_id":       user_id,
+        "merchant_name": merchant_name,
+        "category_id":   category_id,
+    }, on_conflict="user_id, merchant_name").execute()
+
+    # Retroactively fix past transactions from same merchant
+    supabase.table("transactions").update({
+        "custom_category_id": category_id,
+        "category_source":    "user"
+    }).eq("user_id", user_id)\
+      .eq("merchant_name", merchant_name)\
+      .eq("category_source", "plaid")\
+      .execute()
+
+    return jsonify({"status": "ok"})
+
 
 @app.route('/api/balance', methods=['GET'])
 def get_balance():
@@ -363,7 +420,7 @@ def get_assets():
                 )
             )
         )
-        response          = client.asset_report_create(create_req)
+        response           = client.asset_report_create(create_req)
         asset_report_token = response['asset_report_token']
 
         get_req  = AssetReportGetRequest(asset_report_token=asset_report_token)
