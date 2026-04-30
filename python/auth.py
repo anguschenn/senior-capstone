@@ -4,10 +4,10 @@ import hmac
 import threading
 import time
 
-from flask import request, jsonify
+from flask import jsonify, request
 from supabase import Client
 
-from config import INTERNAL_API_KEY, AI_RATE_LIMIT_PER_MINUTE
+from config import AI_RATE_LIMIT_PER_MINUTE, INTERNAL_API_KEY
 from supabase_repo import supabase
 
 # ── Simple in-memory sliding-window rate limiter ─────────────────────

@@ -3,14 +3,14 @@ import time
 
 import plaid
 from flask import Flask, jsonify, request
+from plaid.model.accounts_balance_get_request import AccountsBalanceGetRequest
+from plaid.model.accounts_get_request import AccountsGetRequest
 from plaid.model.asset_report_create_request import AssetReportCreateRequest
 from plaid.model.asset_report_create_request_options import AssetReportCreateRequestOptions
 from plaid.model.asset_report_get_request import AssetReportGetRequest
 from plaid.model.asset_report_pdf_get_request import AssetReportPDFGetRequest
 from plaid.model.asset_report_user import AssetReportUser
 from plaid.model.auth_get_request import AuthGetRequest
-from plaid.model.accounts_balance_get_request import AccountsBalanceGetRequest
-from plaid.model.accounts_get_request import AccountsGetRequest
 from plaid.model.country_code import CountryCode
 from plaid.model.institutions_get_by_id_request import InstitutionsGetByIdRequest
 from plaid.model.item_get_request import ItemGetRequest
@@ -38,10 +38,10 @@ from config import (
     PORT,
 )
 from plaid_sync import (
+    IdentityStateError,
     client,
     format_error,
     get_stored_item_credentials,
-    IdentityStateError,
     poll_with_retries,
     pretty_print_response,
     products,
