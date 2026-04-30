@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../core/config/env_config.dart';
 import '../core/config/supabase_client.dart';
 
 class AuthService {
@@ -17,6 +18,10 @@ class AuthService {
   String get currentUserId {
     final id = currentUser?.id;
     if (id == null || id.isEmpty) {
+      if (EnvConfig.instance.skipAuth &&
+          EnvConfig.instance.demoUserId.trim().isNotEmpty) {
+        return EnvConfig.instance.demoUserId.trim();
+      }
       throw StateError('No authenticated Supabase user.');
     }
     return id;

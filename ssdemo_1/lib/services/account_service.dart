@@ -70,9 +70,9 @@ class AccountService {
 
   Future<List<Map<String, dynamic>>> fetchAccountRows(String userId) async {
     final rows = await AppSupabase.client
-        .from('teller_accounts')
+        .from('accounts')
         .select(
-          'ledger_balance,available_balance,account_type,subtype,user_id,teller_account_id,name,last_four,updated_at',
+          'current_balance,available_balance,account_type,subtype,user_id,plaid_account_id,name,mask,updated_at',
         )
         .eq('user_id', userId);
     return (rows as List).whereType<Map<String, dynamic>>().toList();
@@ -82,7 +82,7 @@ class AccountService {
     final preferredRowByGroup = <String, Map<String, dynamic>>{};
     double total = 0;
     for (final row in accountsRows) {
-      final accountId = (row['teller_account_id'] as String?)?.trim() ?? '';
+      final accountId = (row['plaid_account_id'] as String?)?.trim() ?? '';
       if (accountId.isEmpty) continue;
       final groupKey = _groupKeyForRow(accountId, row);
       final current = preferredRowByGroup[groupKey];
@@ -107,7 +107,7 @@ class AccountService {
     final txCountByGroup = <String, int>{};
 
     for (final row in accountsRows) {
-      final accountId = (row['teller_account_id'] as String?)?.trim() ?? '';
+      final accountId = (row['plaid_account_id'] as String?)?.trim() ?? '';
       if (accountId.isEmpty) continue;
 
       final groupKey = _groupKeyForRow(accountId, row);
@@ -132,7 +132,7 @@ class AccountService {
       final linkedIds = entry.value.toList()..sort();
       final preferredRow = preferredRowByGroup[groupKey];
       final preferredId =
-          (preferredRow?['teller_account_id'] as String?)?.trim() ??
+          (preferredRow?['plaid_account_id'] as String?)?.trim() ??
           linkedIds.first;
       accountOptions.add(
         AccountOption(

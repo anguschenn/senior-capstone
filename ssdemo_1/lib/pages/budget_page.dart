@@ -486,8 +486,11 @@ class _BudgetPageState extends State<BudgetPage> {
             FilledButton(
               onPressed: () async {
                 final parsed = double.tryParse(controller.text.trim());
-                if (parsed == null || parsed <= 0) return;
-                await widget.onUpdateBudgetLimit(item.budgetId, parsed);
+                if (parsed == null || parsed < 0) return;
+                final monthlyLimit = viewMode == BudgetViewMode.year
+                    ? (parsed / 12)
+                    : parsed;
+                await widget.onUpdateBudgetLimit(item.budgetId, monthlyLimit);
                 if (dialogContext.mounted) {
                   Navigator.of(dialogContext).pop();
                 }
@@ -561,8 +564,14 @@ class _BudgetPageState extends State<BudgetPage> {
                 FilledButton(
                   onPressed: () async {
                     final parsed = double.tryParse(controller.text.trim());
-                    if (parsed == null || parsed <= 0) return;
-                    await widget.onUpdateBudgetLimit(selected.budgetId, parsed);
+                    if (parsed == null || parsed < 0) return;
+                    final monthlyLimit = viewMode == BudgetViewMode.year
+                        ? (parsed / 12)
+                        : parsed;
+                    await widget.onUpdateBudgetLimit(
+                      selected.budgetId,
+                      monthlyLimit,
+                    );
                     if (dialogContext.mounted) {
                       Navigator.of(dialogContext).pop();
                     }

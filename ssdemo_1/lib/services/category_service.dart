@@ -3,10 +3,10 @@ import '../constants/app_constants.dart';
 import '../models/app_models.dart';
 import '../utils/app_helpers.dart';
 
-class AutoCategoryRule {
-  const AutoCategoryRule({required this.category, required this.confidence});
+class CategoryDecision {
+  const CategoryDecision({required this.category, required this.confidence});
   final String category;
-  final String confidence;
+  final String confidence; // high | mid | low
 }
 
 /// Manages category fetching, budget-bucket mapping, and review overrides.
@@ -14,140 +14,121 @@ class CategoryService {
   const CategoryService._();
   static const instance = CategoryService._();
 
-  String _norm(String raw) => raw.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+  String _norm(String raw) =>
+      raw.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
 
-  Future<Map<String, String>> _categoryNameById(String userId) async {
-    final rows = await AppSupabase.client
-        .from('categories')
-        .select('id,name,user_id')
-        .or('user_id.eq.$userId,user_id.is.null');
-    return {
-      for (final row in (rows as List).whereType<Map<String, dynamic>>())
-        '${row['id']}': '${row['name'] ?? ''}',
-    };
+  String _normToken(String raw) {
+    final v = _norm(raw);
+    return v.isEmpty ? '_' : v;
   }
 
-  Future<String?> _categoryIdForName(String userId, String category) async {
-    final normalized = normalizeCategoryKey(category);
-    final rows = await AppSupabase.client
-        .from('categories')
-        .select('id,name,user_id')
-        .or('user_id.eq.$userId,user_id.is.null');
-    for (final row in (rows as List).whereType<Map<String, dynamic>>()) {
-      if (normalizeCategoryKey('${row['name'] ?? ''}') == normalized) {
-        return '${row['id']}';
-      }
-    }
-    return null;
-  }
-
-  String ruleKeyForRawTransaction(Map<String, dynamic> row) {
-    final description = _norm('${row['description'] ?? ''}');
-    final tellerCategory = _norm('${row['teller_category'] ?? row['category'] ?? ''}');
-    return '$description|$tellerCategory';
+  String buildRuleKey({
+    required String merchantName,
+    required String pfcPrimary,
+    required String pfcDetailed,
+  }) {
+    return '${_normToken(merchantName)}|${_normToken(pfcPrimary)}|${_normToken(pfcDetailed)}';
   }
 
   String ruleKeyForTransaction(AppTransaction tx) {
-    final description = _norm(tx.description);
-    final tellerCategory = _norm(tx.category);
-    return '$description|$tellerCategory';
+    return buildRuleKey(
+      merchantName: tx.name,
+      pfcPrimary: tx.primaryCategory,
+      pfcDetailed: tx.category,
+    );
   }
 
-  Future<Map<String, AutoCategoryRule>> fetchAutoCategoryRules(String userId) async {
+  String ruleKeyForRawTransaction(Map<String, dynamic> row) {
+    final merchantName =
+        ((row['merchant_name'] as String?) ?? (row['name'] as String?) ?? '')
+            .trim();
+    final pfcPrimary = ((row['pfc_primary'] as String?) ?? '').trim();
+    final pfcDetailed =
+        ((row['pfc_detailed'] as String?) ?? (row['category'] as String?) ?? '')
+            .trim();
+    return buildRuleKey(
+      merchantName: merchantName,
+      pfcPrimary: pfcPrimary,
+      pfcDetailed: pfcDetailed,
+    );
+  }
+
+  Future<Map<String, CategoryDecision>> fetchRememberedRuleDecisions(
+    String userId,
+  ) async {
     try {
-      final categoryNameById = await _categoryNameById(userId);
       final rows = await AppSupabase.client
-          .from('category_rules')
-          .select('rule_key,category_id,confidence')
+          .from('category_match_rules')
+          .select('rule_key,category,confidence')
           .eq('user_id', userId);
-      final out = <String, AutoCategoryRule>{};
+      final out = <String, CategoryDecision>{};
       for (final row in (rows as List).whereType<Map<String, dynamic>>()) {
         final key = ((row['rule_key'] as String?) ?? '').trim();
-        final categoryId = ((row['category_id'] as String?) ?? '').trim();
-        final category = (categoryNameById[categoryId] ?? '').trim();
-        final confidence = ((row['confidence'] as String?) ?? 'medium')
+        final category = ((row['category'] as String?) ?? '').trim();
+        final confidence = ((row['confidence'] as String?) ?? 'high')
             .trim()
             .toLowerCase();
         if (key.isEmpty || category.isEmpty) continue;
-        out[key] = AutoCategoryRule(category: category, confidence: confidence);
+        out[key] = CategoryDecision(
+          category: category,
+          confidence: confidence.isEmpty ? 'high' : confidence,
+        );
       }
       return out;
     } catch (_) {
-      return const <String, AutoCategoryRule>{};
+      return const <String, CategoryDecision>{};
     }
   }
 
-  Future<void> saveAutoCategoryRule({
+  Future<bool> rememberRuleDecision({
     required String userId,
     required String ruleKey,
     required String category,
-    String confidence = 'medium',
   }) async {
-    if (ruleKey.trim().isEmpty || category.trim().isEmpty) return;
+    if (ruleKey.trim().isEmpty || category.trim().isEmpty) return false;
     try {
-      final categoryId = await _categoryIdForName(userId, category.trim());
-      if (categoryId == null || categoryId.isEmpty) return;
-      await AppSupabase.client.from('category_rules').upsert({
+      await AppSupabase.client.from('category_match_rules').upsert({
         'user_id': userId,
         'rule_key': ruleKey.trim(),
-        'category_id': categoryId,
-        'confidence': confidence.trim().toLowerCase(),
+        'category': category.trim(),
+        'confidence': 'high',
       }, onConflict: 'user_id,rule_key');
-    } catch (_) {}
-  }
-
-  Future<void> saveAutoCategoryRulesBatch({
-    required String userId,
-    required Map<String, AutoCategoryRule> rulesByKey,
-  }) async {
-    if (rulesByKey.isEmpty) return;
-    final categoryNameById = await _categoryNameById(userId);
-    final categoryIdByName = {
-      for (final entry in categoryNameById.entries)
-        normalizeCategoryKey(entry.value): entry.key,
-    };
-    final payload = <Map<String, dynamic>>[];
-    for (final entry in rulesByKey.entries) {
-      final key = entry.key.trim();
-      final category = entry.value.category.trim();
-      final confidence = entry.value.confidence.trim().toLowerCase();
-      final categoryId = categoryIdByName[normalizeCategoryKey(category)];
-      if (key.isEmpty || category.isEmpty) continue;
-      if (categoryId == null || categoryId.isEmpty) continue;
-      payload.add({
-        'user_id': userId,
-        'rule_key': key,
-        'category_id': categoryId,
-        'confidence': confidence.isEmpty ? 'medium' : confidence,
-      });
+      return true;
+    } catch (_) {
+      return false;
     }
-    if (payload.isEmpty) return;
-    try {
-      await AppSupabase.client
-          .from('category_rules')
-          .upsert(payload, onConflict: 'user_id,rule_key');
-    } catch (_) {}
   }
 
-  String inferSeedRuleConfidence({
-    required Map<String, dynamic> row,
-    required String category,
+  CategoryDecision classifyByPfcSignals({
+    required String pfcPrimary,
+    required String pfcDetailed,
   }) {
-    final cat = category.trim();
-    final detailed = _norm('${row['teller_category'] ?? row['category'] ?? ''}');
-    final type = _norm('${row['transaction_type'] ?? ''}');
-    final desc = _norm('${row['description'] ?? ''}');
-
-    final categorySignal = cat.isNotEmpty && cat != 'Other';
-    final descriptionSignal = RegExp(
-      r'\b(atm|withdrawal|cash|zelle|transfer|wire|ach|rent|mortgage|water|electric|utility|internet|phone|dining|restaurant|grocer|shopping|fuel|medical|pharmacy|software|subscription)\b',
-      caseSensitive: false,
-    ).hasMatch('$desc $detailed $type');
-
-    final hitCount = (categorySignal ? 1 : 0) + (descriptionSignal ? 1 : 0);
-    if (hitCount >= 2) return 'high';
-    if (hitCount == 1) return 'medium';
-    return 'low';
+    final primaryCategory = budgetCategoryFromPfc(
+      pfcDetailed: '',
+      pfcPrimary: pfcPrimary,
+    );
+    final detailedCategory = budgetCategoryFromPfc(
+      pfcDetailed: pfcDetailed,
+      pfcPrimary: '',
+    );
+    final hasPrimarySignal =
+        pfcPrimary.trim().isNotEmpty && primaryCategory != 'Other';
+    final hasDetailedSignal =
+        pfcDetailed.trim().isNotEmpty && detailedCategory != 'Other';
+    if (hasPrimarySignal && hasDetailedSignal) {
+      if (normalizeCategoryKey(primaryCategory) ==
+          normalizeCategoryKey(detailedCategory)) {
+        return CategoryDecision(category: detailedCategory, confidence: 'high');
+      }
+      return CategoryDecision(category: detailedCategory, confidence: 'mid');
+    }
+    if (hasDetailedSignal) {
+      return CategoryDecision(category: detailedCategory, confidence: 'mid');
+    }
+    if (hasPrimarySignal) {
+      return CategoryDecision(category: primaryCategory, confidence: 'mid');
+    }
+    return const CategoryDecision(category: 'Other', confidence: 'low');
   }
 
   Future<List<CategoryOption>> ensureBaseCategories(String userId) async {
@@ -215,17 +196,17 @@ class CategoryService {
     Map<String, dynamic> row,
     Map<String, String> reviewedCategoryByTxId,
   ) {
-    final txId = ((row['teller_transaction_id'] as String?) ?? '').trim();
+    final txId = ((row['plaid_transaction_id'] as String?) ?? '').trim();
     final reviewed = reviewedCategoryByTxId[txId];
     if (reviewed != null && reviewed.isNotEmpty) return reviewed;
     return budgetCategoryFromPfc(
       pfcDetailed:
-          ((row['teller_category'] as String?) ??
+          ((row['pfc_detailed'] as String?) ??
                   (row['category'] as String?) ??
                   '')
               .trim(),
       pfcPrimary:
-          ((row['transaction_type'] as String?) ?? '')
+          ((row['pfc_primary'] as String?) ?? '')
               .trim(),
     );
   }

@@ -25,12 +25,13 @@ ENV = os.getenv("ENV", "development")  # development | production
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 
-# ── Teller ───────────────────────────────────────────────────────────
-TELLER_ENV = os.getenv("TELLER_ENV", "sandbox")
-TELLER_API_BASE = os.getenv("TELLER_API_BASE", "https://api.teller.io")
-TELLER_PRODUCTS = os.getenv("TELLER_PRODUCTS", "transactions,balance").split(",")
-TELLER_CERT_PATH = _empty_to_none("TELLER_CERT_PATH")
-TELLER_KEY_PATH = _empty_to_none("TELLER_KEY_PATH")
+# ── Plaid ────────────────────────────────────────────────────────────
+PLAID_CLIENT_ID = os.getenv("PLAID_CLIENT_ID")
+PLAID_SECRET = os.getenv("PLAID_SECRET")
+PLAID_ENV = os.getenv("PLAID_ENV", "sandbox")
+PLAID_PRODUCTS = os.getenv("PLAID_PRODUCTS", "transactions").split(",")
+PLAID_COUNTRY_CODES = os.getenv("PLAID_COUNTRY_CODES", "US").split(",")
+PLAID_REDIRECT_URI = _empty_to_none("PLAID_REDIRECT_URI")
 
 # ── AI model providers ───────────────────────────────────────────────
 OLLAMA_MODEL = _empty_to_none("OLLAMA_MODEL") or "llama3"
@@ -38,7 +39,7 @@ OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
 
 # ── Demo identity ────────────────────────────────────────────────────
 DEMO_USER_ID = _empty_to_none("DEMO_USER_ID")
-DEMO_BANK_CONNECTION_ID = _empty_to_none("DEMO_BANK_CONNECTION_ID")
+DEMO_PLAID_ITEM_ID = _empty_to_none("DEMO_PLAID_ITEM_ID")
 INTERNAL_API_KEY = _empty_to_none("INTERNAL_API_KEY")
 
 # ── Caching ──────────────────────────────────────────────────────────

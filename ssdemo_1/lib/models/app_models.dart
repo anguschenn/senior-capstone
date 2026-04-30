@@ -42,21 +42,42 @@ class AppTransaction {
     accountSubtype: accountSubtype,
   );
 
+  bool get isDepositoryAccount => accountType.toLowerCase().trim() == 'depository';
+
   bool get isExpense =>
       amount != 0 &&
-      (usesCheckingSavingsPolarity ? amount < 0 : amount > 0);
+      (isDepositoryAccount
+          ? amount > 0
+          : _isExpenseByFallback(
+              amount: amount,
+              pfcDetailed: category,
+              pfcPrimary: primaryCategory,
+              usesCheckingSavingsPolarity: usesCheckingSavingsPolarity,
+            ));
 
   bool get isInflow => amount != 0 && !isExpense;
 
   bool get isIncome =>
-      isInflow &&
-      isDepositIncomeSignal(
-        transactionType: transactionType,
-        category: category,
-        primaryCategory: primaryCategory,
-        name: name,
-        description: description,
-      );
+      amount != 0 &&
+      (isDepositoryAccount
+          ? amount < 0
+          : (_directionByPfc(
+                    pfcDetailed: category,
+                    pfcPrimary: primaryCategory,
+                  ) ==
+                  _TxDirection.income ||
+              (isInflow &&
+                  isDepositIncomeSignal(
+                    transactionType: transactionType,
+                    category: category,
+                    primaryCategory: primaryCategory,
+                    name: name,
+                    description: description,
+                  ))));
+
+  bool get isRefundIncome => isIncome && _isRefundLike();
+
+  String get incomeType => !isIncome ? '' : (isRefundIncome ? 'refund' : 'other_income');
 
   bool get isNonIncomeInflow => isInflow && !isIncome;
 
@@ -70,11 +91,9 @@ class AppTransaction {
 
   factory AppTransaction.fromMap(Map<String, dynamic> row) {
     final merchant =
-        ((row['counterparty_name'] as String?) ??
-                (row['merchant_name'] as String?))
-            ?.trim();
+        (row['merchant_name'] as String?)?.trim();
     final fallbackName = (row['name'] as String?)?.trim();
-    final description = (row['description'] as String?)?.trim();
+    final description = (row['name'] as String?)?.trim();
     final name = (merchant?.isNotEmpty ?? false)
         ? merchant!
         : ((fallbackName?.isNotEmpty ?? false)
@@ -83,10 +102,10 @@ class AppTransaction {
                     ? description!
                     : 'Unknown'));
     final rawDetailedCategory =
-        ((row['teller_category'] as String?) ?? (row['category'] as String?))
+        ((row['pfc_detailed'] as String?) ?? (row['category'] as String?))
             ?.trim();
-    final rawCategory = (row['transaction_type'] as String?)?.trim();
-    final transactionType = (row['transaction_type'] as String?)?.trim();
+    final rawCategory = (row['pfc_primary'] as String?)?.trim();
+    final transactionType = (row['pfc_primary'] as String?)?.trim();
     final category = (rawDetailedCategory?.isNotEmpty ?? false)
         ? prettifyCategoryLabel(rawDetailedCategory!)
         : ((rawCategory?.isNotEmpty ?? false)
@@ -108,21 +127,17 @@ class AppTransaction {
         : double.tryParse('$amountRaw') ?? 0;
     final amount = parsedAmount;
     final externalTransactionId =
-        ((row['teller_transaction_id'] as String?) ?? '').trim();
+        ((row['plaid_transaction_id'] as String?) ?? '').trim();
     final providerId = externalTransactionId;
-    final externalAccountId = ((row['teller_account_id'] as String?) ?? '')
+    final externalAccountId = ((row['plaid_account_id'] as String?) ?? '')
         .trim();
     final accountId = externalAccountId;
     final accountName = ((row['account_name'] as String?) ?? '').trim();
     final accountType = ((row['account_type'] as String?) ?? '').trim();
     final accountSubtype = ((row['subtype'] as String?) ?? '').trim();
-    final processingStatus = ((row['processing_status'] as String?) ?? '')
+    final confidence = ((row['pfc_confidence'] as String?) ?? 'medium')
         .trim()
         .toLowerCase();
-    final confidence = ((row['needs_review'] as bool?) ?? false)
-        ? 'low'
-        : (processingStatus == 'complete' ? 'high' : 'medium');
-    final status = ((row['status'] as String?) ?? '').trim().toLowerCase();
     final dedupeKey = providerId.isNotEmpty
         ? providerId
         : '${name.toLowerCase()}|${amount.toStringAsFixed(2)}|${date.toIso8601String().split("T").first}';
@@ -140,7 +155,7 @@ class AppTransaction {
       amount: amount,
       accountType: accountType,
       accountSubtype: accountSubtype,
-      pending: ((row['pending'] as bool?) ?? false) || status == 'pending',
+      pending: ((row['pending'] as bool?) ?? false),
       confidence: confidence,
     );
   }
@@ -172,7 +187,70 @@ class AppTransaction {
     final desc = description.toLowerCase().replaceAll('_', ' ');
     return RegExp(r'\bdeposit\b', caseSensitive: false).hasMatch(desc);
   }
+
+  static bool isExpenseByPfc({
+    required String pfcDetailed,
+    required String pfcPrimary,
+  }) =>
+      _directionByPfc(pfcDetailed: pfcDetailed, pfcPrimary: pfcPrimary) ==
+      _TxDirection.expense;
+
+  static bool isIncomeByPfc({
+    required String pfcDetailed,
+    required String pfcPrimary,
+  }) =>
+      _directionByPfc(pfcDetailed: pfcDetailed, pfcPrimary: pfcPrimary) ==
+      _TxDirection.income;
+
+  static bool isKnownByPfc({
+    required String pfcDetailed,
+    required String pfcPrimary,
+  }) =>
+      _directionByPfc(pfcDetailed: pfcDetailed, pfcPrimary: pfcPrimary) !=
+      _TxDirection.unknown;
+
+  static bool _isExpenseByFallback({
+    required double amount,
+    required String pfcDetailed,
+    required String pfcPrimary,
+    required bool usesCheckingSavingsPolarity,
+  }) {
+    final byPfc = _directionByPfc(
+      pfcDetailed: pfcDetailed,
+      pfcPrimary: pfcPrimary,
+    );
+    if (byPfc == _TxDirection.expense) return true;
+    if (byPfc == _TxDirection.income) return false;
+    return usesCheckingSavingsPolarity ? amount < 0 : amount > 0;
+  }
+
+  bool _isRefundLike() {
+    final text = '${name.toLowerCase()} ${description.toLowerCase()} '
+        '${category.toLowerCase()} ${primaryCategory.toLowerCase()}';
+    return text.contains('refund') ||
+        text.contains('reversal') ||
+        text.contains('returned') ||
+        text.contains('return');
+  }
+
+  static _TxDirection _directionByPfc({
+    required String pfcDetailed,
+    required String pfcPrimary,
+  }) {
+    final detailed = pfcDetailed.toUpperCase().trim();
+    final primary = pfcPrimary.toUpperCase().trim();
+    final key = '$detailed $primary';
+    if (key.contains('INCOME')) return _TxDirection.income;
+    if (key.contains('FOOD_AND_DRINK')) return _TxDirection.expense;
+    if (key.contains('TRANSPORTATION')) return _TxDirection.expense;
+    if (key.contains('TRAVEL')) return _TxDirection.expense;
+    if (key.contains('ENTERTAINMENT')) return _TxDirection.expense;
+    if (key.contains('TRANSFER_OUT')) return _TxDirection.expense;
+    return _TxDirection.unknown;
+  }
 }
+
+enum _TxDirection { income, expense, unknown }
 
 // Lightweight subscription model shown in dashboard and subscription views.
 class DetectedSubscription {

@@ -10,7 +10,7 @@ class BudgetService {
   static const instance = BudgetService._();
 
   final _categoryService = CategoryService.instance;
-  static const _budgetMonthColumn = 'month';
+  static const _budgetMonthColumn = 'month_year';
 
   Future<void> initializeBudgetsTo500(
     List<CategoryOption> categories,
@@ -51,7 +51,7 @@ class BudgetService {
     double monthlyLimit,
     String userId,
   ) async {
-    if (monthlyLimit <= 0) return;
+    if (monthlyLimit < 0) return;
     if (budgetId.startsWith('preset_')) return;
     await AppSupabase.client
         .from('budgets')
@@ -66,7 +66,7 @@ class BudgetService {
     required double monthlyLimit,
     required String monthYear,
   }) async {
-    if (monthlyLimit <= 0 || categoryTitle.trim().isEmpty) return;
+    if (monthlyLimit < 0 || categoryTitle.trim().isEmpty) return;
     final normalizedTitle = normalizeCategoryKey(categoryTitle);
 
     final categoriesRows = await AppSupabase.client
@@ -149,6 +149,23 @@ class BudgetService {
       final amount = rawAmount is num
           ? rawAmount.toDouble()
           : double.tryParse('$rawAmount') ?? 0;
+      final pfcDetailed = ((row['pfc_detailed'] as String?) ??
+              (row['category'] as String?) ??
+              '')
+          .trim();
+      final pfcPrimary = ((row['pfc_primary'] as String?) ?? '').trim();
+      final pfcExpense = AppTransaction.isExpenseByPfc(
+        pfcDetailed: pfcDetailed,
+        pfcPrimary: pfcPrimary,
+      );
+      final pfcIncome = AppTransaction.isIncomeByPfc(
+        pfcDetailed: pfcDetailed,
+        pfcPrimary: pfcPrimary,
+      );
+      final pfcKnown = AppTransaction.isKnownByPfc(
+        pfcDetailed: pfcDetailed,
+        pfcPrimary: pfcPrimary,
+      );
       final accountName = ((row['account_name'] as String?) ?? '').trim();
       final accountType = ((row['account_type'] as String?) ?? '').trim();
       final accountSubtype = ((row['subtype'] as String?) ?? '').trim();
@@ -157,7 +174,13 @@ class BudgetService {
         accountType: accountType,
         accountSubtype: accountSubtype,
       );
-      final isExpense = usesDepository ? amount < 0 : amount > 0;
+      final isDepositoryAccount = accountType.toLowerCase() == 'depository';
+      final fallbackExpense = isDepositoryAccount
+          ? amount > 0
+          : (usesDepository ? amount < 0 : amount > 0);
+      final isExpense = pfcKnown
+          ? (pfcExpense && !pfcIncome)
+          : fallbackExpense;
       if (!isExpense) {
         continue;
       }

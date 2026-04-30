@@ -55,7 +55,7 @@ class HomePage extends StatelessWidget {
   final ValueChanged<String> onAccountChanged;
   final void Function(AppTransaction tx, String category)
   onTransactionCategorySelected;
-  final void Function(String txId) onReviewConfirm;
+  final Future<void> Function(String txId) onReviewConfirm;
 
   @override
   Widget build(BuildContext context) {
@@ -391,7 +391,7 @@ class HomePage extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       FilledButton(
-                        onPressed: () => onReviewConfirm(tx.id),
+                        onPressed: () async => onReviewConfirm(tx.id),
                         style: FilledButton.styleFrom(
                           minimumSize: const Size(52, 30),
                           padding: const EdgeInsets.symmetric(

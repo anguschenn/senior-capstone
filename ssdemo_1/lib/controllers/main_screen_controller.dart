@@ -29,6 +29,7 @@ class MainScreenController extends ChangeNotifier {
   Set<String> manualReviewedTxIds = const {};
   Set<String> confirmedReviewTxIds = const {};
   Set<String> lowConfidenceReviewTxIds = const {};
+  final Map<String, double> _manualMonthlyLimitByCategoryKey = {};
   String selectedAccountId = kAllAccountsId;
   DateTime selectedMonth = DateTime(
     DateTime.now().year,
@@ -67,6 +68,7 @@ class MainScreenController extends ChangeNotifier {
     try {
       final result = await SyncService.instance.refreshFromSupabase(
         reviewedCategoryByTxId,
+        selectedMonth,
       );
       _applySyncResult(result);
       syncStatus = result.hasData
@@ -91,6 +93,7 @@ class MainScreenController extends ChangeNotifier {
     try {
       final result = await SyncService.instance.refreshFromSupabase(
         reviewedCategoryByTxId,
+        selectedMonth,
       );
       _applySyncResult(result);
       syncStatus = result.hasData
@@ -150,9 +153,8 @@ class MainScreenController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void confirmReviewedCategory(String txId) {
+  Future<void> confirmReviewedCategory(String txId) async {
     confirmedReviewTxIds = Set<String>.from(confirmedReviewTxIds)..add(txId);
-    notifyListeners();
     AppTransaction? tx;
     for (final item in liveTransactions) {
       if (item.id == txId) {
@@ -160,53 +162,41 @@ class MainScreenController extends ChangeNotifier {
         break;
       }
     }
-    if (tx == null) return;
-    final category = reviewedCategoryByTxId[txId] ??
-        CategoryService.instance.budgetBucketFor(
-          tx,
-          reviewedCategoryByTxId,
-        );
-    final ruleKey = CategoryService.instance.ruleKeyForTransaction(tx);
-    CategoryService.instance.saveAutoCategoryRule(
-      userId: AuthService.instance.currentUserId,
-      ruleKey: ruleKey,
-      category: category,
-      confidence: 'high',
-    );
+    if (tx != null) {
+      final category = reviewedCategoryByTxId[txId] ??
+          CategoryService.instance.budgetBucketFor(tx, reviewedCategoryByTxId);
+      final ruleKey = CategoryService.instance.ruleKeyForTransaction(tx);
+      final ok = await CategoryService.instance.rememberRuleDecision(
+        userId: AuthService.instance.currentUserId,
+        ruleKey: ruleKey,
+        category: category,
+      );
+      syncStatus = ok
+          ? 'Review confirmed and saved.'
+          : 'Review confirmed locally, but save failed.';
+    }
+    notifyListeners();
   }
 
   Future<void> updateBudgetLimit(String budgetId, double monthlyLimit) async {
-    if (monthlyLimit <= 0) return;
-    if (budgetId.startsWith('preset_')) {
-      try {
-        final item = liveBudgetProgress.firstWhere((b) => b.budgetId == budgetId);
-        final month = normalizedMonthOption(selectedMonth);
-        final monthYear =
-            '${month.year.toString().padLeft(4, '0')}-${month.month.toString().padLeft(2, '0')}';
-        await BudgetService.instance.upsertMonthlyBudgetByCategoryTitle(
-          userId: AuthService.instance.currentUserId,
-          categoryTitle: item.title,
-          monthlyLimit: monthlyLimit,
-          monthYear: monthYear,
-        );
-        await refreshLiveDataOnly();
-      } catch (e) {
-        syncStatus = 'Update budget failed: $e';
-        notifyListeners();
+    if (monthlyLimit < 0) return;
+    final all = [
+      ...liveBudgetProgress,
+      ...liveBudgetProgressYear,
+      ...liveBudgetProgressAll,
+    ];
+    BudgetCategoryProgress? target;
+    for (final item in all) {
+      if (item.budgetId == budgetId) {
+        target = item;
+        break;
       }
-      return;
     }
-    try {
-      await BudgetService.instance.updateBudgetLimit(
-        budgetId,
-        monthlyLimit,
-        AuthService.instance.currentUserId,
-      );
-      await refreshLiveDataOnly();
-    } catch (e) {
-      syncStatus = 'Update budget failed: $e';
-      notifyListeners();
-    }
+    if (target == null) return;
+    final key = normalizeCategoryKey(target.title);
+    _manualMonthlyLimitByCategoryKey[key] = monthlyLimit;
+    _applyManualLimitOverrides();
+    notifyListeners();
   }
 
   // --- Private helpers ---
@@ -231,7 +221,6 @@ class MainScreenController extends ChangeNotifier {
         if (txIdSet.contains(txId)) txId,
     };
     confirmedReviewTxIds = {
-      ...result.autoConfirmedReviewTxIds,
       for (final txId in confirmedReviewTxIds)
         if (txIdSet.contains(txId)) txId,
     };
@@ -240,10 +229,50 @@ class MainScreenController extends ChangeNotifier {
       for (final txId in lowConfidenceReviewTxIds)
         if (txIdSet.contains(txId)) txId,
     };
+    _applyManualLimitOverrides();
     if (selectedAccountId != kAllAccountsId &&
         !result.accountOptions.any((a) => a.accountId == selectedAccountId)) {
       selectedAccountId = kAllAccountsId;
     }
+  }
+
+  void _applyManualLimitOverrides() {
+    if (_manualMonthlyLimitByCategoryKey.isEmpty) return;
+    liveBudgetProgress = _withManualLimits(
+      liveBudgetProgress,
+      yearly: false,
+      allTime: false,
+    );
+    liveBudgetProgressYear = _withManualLimits(
+      liveBudgetProgressYear,
+      yearly: true,
+      allTime: false,
+    );
+    liveBudgetProgressAll = _withManualLimits(
+      liveBudgetProgressAll,
+      yearly: false,
+      allTime: true,
+    );
+  }
+
+  List<BudgetCategoryProgress> _withManualLimits(
+    List<BudgetCategoryProgress> source, {
+    required bool yearly,
+    required bool allTime,
+  }) {
+    return source.map((item) {
+      final key = normalizeCategoryKey(item.title);
+      final monthly = _manualMonthlyLimitByCategoryKey[key];
+      if (monthly == null) return item;
+      final limit = allTime ? monthly : (yearly ? monthly * 12 : monthly);
+      return BudgetCategoryProgress(
+        budgetId: item.budgetId,
+        categoryId: item.categoryId,
+        title: item.title,
+        spent: item.spent,
+        limit: limit,
+      );
+    }).toList();
   }
 
   void _rebuildBudgetProgress() {
