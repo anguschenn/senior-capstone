@@ -73,7 +73,8 @@ class BudgetService {
         .from('categories')
         .select('id,name,user_id')
         .or('user_id.eq.$userId,user_id.is.null');
-    final categories = (categoriesRows as List).whereType<Map<String, dynamic>>();
+    final categories = (categoriesRows as List)
+        .whereType<Map<String, dynamic>>();
 
     String? categoryId;
     for (final row in categories) {
@@ -108,7 +109,9 @@ class BudgetService {
         .eq('category_id', categoryId)
         .eq(_budgetMonthColumn, monthYear)
         .limit(1);
-    final existing = (budgetRows as List).whereType<Map<String, dynamic>>().toList();
+    final existing = (budgetRows as List)
+        .whereType<Map<String, dynamic>>()
+        .toList();
     if (existing.isNotEmpty) {
       await AppSupabase.client
           .from('budgets')
@@ -149,10 +152,11 @@ class BudgetService {
       final amount = rawAmount is num
           ? rawAmount.toDouble()
           : double.tryParse('$rawAmount') ?? 0;
-      final pfcDetailed = ((row['pfc_detailed'] as String?) ??
-              (row['category'] as String?) ??
-              '')
-          .trim();
+      final pfcDetailed =
+          ((row['pfc_detailed'] as String?) ??
+                  (row['category'] as String?) ??
+                  '')
+              .trim();
       final pfcPrimary = ((row['pfc_primary'] as String?) ?? '').trim();
       final pfcExpense = AppTransaction.isExpenseByPfc(
         pfcDetailed: pfcDetailed,
@@ -178,9 +182,7 @@ class BudgetService {
       final fallbackExpense = isDepositoryAccount
           ? amount > 0
           : (usesDepository ? amount < 0 : amount > 0);
-      final isExpense = pfcKnown
-          ? (pfcExpense && !pfcIncome)
-          : fallbackExpense;
+      final isExpense = pfcKnown ? (pfcExpense && !pfcIncome) : fallbackExpense;
       if (!isExpense) {
         continue;
       }

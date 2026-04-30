@@ -82,7 +82,10 @@ class _BudgetPageState extends State<BudgetPage> {
   List<BudgetCategoryProgress> get orderedBudgetProgress {
     final ordered = [...activeBudgetProgress];
     for (final item in ordered) {
-      _manualBudgetOrder.putIfAbsent(item.budgetId, () => _manualBudgetOrder.length);
+      _manualBudgetOrder.putIfAbsent(
+        item.budgetId,
+        () => _manualBudgetOrder.length,
+      );
     }
     ordered.sort((a, b) {
       final ai = _manualBudgetOrder[a.budgetId] ?? 1 << 30;

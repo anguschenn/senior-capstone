@@ -3,11 +3,7 @@ import 'package:flutter/material.dart';
 import '../../utils/app_helpers.dart';
 
 class TransactionCategoryTag extends StatelessWidget {
-  const TransactionCategoryTag({
-    super.key,
-    required this.label,
-    this.colorKey,
-  });
+  const TransactionCategoryTag({super.key, required this.label, this.colorKey});
 
   final String label;
   final String? colorKey;

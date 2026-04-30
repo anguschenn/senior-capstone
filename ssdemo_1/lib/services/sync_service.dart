@@ -62,10 +62,7 @@ class SyncService {
   Future<void> triggerBankSync() async {
     try {
       await http
-          .get(
-            ApiConfig.instance.transactionsUri,
-            headers: _backendHeaders(),
-          )
+          .get(ApiConfig.instance.transactionsUri, headers: _backendHeaders())
           .timeout(const Duration(seconds: 30));
     } catch (_) {}
   }
@@ -83,18 +80,17 @@ class SyncService {
     final accountsRows = await AccountService.instance.fetchAccountRows(userId);
     final accountMetaById = {
       for (final row in accountsRows)
-        ((row['plaid_account_id'] as String?) ?? '').trim():
-            {
-              'account_name': ((row['name'] as String?) ?? '').trim(),
-              'account_type': ((row['account_type'] as String?) ?? '').trim(),
-              'subtype': ((row['subtype'] as String?) ?? '').trim(),
-            },
+        ((row['plaid_account_id'] as String?) ?? '').trim(): {
+          'account_name': ((row['name'] as String?) ?? '').trim(),
+          'account_type': ((row['account_type'] as String?) ?? '').trim(),
+          'subtype': ((row['subtype'] as String?) ?? '').trim(),
+        },
     }..remove('');
     final userCategories = await CategoryService.instance.ensureBaseCategories(
       userId,
     );
-    final rememberedRules =
-        await CategoryService.instance.fetchRememberedRuleDecisions(userId);
+    final rememberedRules = await CategoryService.instance
+        .fetchRememberedRuleDecisions(userId);
     await BudgetService.instance.initializeBudgetsTo500(
       userCategories,
       monthYear,

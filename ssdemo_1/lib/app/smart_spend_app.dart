@@ -20,15 +20,15 @@ class SmartSpendApp extends StatelessWidget {
       home: EnvConfig.instance.skipAuth
           ? const MainScreen()
           : StreamBuilder(
-        stream: AuthService.instance.authStateChanges,
-        builder: (context, snapshot) {
-          final user = AuthService.instance.currentUser;
-          if (user == null) {
-            return const AuthPage();
-          }
-          return const MainScreen();
-        },
-      ),
+              stream: AuthService.instance.authStateChanges,
+              builder: (context, snapshot) {
+                final user = AuthService.instance.currentUser;
+                if (user == null) {
+                  return const AuthPage();
+                }
+                return const MainScreen();
+              },
+            ),
     );
   }
 }

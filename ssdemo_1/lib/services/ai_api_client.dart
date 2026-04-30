@@ -67,16 +67,17 @@ class AiApiClient {
       final response = await http
           .post(
             uri,
-            headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': apiKey,
-            },
+            headers: {'Content-Type': 'application/json', 'x-api-key': apiKey},
             body: jsonEncode(body),
           )
           .timeout(const Duration(seconds: 30));
 
       final rawBody = utf8.decode(response.bodyBytes);
-      final parsed = _decodeJson(rawBody, response.statusCode, response.headers['content-type']);
+      final parsed = _decodeJson(
+        rawBody,
+        response.statusCode,
+        response.headers['content-type'],
+      );
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw AiApiException((parsed['error'] ?? 'Request failed').toString());
       }
@@ -90,15 +91,23 @@ class AiApiClient {
         'Cannot reach AI backend at ${uri.origin}. Start backend and retry.',
       );
     } on http.ClientException catch (e) {
-      throw AiApiException('Network error while reaching AI backend: ${e.message}');
+      throw AiApiException(
+        'Network error while reaching AI backend: ${e.message}',
+      );
     }
   }
 
-  Map<String, dynamic> _decodeJson(String rawBody, int statusCode, String? contentType) {
+  Map<String, dynamic> _decodeJson(
+    String rawBody,
+    int statusCode,
+    String? contentType,
+  ) {
     try {
       return jsonDecode(rawBody) as Map<String, dynamic>;
     } catch (_) {
-      final preview = rawBody.length > 180 ? '${rawBody.substring(0, 180)}...' : rawBody;
+      final preview = rawBody.length > 180
+          ? '${rawBody.substring(0, 180)}...'
+          : rawBody;
       throw AiApiException(
         'Expected JSON but got ${contentType ?? 'unknown'} (HTTP $statusCode). Body preview: $preview',
       );

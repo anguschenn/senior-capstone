@@ -42,7 +42,8 @@ class AppTransaction {
     accountSubtype: accountSubtype,
   );
 
-  bool get isDepositoryAccount => accountType.toLowerCase().trim() == 'depository';
+  bool get isDepositoryAccount =>
+      accountType.toLowerCase().trim() == 'depository';
 
   bool get isExpense =>
       amount != 0 &&
@@ -62,22 +63,23 @@ class AppTransaction {
       (isDepositoryAccount
           ? amount < 0
           : (_directionByPfc(
-                    pfcDetailed: category,
-                    pfcPrimary: primaryCategory,
-                  ) ==
-                  _TxDirection.income ||
-              (isInflow &&
-                  isDepositIncomeSignal(
-                    transactionType: transactionType,
-                    category: category,
-                    primaryCategory: primaryCategory,
-                    name: name,
-                    description: description,
-                  ))));
+                      pfcDetailed: category,
+                      pfcPrimary: primaryCategory,
+                    ) ==
+                    _TxDirection.income ||
+                (isInflow &&
+                    isDepositIncomeSignal(
+                      transactionType: transactionType,
+                      category: category,
+                      primaryCategory: primaryCategory,
+                      name: name,
+                      description: description,
+                    ))));
 
   bool get isRefundIncome => isIncome && _isRefundLike();
 
-  String get incomeType => !isIncome ? '' : (isRefundIncome ? 'refund' : 'other_income');
+  String get incomeType =>
+      !isIncome ? '' : (isRefundIncome ? 'refund' : 'other_income');
 
   bool get isNonIncomeInflow => isInflow && !isIncome;
 
@@ -90,8 +92,7 @@ class AppTransaction {
   double get nonIncomeInflowAmount => isNonIncomeInflow ? displayAmount : 0;
 
   factory AppTransaction.fromMap(Map<String, dynamic> row) {
-    final merchant =
-        (row['merchant_name'] as String?)?.trim();
+    final merchant = (row['merchant_name'] as String?)?.trim();
     final fallbackName = (row['name'] as String?)?.trim();
     final description = (row['name'] as String?)?.trim();
     final name = (merchant?.isNotEmpty ?? false)
@@ -225,7 +226,8 @@ class AppTransaction {
   }
 
   bool _isRefundLike() {
-    final text = '${name.toLowerCase()} ${description.toLowerCase()} '
+    final text =
+        '${name.toLowerCase()} ${description.toLowerCase()} '
         '${category.toLowerCase()} ${primaryCategory.toLowerCase()}';
     return text.contains('refund') ||
         text.contains('reversal') ||

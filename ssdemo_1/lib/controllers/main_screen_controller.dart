@@ -133,11 +133,9 @@ class MainScreenController extends ChangeNotifier {
 
   void onTransactionCategorySelected(AppTransaction tx, String category) {
     if (!tx.isExpense) return;
-    final currentCategory = reviewedCategoryByTxId[tx.id] ??
-        CategoryService.instance.budgetBucketFor(
-          tx,
-          const <String, String>{},
-        );
+    final currentCategory =
+        reviewedCategoryByTxId[tx.id] ??
+        CategoryService.instance.budgetBucketFor(tx, const <String, String>{});
     if (currentCategory.trim() == category.trim()) {
       return;
     }
@@ -163,7 +161,8 @@ class MainScreenController extends ChangeNotifier {
       }
     }
     if (tx != null) {
-      final category = reviewedCategoryByTxId[txId] ??
+      final category =
+          reviewedCategoryByTxId[txId] ??
           CategoryService.instance.budgetBucketFor(tx, reviewedCategoryByTxId);
       final ruleKey = CategoryService.instance.ruleKeyForTransaction(tx);
       final ok = await CategoryService.instance.rememberRuleDecision(

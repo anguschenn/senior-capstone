@@ -27,18 +27,12 @@ class AuthService {
     return id;
   }
 
-  Future<void> signIn({
-    required String email,
-    required String password,
-  }) async {
+  Future<void> signIn({required String email, required String password}) async {
     await _auth.signInWithPassword(email: email.trim(), password: password);
     await ensurePublicUserRecord();
   }
 
-  Future<void> signUp({
-    required String email,
-    required String password,
-  }) async {
+  Future<void> signUp({required String email, required String password}) async {
     await _auth.signUp(email: email.trim(), password: password);
     await ensurePublicUserRecord();
   }

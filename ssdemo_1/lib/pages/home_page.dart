@@ -74,19 +74,15 @@ class HomePage extends StatelessWidget {
     final cashFlowLabel = 'Cash Flow ($periodLabel)';
 
     // Review queue only shows low-confidence spending transactions.
-    final pendingReviewTransactions = lowConfidenceTransactions
-        .where(
-          (tx) {
-            if (confirmedReviewTxIds.contains(tx.id) || !tx.isExpense) {
-              return false;
-            }
-            if (manualReviewedTxIds.contains(tx.id)) {
-              return true;
-            }
-            return lowConfidenceReviewTxIds.contains(tx.id);
-          },
-        )
-        .toList();
+    final pendingReviewTransactions = lowConfidenceTransactions.where((tx) {
+      if (confirmedReviewTxIds.contains(tx.id) || !tx.isExpense) {
+        return false;
+      }
+      if (manualReviewedTxIds.contains(tx.id)) {
+        return true;
+      }
+      return lowConfidenceReviewTxIds.contains(tx.id);
+    }).toList();
     return SafeArea(
       child: ListView(
         padding: const EdgeInsets.all(20),

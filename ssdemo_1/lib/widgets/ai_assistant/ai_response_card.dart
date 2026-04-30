@@ -42,7 +42,10 @@ class AiResponseCard extends StatelessWidget {
                   children: [
                     const Text('• ', style: TextStyle(fontSize: 13)),
                     Expanded(
-                      child: Text(item, style: const TextStyle(fontSize: 13, height: 1.3)),
+                      child: Text(
+                        item,
+                        style: const TextStyle(fontSize: 13, height: 1.3),
+                      ),
                     ),
                   ],
                 ),
@@ -66,9 +69,15 @@ class AiResponseCard extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('→ ', style: TextStyle(fontSize: 13, color: Colors.green)),
+                    const Text(
+                      '→ ',
+                      style: TextStyle(fontSize: 13, color: Colors.green),
+                    ),
                     Expanded(
-                      child: Text(item, style: const TextStyle(fontSize: 13, height: 1.3)),
+                      child: Text(
+                        item,
+                        style: const TextStyle(fontSize: 13, height: 1.3),
+                      ),
                     ),
                   ],
                 ),

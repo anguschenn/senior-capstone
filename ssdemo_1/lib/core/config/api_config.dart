@@ -11,8 +11,9 @@ class ApiConfig {
     instance = ApiConfig._()
       .._transactionsUri = Uri.parse('${env.backendUrl}/api/transactions')
       .._aiChatUri = Uri.parse('${env.backendUrl}/api/ai/chat')
-      .._aiBudgetSuggestUri =
-          Uri.parse('${env.backendUrl}/api/ai/budget_suggest');
+      .._aiBudgetSuggestUri = Uri.parse(
+        '${env.backendUrl}/api/ai/budget_suggest',
+      );
   }
 
   late final Uri _transactionsUri;

@@ -8,10 +8,7 @@ class AppSupabase {
 
   static Future<void> init() async {
     final env = EnvConfig.instance;
-    await Supabase.initialize(
-      url: env.supabaseUrl,
-      anonKey: env.supabaseKey,
-    );
+    await Supabase.initialize(url: env.supabaseUrl, anonKey: env.supabaseKey);
   }
 
   static SupabaseClient get client => Supabase.instance.client;

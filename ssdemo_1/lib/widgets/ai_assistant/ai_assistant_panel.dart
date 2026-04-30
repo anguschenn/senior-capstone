@@ -163,7 +163,10 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
         spendingSummary: _activeSummary,
       );
       setState(() {
-        _turns[_turns.length - 1] = _ChatTurn(prompt: prompt, response: aiRespRaw);
+        _turns[_turns.length - 1] = _ChatTurn(
+          prompt: prompt,
+          response: aiRespRaw,
+        );
       });
       _persistTurnsToCache();
     } catch (e) {

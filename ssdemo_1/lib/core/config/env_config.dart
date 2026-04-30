@@ -18,9 +18,7 @@ class EnvConfig {
       );
     }
     if (backendApiKey.isEmpty) {
-      throw StateError(
-        'Missing BACKEND_API_KEY. Set it in ssdemo_1/.env.',
-      );
+      throw StateError('Missing BACKEND_API_KEY. Set it in ssdemo_1/.env.');
     }
     instance = EnvConfig._()
       .._supabaseUrl = supabaseUrl

@@ -145,7 +145,9 @@ String budgetCategoryFromPfc({
   final isCardPayment =
       key.contains('card_payment') || key.contains('card payment');
 
-  if (key.contains('atm') || key.contains('withdrawal') || key.contains('cash')) {
+  if (key.contains('atm') ||
+      key.contains('withdrawal') ||
+      key.contains('cash')) {
     return 'Cash / ATM';
   }
   if (key.contains('utility') ||

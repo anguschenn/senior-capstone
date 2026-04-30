@@ -155,11 +155,7 @@ class CategoryService {
       if (missingDefaults.isNotEmpty) {
         final payload = [
           for (final name in missingDefaults)
-            {
-              'user_id': userId,
-              'name': name,
-              'is_custom': false,
-            },
+            {'user_id': userId, 'name': name, 'is_custom': false},
         ];
         await AppSupabase.client.from('categories').insert(payload);
       }
@@ -205,9 +201,7 @@ class CategoryService {
                   (row['category'] as String?) ??
                   '')
               .trim(),
-      pfcPrimary:
-          ((row['pfc_primary'] as String?) ?? '')
-              .trim(),
+      pfcPrimary: ((row['pfc_primary'] as String?) ?? '').trim(),
     );
   }
 }

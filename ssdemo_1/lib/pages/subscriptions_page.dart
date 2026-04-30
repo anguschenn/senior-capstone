@@ -16,7 +16,10 @@ class SubscriptionsPage extends StatelessWidget {
         padding: const EdgeInsets.all(20),
         children: [
           // This page is intentionally simple: it is just the full subscriptions list.
-          const Text('Subs', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+          const Text(
+            'Subs',
+            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 8),
           Text('Recurring ${subscriptions.length} subscriptions'),
           const SizedBox(height: 16),
@@ -26,7 +29,9 @@ class SubscriptionsPage extends StatelessWidget {
             (sub) => ListTile(
               leading: const Icon(Icons.subscriptions_outlined),
               title: Text(sub.merchant),
-              subtitle: Text('Renews ${shortDate(sub.nextChargeDate)} • ${sub.frequency}'),
+              subtitle: Text(
+                'Renews ${shortDate(sub.nextChargeDate)} • ${sub.frequency}',
+              ),
               trailing: Text(formatMoney(sub.amount, signed: false)),
             ),
           ),

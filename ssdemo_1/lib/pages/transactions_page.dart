@@ -45,7 +45,9 @@ class _TransactionsPageState extends State<TransactionsPage> {
 
   String get _rangeLabel {
     final selectedMonth = normalizedMonthOption(widget.selectedMonth);
-    if (viewMode == ActivityViewMode.month) return monthOptionLabel(selectedMonth);
+    if (viewMode == ActivityViewMode.month) {
+      return monthOptionLabel(selectedMonth);
+    }
     if (viewMode == ActivityViewMode.year) return '${selectedMonth.year}';
     if (customRange != null) {
       return '${shortDate(customRange!.start, alwaysShowYear: true)} - ${shortDate(customRange!.end, alwaysShowYear: true)}';
@@ -69,8 +71,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
   Widget build(BuildContext context) {
     // First filter by time range, then apply the text query.
     final selectedMonth = normalizedMonthOption(widget.selectedMonth);
-    final monthSelectionValue =
-        _monthOnlyOptions.any((m) => m == selectedMonth)
+    final monthSelectionValue = _monthOnlyOptions.any((m) => m == selectedMonth)
         ? selectedMonth
         : (_monthOnlyOptions.isNotEmpty
               ? _monthOnlyOptions.first
