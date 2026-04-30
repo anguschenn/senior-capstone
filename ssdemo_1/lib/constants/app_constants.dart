@@ -1,5 +1,6 @@
 const String kAllAccountsId = '__all_accounts__';
 const List<String> kReviewCategories = [
+  'Income',
   'Food',
   'Shopping',
   'Transport',

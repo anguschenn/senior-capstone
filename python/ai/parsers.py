@@ -9,13 +9,16 @@ def extract_json_object(text):
         return None
     try:
         return json.loads(stripped)
-    except Exception:
-        pass
+    except json.JSONDecodeError:
+        return _extract_embedded_json(stripped)
+
+
+def _extract_embedded_json(stripped):
     start = stripped.find("{")
     end = stripped.rfind("}")
     if start >= 0 and end > start:
         try:
             return json.loads(stripped[start : end + 1])
-        except Exception:
+        except json.JSONDecodeError:
             return None
     return None

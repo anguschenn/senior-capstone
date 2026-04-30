@@ -44,6 +44,9 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     _ctrl.addListener(_onControllerChange);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _ctrl.refreshLiveDataOnly();
+    });
   }
 
   @override
@@ -136,13 +139,15 @@ class _MainScreenState extends State<MainScreen> {
       children: [
         Scaffold(
           body: body,
-          floatingActionButton: FloatingActionButton.small(
-            heroTag: 'sign-out',
-            onPressed: () async {
-              await AuthService.instance.signOut();
-            },
-            child: const Icon(Icons.logout),
-          ),
+          floatingActionButton: EnvConfig.instance.skipAuth
+              ? null
+              : FloatingActionButton.small(
+                  heroTag: 'sign-out',
+                  onPressed: () async {
+                    await AuthService.instance.signOut();
+                  },
+                  child: const Icon(Icons.logout),
+                ),
           bottomNavigationBar: NavigationBar(
             selectedIndex: c.tabIndex,
             onDestinationSelected: c.selectTab,

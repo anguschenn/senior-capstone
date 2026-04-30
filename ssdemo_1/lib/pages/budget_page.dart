@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../models/ai/ai_models.dart';
 import '../models/app_models.dart';
+import '../models/budget/budget_view_mode.dart';
 import '../services/ai_api_client.dart';
 import '../utils/app_helpers.dart';
 import '../widgets/budget/budget_ai_analysis_card.dart';
-
-enum BudgetViewMode { month, year, all }
+import '../widgets/budget/budget_insight_banner.dart';
+import '../widgets/budget/budget_progress_card.dart';
+import '../widgets/budget/budget_scope_selector.dart';
 
 class BudgetPage extends StatefulWidget {
   const BudgetPage({
@@ -210,12 +212,6 @@ class _BudgetPageState extends State<BudgetPage> {
   @override
   Widget build(BuildContext context) {
     // Budget page combines editable category limits with lightweight insight text.
-    final selectedMonth = normalizedMonthOption(widget.selectedMonth);
-    final monthSelectionValue = _monthOnlyOptions.any((m) => m == selectedMonth)
-        ? selectedMonth
-        : (_monthOnlyOptions.isNotEmpty
-              ? _monthOnlyOptions.first
-              : DateTime(selectedMonth.year, selectedMonth.month, 1));
     return SafeArea(
       child: ListView(
         padding: const EdgeInsets.all(20),
@@ -246,121 +242,28 @@ class _BudgetPageState extends State<BudgetPage> {
             ),
           ),
           const SizedBox(height: 8),
-          SegmentedButton<BudgetViewMode>(
-            segments: const [
-              ButtonSegment<BudgetViewMode>(
-                value: BudgetViewMode.month,
-                label: Text('By Month'),
-              ),
-              ButtonSegment<BudgetViewMode>(
-                value: BudgetViewMode.year,
-                label: Text('By Year'),
-              ),
-              ButtonSegment<BudgetViewMode>(
-                value: BudgetViewMode.all,
-                label: Text('All Time'),
-              ),
-            ],
-            selected: {viewMode},
-            onSelectionChanged: (selection) {
-              if (selection.isEmpty) return;
+          BudgetScopeSelector(
+            viewMode: viewMode,
+            onViewModeChanged: (mode) {
               setState(() {
-                viewMode = selection.first;
-                // Reset prior AI output when switching scope to avoid stale messages.
+                viewMode = mode;
                 _aiSuggestion = null;
                 _aiError = '';
                 _aiContextSource = '';
               });
             },
+            selectedMonth: widget.selectedMonth,
+            monthOptions: _monthOnlyOptions,
+            yearOptions: _yearOptions,
+            onMonthChanged: widget.onMonthChanged,
           ),
-          if (viewMode == BudgetViewMode.month) ...[
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                const Text('Month', style: TextStyle(color: Colors.black54)),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: DropdownButtonFormField<DateTime>(
-                    key: ValueKey(
-                      'budget-month-${widget.selectedMonth.year}-${widget.selectedMonth.month}-${widget.selectedMonth.day}',
-                    ),
-                    initialValue: monthSelectionValue,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    items: _monthOnlyOptions
-                        .map(
-                          (m) => DropdownMenuItem<DateTime>(
-                            value: normalizedMonthOption(m),
-                            child: Text(monthOptionLabel(m)),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      if (value == null) return;
-                      widget.onMonthChanged(value);
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ],
-          if (viewMode == BudgetViewMode.year) ...[
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                const Text('Year', style: TextStyle(color: Colors.black54)),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: DropdownButtonFormField<int>(
-                    initialValue: widget.selectedMonth.year,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    items: _yearOptions
-                        .map(
-                          (y) => DropdownMenuItem<int>(
-                            value: y,
-                            child: Text('$y'),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      if (value == null) return;
-                      widget.onMonthChanged(DateTime(value, 1, 2));
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ],
           const SizedBox(height: 8),
           Text(
             '${periodLabelForSelection(widget.selectedMonth)} cash flow: ${widget.stats.cashFlowNetThisMonth >= 0 ? '+ ' : '- '}\$${widget.stats.cashFlowNetThisMonth.abs().toStringAsFixed(2)}',
           ),
           const SizedBox(height: 20),
           // Insight card summarizes the highest-risk budget category at a glance.
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.orange.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.warning_amber_rounded, color: Colors.orange),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    _budgetInsight(),
-                    style: const TextStyle(fontWeight: FontWeight.w500),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          BudgetInsightBanner(message: _budgetInsight()),
           const SizedBox(height: 18),
           // Category budget cards show spent vs. limit for the current time scope.
           if (activeBudgetProgress.isEmpty)
@@ -414,7 +317,12 @@ class _BudgetPageState extends State<BudgetPage> {
         return Padding(
           key: ValueKey('budget-item-${item.budgetId}'),
           padding: EdgeInsets.only(bottom: index == items.length - 1 ? 0 : 14),
-          child: _budgetItem(context, item, index),
+          child: BudgetProgressCard(
+            item: item,
+            index: index,
+            onEdit: (selectedItem) =>
+                _showEditBudgetDialog(context, selectedItem),
+          ),
         );
       },
     );
@@ -625,110 +533,6 @@ class _BudgetPageState extends State<BudgetPage> {
           ],
         );
       },
-    );
-  }
-
-  // -------------------------------------------------------------------------
-  // Budget card rendering helpers
-  // -------------------------------------------------------------------------
-
-  // Visual card for one budget category and its current usage.
-  Widget _budgetItem(
-    BuildContext context,
-    BudgetCategoryProgress item,
-    int index,
-  ) {
-    final icon = iconForBudgetCategory(item.title);
-    final tone = colorForDetailedCategory(item.title);
-    final amount =
-        '${formatMoney(item.spent, signed: false)} / ${formatMoney(item.limit, signed: false)}';
-    final progress = item.ratio;
-    final isWarning = item.isWarning;
-    final limit = item.limit;
-    final spent = item.spent;
-    final remaining = (limit - spent).clamp(-999999, 999999);
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [tone.withValues(alpha: 0.14), tone.withValues(alpha: 0.05)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: tone.withValues(alpha: 0.25)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.85),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, size: 18, color: tone),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  item.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  softWrap: false,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ),
-              IconButton(
-                tooltip: 'Set budget',
-                onPressed: () {
-                  _showEditBudgetDialog(context, item);
-                },
-                icon: Icon(Icons.tune, size: 20, color: tone),
-              ),
-              ReorderableDragStartListener(
-                index: index,
-                child: Icon(Icons.drag_indicator, size: 20, color: tone),
-              ),
-              const SizedBox(width: 12),
-              Text(amount, style: const TextStyle(fontWeight: FontWeight.w600)),
-            ],
-          ),
-          const SizedBox(height: 10),
-          LinearProgressIndicator(
-            value: progress.clamp(0, 1),
-            minHeight: 8,
-            color: isWarning ? Colors.orange : tone,
-            backgroundColor: Colors.black12,
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Text(
-                isWarning ? 'High usage' : 'Healthy',
-                style: TextStyle(
-                  color: isWarning ? Colors.orange : tone,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 12,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                'Remaining: ${remaining >= 0 ? '' : '-'}\$${remaining.abs().toStringAsFixed(2)}',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: remaining >= 0 ? Colors.black54 : Colors.redAccent,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
     );
   }
 }

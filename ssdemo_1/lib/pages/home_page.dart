@@ -4,7 +4,7 @@ import '../constants/app_constants.dart';
 import '../models/app_models.dart';
 import '../utils/app_helpers.dart';
 import '../widgets/common/transaction_category_tag.dart';
-import '../widgets/dashboard_widgets.dart';
+import '../widgets/dashboard_sections.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({
@@ -73,9 +73,9 @@ class HomePage extends StatelessWidget {
     final expensesTitle = 'Expenses ($periodLabel)';
     final cashFlowLabel = 'Cash Flow ($periodLabel)';
 
-    // Review queue only shows low-confidence spending transactions.
+    // Review queue shows low-confidence transactions (income + expense).
     final pendingReviewTransactions = lowConfidenceTransactions.where((tx) {
-      if (confirmedReviewTxIds.contains(tx.id) || !tx.isExpense) {
+      if (confirmedReviewTxIds.contains(tx.id)) {
         return false;
       }
       if (manualReviewedTxIds.contains(tx.id)) {
@@ -318,10 +318,11 @@ class HomePage extends StatelessWidget {
               style: TextStyle(color: Colors.black54),
             ),
           ...pendingReviewTransactions.map((tx) {
-            final selected = tx.isIncome
-                ? 'Income'
-                : (reviewedCategoryByTxId[tx.id] ??
-                      budgetCategoryFromPfc(
+            final selected =
+                reviewedCategoryByTxId[tx.id] ??
+                (tx.isIncome
+                    ? 'Income'
+                    : budgetCategoryFromPfc(
                         pfcDetailed: tx.category,
                         pfcPrimary: tx.primaryCategory,
                       ));
@@ -356,20 +357,18 @@ class HomePage extends StatelessWidget {
                             ),
                             InkWell(
                               borderRadius: BorderRadius.circular(999),
-                              onTap: tx.isIncome
-                                  ? null
-                                  : () {
-                                      showTransactionCategoryPicker(
-                                        context: context,
-                                        tx: tx,
-                                        selectedCategory: selected,
-                                        onSelected: (category) =>
-                                            onTransactionCategorySelected(
-                                              tx,
-                                              category,
-                                            ),
-                                      );
-                                    },
+                              onTap: () {
+                                showTransactionCategoryPicker(
+                                  context: context,
+                                  tx: tx,
+                                  selectedCategory: selected,
+                                  onSelected: (category) =>
+                                      onTransactionCategorySelected(
+                                        tx,
+                                        category,
+                                      ),
+                                );
+                              },
                               child: TransactionCategoryTag(
                                 label: selected,
                                 colorKey: selected,

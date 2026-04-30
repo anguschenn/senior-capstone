@@ -68,13 +68,22 @@ class AccountService {
         _balanceContributionForRow(current).abs();
   }
 
-  Future<List<Map<String, dynamic>>> fetchAccountRows(String userId) async {
-    final rows = await AppSupabase.client
-        .from('accounts')
-        .select(
-          'current_balance,available_balance,account_type,subtype,user_id,plaid_account_id,name,mask,updated_at',
-        )
-        .eq('user_id', userId);
+  Future<List<Map<String, dynamic>>> fetchAccountRows(
+    String userId, {
+    bool unscoped = false,
+  }) async {
+    final rows = unscoped
+        ? await AppSupabase.client
+              .from('accounts')
+              .select(
+                'current_balance,available_balance,account_type,subtype,user_id,plaid_account_id,name,mask,updated_at',
+              )
+        : await AppSupabase.client
+              .from('accounts')
+              .select(
+                'current_balance,available_balance,account_type,subtype,user_id,plaid_account_id,name,mask,updated_at',
+              )
+              .eq('user_id', userId);
     return (rows as List).whereType<Map<String, dynamic>>().toList();
   }
 

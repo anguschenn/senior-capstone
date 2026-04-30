@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 import '../constants/app_constants.dart';
 import '../models/app_models.dart';
 import '../utils/app_helpers.dart';
-import '../widgets/dashboard_widgets.dart';
+import '../widgets/cash_flow/cash_flow_range_selector.dart';
+import '../widgets/cash_flow/cash_flow_totals_card.dart';
+import '../widgets/cash_flow/cash_flow_trend_summary_card.dart';
+import '../widgets/dashboard_sections.dart';
 
 class CashFlowPage extends StatefulWidget {
   const CashFlowPage({
@@ -219,11 +222,6 @@ class _CashFlowPageState extends State<CashFlowPage> {
   @override
   Widget build(BuildContext context) {
     // This page is a read-only analytics view over the currently visible transactions.
-    final monthSelectionValue = _monthOnlyOptions.any((m) => m == _focusMonth)
-        ? _focusMonth
-        : (_monthOnlyOptions.isNotEmpty
-              ? _monthOnlyOptions.first
-              : DateTime(_focusMonth.year, _focusMonth.month, 1));
     return SafeArea(
       child: ListView(
         padding: const EdgeInsets.all(20),
@@ -236,184 +234,34 @@ class _CashFlowPageState extends State<CashFlowPage> {
           const SizedBox(height: 8),
           const Text('Track money in and out'),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              const Text('Range', style: TextStyle(color: Colors.black54)),
-              const SizedBox(width: 12),
-              Expanded(
-                child: DropdownButtonFormField<FlowViewMode>(
-                  initialValue: viewMode,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                  items: const [
-                    DropdownMenuItem(
-                      value: FlowViewMode.month,
-                      child: Text('By Month'),
-                    ),
-                    DropdownMenuItem(
-                      value: FlowViewMode.year,
-                      child: Text('By Year'),
-                    ),
-                    DropdownMenuItem(
-                      value: FlowViewMode.all,
-                      child: Text('All Time / Custom'),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    if (value == null) return;
-                    setState(() => viewMode = value);
-                  },
-                ),
-              ),
-            ],
+          CashFlowRangeSelector(
+            viewMode: viewMode,
+            selectedMonth: widget.selectedMonth,
+            monthOptions: _monthOnlyOptions,
+            yearOptions: _yearOptions,
+            customRange: customRange,
+            onViewModeChanged: (mode) => setState(() => viewMode = mode),
+            onMonthChanged: widget.onMonthChanged,
+            onYearChanged: (year) =>
+                widget.onMonthChanged(DateTime(year, 1, 2)),
+            onPickCustomRange: () async {
+              final now = DateTime.now();
+              final picked = await showDateRangePicker(
+                context: context,
+                firstDate: DateTime(now.year - 10, 1, 1),
+                lastDate: DateTime(now.year + 1, 12, 31),
+                initialDateRange: customRange,
+              );
+              if (picked == null) return;
+              setState(() => customRange = picked);
+            },
+            onClearCustomRange: () => setState(() => customRange = null),
           ),
-          if (viewMode == FlowViewMode.month) ...[
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                const Text('Month', style: TextStyle(color: Colors.black54)),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: DropdownButtonFormField<DateTime>(
-                    key: ValueKey(
-                      'flow-month-${_focusMonth.year}-${_focusMonth.month}-${_focusMonth.day}',
-                    ),
-                    initialValue: monthSelectionValue,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    items: _monthOnlyOptions
-                        .map(
-                          (m) => DropdownMenuItem<DateTime>(
-                            value: normalizedMonthOption(m),
-                            child: Text(monthOptionLabel(m)),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      if (value == null) return;
-                      widget.onMonthChanged(value);
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ],
-          if (viewMode == FlowViewMode.year) ...[
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                const Text('Year', style: TextStyle(color: Colors.black54)),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: DropdownButtonFormField<int>(
-                    initialValue: _focusMonth.year,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    items: _yearOptions
-                        .map(
-                          (y) => DropdownMenuItem<int>(
-                            value: y,
-                            child: Text('$y'),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      if (value == null) return;
-                      widget.onMonthChanged(DateTime(value, 1, 2));
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ],
-          if (viewMode == FlowViewMode.all) ...[
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () async {
-                      final now = DateTime.now();
-                      final picked = await showDateRangePicker(
-                        context: context,
-                        firstDate: DateTime(now.year - 10, 1, 1),
-                        lastDate: DateTime(now.year + 1, 12, 31),
-                        initialDateRange: customRange,
-                      );
-                      if (picked == null) return;
-                      setState(() => customRange = picked);
-                    },
-                    icon: const Icon(Icons.date_range),
-                    label: Text(
-                      customRange == null
-                          ? 'Pick Custom Date Range (Optional)'
-                          : '${shortDate(customRange!.start, alwaysShowYear: true)} - ${shortDate(customRange!.end, alwaysShowYear: true)}',
-                    ),
-                  ),
-                ),
-                if (customRange != null) ...[
-                  const SizedBox(width: 8),
-                  IconButton(
-                    tooltip: 'Clear custom range',
-                    onPressed: () => setState(() => customRange = null),
-                    icon: const Icon(Icons.clear),
-                  ),
-                ],
-              ],
-            ),
-          ],
           const SizedBox(height: 20),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.green.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Income',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    Text(formatMoney(_periodIncome, signed: false)),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Expenses',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    Text(formatMoney(_periodExpenses, signed: false)),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Net',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    Text(
-                      '${_periodNet >= 0 ? '+' : '-'} \$${_periodNet.abs().toStringAsFixed(2)}',
-                    ),
-                  ],
-                ),
-              ],
-            ),
+          CashFlowTotalsCard(
+            income: _periodIncome,
+            expenses: _periodExpenses,
+            net: _periodNet,
           ),
           const SizedBox(height: 24),
           // Simple bar chart showing expense magnitude for the active range.
@@ -432,48 +280,11 @@ class _CashFlowPageState extends State<CashFlowPage> {
           ),
           const SizedBox(height: 20),
           // Lightweight text summary that turns the chart data into a sentence.
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: const [
-                BoxShadow(
-                  color: Colors.black12,
-                  blurRadius: 6,
-                  offset: Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Row(
-                  children: [
-                    Icon(Icons.trending_up, color: Colors.green),
-                    SizedBox(width: 8),
-                    Text(
-                      'Trend Summary',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Text(_monthCompareText()),
-                const SizedBox(height: 6),
-                Text(
-                  '• $_rangeLabel income: ${formatMoney(_periodIncome, signed: false)}',
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '• $_rangeLabel expenses: ${formatMoney(_periodExpenses, signed: false)}',
-                ),
-              ],
-            ),
+          CashFlowTrendSummaryCard(
+            summaryText: _monthCompareText(),
+            rangeLabel: _rangeLabel,
+            income: _periodIncome,
+            expenses: _periodExpenses,
           ),
         ],
       ),
@@ -542,6 +353,4 @@ class _CashFlowPageState extends State<CashFlowPage> {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Small reusable UI widgets used across multiple pages
-// ---------------------------------------------------------------------------
+

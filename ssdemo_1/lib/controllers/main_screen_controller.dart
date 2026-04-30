@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../constants/app_constants.dart';
+import '../core/config/env_config.dart';
 import '../models/app_models.dart';
 import '../services/auth_service.dart';
 import '../services/budget_service.dart';
@@ -132,10 +133,14 @@ class MainScreenController extends ChangeNotifier {
   }
 
   void onTransactionCategorySelected(AppTransaction tx, String category) {
-    if (!tx.isExpense) return;
     final currentCategory =
         reviewedCategoryByTxId[tx.id] ??
-        CategoryService.instance.budgetBucketFor(tx, const <String, String>{});
+        (tx.isIncome
+            ? 'Income'
+            : CategoryService.instance.budgetBucketFor(
+                tx,
+                const <String, String>{},
+              ));
     if (currentCategory.trim() == category.trim()) {
       return;
     }
@@ -165,8 +170,14 @@ class MainScreenController extends ChangeNotifier {
           reviewedCategoryByTxId[txId] ??
           CategoryService.instance.budgetBucketFor(tx, reviewedCategoryByTxId);
       final ruleKey = CategoryService.instance.ruleKeyForTransaction(tx);
+      final ruleUserId =
+          (EnvConfig.instance.skipAuth &&
+              EnvConfig.instance.devUnscopedReads &&
+              tx.userId.trim().isNotEmpty)
+          ? tx.userId.trim()
+          : AuthService.instance.currentUserId;
       final ok = await CategoryService.instance.rememberRuleDecision(
-        userId: AuthService.instance.currentUserId,
+        userId: ruleUserId,
         ruleKey: ruleKey,
         category: category,
       );

@@ -19,16 +19,57 @@ class SmartSpendApp extends StatelessWidget {
       ),
       home: EnvConfig.instance.skipAuth
           ? const MainScreen()
-          : StreamBuilder(
-              stream: AuthService.instance.authStateChanges,
-              builder: (context, snapshot) {
-                final user = AuthService.instance.currentUser;
-                if (user == null) {
-                  return const AuthPage();
-                }
-                return const MainScreen();
-              },
-            ),
+          : const _AuthGate(),
+    );
+  }
+}
+
+class _AuthGate extends StatefulWidget {
+  const _AuthGate();
+
+  @override
+  State<_AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<_AuthGate> {
+  Future<void>? _autoLoginFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _autoLoginFuture = _attemptAutoLoginIfNeeded();
+  }
+
+  Future<void> _attemptAutoLoginIfNeeded() async {
+    if (AuthService.instance.currentUser != null) return;
+    if (!EnvConfig.instance.hasAutoLoginCredentials) return;
+    try {
+      await AuthService.instance.signIn(
+        email: EnvConfig.instance.autoLoginEmail,
+        password: EnvConfig.instance.autoLoginPassword,
+      );
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<void>(
+      future: _autoLoginFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        return StreamBuilder(
+          stream: AuthService.instance.authStateChanges,
+          builder: (context, _) {
+            final user = AuthService.instance.currentUser;
+            if (user == null) return const AuthPage();
+            return const MainScreen();
+          },
+        );
+      },
     );
   }
 }

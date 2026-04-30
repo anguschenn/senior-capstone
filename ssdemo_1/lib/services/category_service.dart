@@ -14,8 +14,11 @@ class CategoryService {
   const CategoryService._();
   static const instance = CategoryService._();
 
-  String _norm(String raw) =>
-      raw.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+  String _norm(String raw) => raw
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[_\s]+'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ');
 
   String _normToken(String raw) {
     final v = _norm(raw);
@@ -32,9 +35,11 @@ class CategoryService {
 
   String ruleKeyForTransaction(AppTransaction tx) {
     return buildRuleKey(
-      merchantName: tx.name,
-      pfcPrimary: tx.primaryCategory,
-      pfcDetailed: tx.category,
+      merchantName: tx.rawMerchantName.isNotEmpty
+          ? tx.rawMerchantName
+          : tx.name,
+      pfcPrimary: tx.rawPfcPrimary,
+      pfcDetailed: tx.rawPfcDetailed,
     );
   }
 

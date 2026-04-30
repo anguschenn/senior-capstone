@@ -18,6 +18,10 @@ class AppTransaction {
     required this.accountSubtype,
     required this.pending,
     required this.confidence,
+    required this.userId,
+    required this.rawMerchantName,
+    required this.rawPfcPrimary,
+    required this.rawPfcDetailed,
   });
 
   final String dedupeKey;
@@ -35,6 +39,10 @@ class AppTransaction {
   final String accountSubtype;
   final bool pending;
   final String confidence;
+  final String userId;
+  final String rawMerchantName;
+  final String rawPfcPrimary;
+  final String rawPfcDetailed;
 
   bool get usesCheckingSavingsPolarity => usesDepositoryPolarity(
     accountName: accountName,
@@ -139,6 +147,7 @@ class AppTransaction {
     final confidence = ((row['pfc_confidence'] as String?) ?? 'medium')
         .trim()
         .toLowerCase();
+    final userId = ((row['user_id'] as String?) ?? '').trim();
     final dedupeKey = providerId.isNotEmpty
         ? providerId
         : '${name.toLowerCase()}|${amount.toStringAsFixed(2)}|${date.toIso8601String().split("T").first}';
@@ -158,6 +167,10 @@ class AppTransaction {
       accountSubtype: accountSubtype,
       pending: ((row['pending'] as bool?) ?? false),
       confidence: confidence,
+      userId: userId,
+      rawMerchantName: merchant ?? '',
+      rawPfcPrimary: rawCategory ?? '',
+      rawPfcDetailed: rawDetailedCategory ?? '',
     );
   }
 
