@@ -41,9 +41,7 @@ OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
 INTERNAL_API_KEY = _empty_to_none("INTERNAL_API_KEY")
 
 # ── Caching ──────────────────────────────────────────────────────────
-SPENDING_SNAPSHOT_CACHE_TTL_SECONDS = int(
-    os.getenv("SPENDING_SNAPSHOT_CACHE_TTL_SECONDS", "60")
-)
+SPENDING_SNAPSHOT_CACHE_TTL_SECONDS = int(os.getenv("SPENDING_SNAPSHOT_CACHE_TTL_SECONDS", "60"))
 _SPENDING_SNAPSHOT_CACHE: dict = {}
 _SPENDING_SNAPSHOT_CACHE_LOCK = threading.Lock()
 

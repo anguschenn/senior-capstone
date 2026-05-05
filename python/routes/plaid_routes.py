@@ -83,23 +83,29 @@ def info():
             return jsonify(payload), 200
         if error.reason == IdentityStateError.STORED_ACCESS_TOKEN_MISSING:
             payload["identity_status"] = "configured_item_invalid"
-            return jsonify({
-                **payload,
-                "error": "Stored Plaid item is invalid",
-            }), 409
+            return jsonify(
+                {
+                    **payload,
+                    "error": "Stored Plaid item is invalid",
+                }
+            ), 409
         log_route_error("/api/info identity", error)
-        return jsonify({
-            **payload,
-            "identity_status": "error",
-            "error": "Failed to load backend identity state",
-        }), 500
+        return jsonify(
+            {
+                **payload,
+                "identity_status": "error",
+                "error": "Failed to load backend identity state",
+            }
+        ), 500
     except Exception as error:
         log_route_error("/api/info unexpected", error)
-        return jsonify({
-            **payload,
-            "identity_status": "error",
-            "error": "Failed to load backend identity state",
-        }), 503
+        return jsonify(
+            {
+                **payload,
+                "identity_status": "error",
+                "error": "Failed to load backend identity state",
+            }
+        ), 503
 
 
 @plaid_bp.route("/api/create_link_token", methods=["POST"])
@@ -148,12 +154,14 @@ def set_access_token():
 
         accounts_synced = save_accounts_to_supabase(user_id, plaid_item_id, access_token)
 
-        return jsonify({
-            "item_id": item_id,
-            "stored_plaid_item_id": plaid_item_id,
-            "accounts_synced": accounts_synced,
-            "request_id": exchange_data.get("request_id"),
-        })
+        return jsonify(
+            {
+                "item_id": item_id,
+                "stored_plaid_item_id": plaid_item_id,
+                "accounts_synced": accounts_synced,
+                "request_id": exchange_data.get("request_id"),
+            }
+        )
     except UserAuthError as error:
         return jsonify({"error": str(error)}), 401
     except IdentityStateError as error:
@@ -197,11 +205,13 @@ def get_transactions():
             log_route_error("/api/transactions readback warning", read_error)
 
         elapsed_ms = int((time.time() - started_at) * 1000)
-        return jsonify({
-            "latest_transactions": rows,
-            "transactions": rows,
-            "sync": {**stats, "duration_ms": elapsed_ms},
-        })
+        return jsonify(
+            {
+                "latest_transactions": rows,
+                "transactions": rows,
+                "sync": {**stats, "duration_ms": elapsed_ms},
+            }
+        )
     except UserAuthError as error:
         return jsonify({"error": str(error)}), 401
     except IdentityStateError as error:
@@ -270,16 +280,24 @@ def get_assets():
         response = client.asset_report_create(create_request)
         asset_report_token = response["asset_report_token"]
 
-        report_response = poll_with_retries(lambda: client.asset_report_get(AssetReportGetRequest(asset_report_token=asset_report_token)))
+        report_response = poll_with_retries(
+            lambda: client.asset_report_get(
+                AssetReportGetRequest(asset_report_token=asset_report_token)
+            )
+        )
         asset_report_json = report_response["report"]
 
-        pdf = client.asset_report_pdf_get(AssetReportPDFGetRequest(asset_report_token=asset_report_token))
+        pdf = client.asset_report_pdf_get(
+            AssetReportPDFGetRequest(asset_report_token=asset_report_token)
+        )
 
-        return jsonify({
-            "error": None,
-            "json": asset_report_json.to_dict(),
-            "pdf": base64.b64encode(pdf.read()).decode("utf-8"),
-        })
+        return jsonify(
+            {
+                "error": None,
+                "json": asset_report_json.to_dict(),
+                "pdf": base64.b64encode(pdf.read()).decode("utf-8"),
+            }
+        )
     except UserAuthError as error:
         return jsonify({"error": str(error)}), 401
     except IdentityStateError as error:
@@ -302,11 +320,13 @@ def item():
         )
         pretty_print_response(response.to_dict())
         pretty_print_response(institution_response.to_dict())
-        return jsonify({
-            "error": None,
-            "item": response.to_dict()["item"],
-            "institution": institution_response.to_dict()["institution"],
-        })
+        return jsonify(
+            {
+                "error": None,
+                "item": response.to_dict()["item"],
+                "institution": institution_response.to_dict()["institution"],
+            }
+        )
     except UserAuthError as error:
         return jsonify({"error": str(error)}), 401
     except IdentityStateError as error:

@@ -28,7 +28,9 @@ def ai_chat():
         return jsonify(
             {
                 "reply": "I cannot process this request right now. Please try again.",
-                "insights": ["The assistant returned a safe fallback response due to a backend error."],
+                "insights": [
+                    "The assistant returned a safe fallback response due to a backend error."
+                ],
                 "actions": ["Try again in a moment."],
                 "confidence": 0.0,
                 "citations": ["rule_fallback"],
@@ -78,7 +80,9 @@ def ai_budget_suggest():
         if simplified:
             context_source = "deterministic_simplified"
         else:
-            context_source = "rule_fallback" if response.get("fallback_used") else "frontend_summary"
+            context_source = (
+                "rule_fallback" if response.get("fallback_used") else "frontend_summary"
+            )
         return jsonify({"suggestions": suggestions, "context_source": context_source})
     except ValueError as error:
         return jsonify({"error": str(error)}), 400

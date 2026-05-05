@@ -15,7 +15,9 @@ class TestChatServiceContract(unittest.TestCase):
         def get_detailed_snapshot(_user_id):
             return "snapshot"
 
-        return ChatService(generate_reply=generate_reply, get_detailed_snapshot=get_detailed_snapshot)
+        return ChatService(
+            generate_reply=generate_reply, get_detailed_snapshot=get_detailed_snapshot
+        )
 
     def _summary_fixture(self):
         return {
@@ -85,12 +87,22 @@ class TestChatServiceContract(unittest.TestCase):
             },
             "windows": {
                 "last_7d": {"income": 120, "expenses": 80, "tx_count": 6},
-                "last_30d": {"income": 500, "expenses": 300, "tx_count": 24, "expense_tx_count": 18},
+                "last_30d": {
+                    "income": 500,
+                    "expenses": 300,
+                    "tx_count": 24,
+                    "expense_tx_count": 18,
+                },
                 "last_90d": {"income": 1500, "expenses": 980, "tx_count": 66},
             },
             "windows_rolling": {
                 "last_7d": {"income": 120, "expenses": 80, "tx_count": 6},
-                "last_30d": {"income": 500, "expenses": 300, "tx_count": 24, "expense_tx_count": 18},
+                "last_30d": {
+                    "income": 500,
+                    "expenses": 300,
+                    "tx_count": 24,
+                    "expense_tx_count": 18,
+                },
                 "last_90d": {"income": 1500, "expenses": 980, "tx_count": 66},
             },
             "totals": {
@@ -108,9 +120,33 @@ class TestChatServiceContract(unittest.TestCase):
                 {"category": "Transport", "amount": 90},
             ],
             "recent_transactions": [
-                {"id": "tx_3", "date": "2026-05-04", "name": "Cafe", "amount": -12.4, "category": "Food", "type": "debit", "account_id": "acc_1"},
-                {"id": "tx_2", "date": "2026-05-03", "name": "Uber", "amount": -26.0, "category": "Transport", "type": "debit", "account_id": "acc_1"},
-                {"id": "tx_1", "date": "2026-05-02", "name": "Groceries", "amount": -58.1, "category": "Food", "type": "debit", "account_id": "acc_1"},
+                {
+                    "id": "tx_3",
+                    "date": "2026-05-04",
+                    "name": "Cafe",
+                    "amount": -12.4,
+                    "category": "Food",
+                    "type": "debit",
+                    "account_id": "acc_1",
+                },
+                {
+                    "id": "tx_2",
+                    "date": "2026-05-03",
+                    "name": "Uber",
+                    "amount": -26.0,
+                    "category": "Transport",
+                    "type": "debit",
+                    "account_id": "acc_1",
+                },
+                {
+                    "id": "tx_1",
+                    "date": "2026-05-02",
+                    "name": "Groceries",
+                    "amount": -58.1,
+                    "category": "Food",
+                    "type": "debit",
+                    "account_id": "acc_1",
+                },
             ],
             "data_coverage": {
                 "transaction_count_total": 120,
@@ -184,7 +220,9 @@ class TestChatServiceContract(unittest.TestCase):
         self.assertIn("Food", cleaned["category_index"])
 
     def test_chat_uses_frontend_v3_summary_for_year_amount(self):
-        service = self._service_with_reply('{"reply":"fallback llm","insights":["x"],"actions":["y"]}')
+        service = self._service_with_reply(
+            '{"reply":"fallback llm","insights":["x"],"actions":["y"]}'
+        )
         payload = {
             "prompt": "How much did I spend this year?",
             "history": [],
@@ -198,7 +236,9 @@ class TestChatServiceContract(unittest.TestCase):
         self.assertIn("$2100", response["reply"])
 
     def test_chat_uses_frontend_v3_summary_for_rolling_days_amount(self):
-        service = self._service_with_reply('{"reply":"fallback llm","insights":["x"],"actions":["y"]}')
+        service = self._service_with_reply(
+            '{"reply":"fallback llm","insights":["x"],"actions":["y"]}'
+        )
         payload = {
             "prompt": "How much did I spend last 20 days?",
             "history": [],
@@ -219,21 +259,56 @@ class TestChatServiceContract(unittest.TestCase):
             # Deterministic factual
             ("How much did I spend this month?", "amount_lookup", "deterministic", "month"),
             ("How much did I spend this year so far?", "amount_lookup", "deterministic", "year"),
-            ("How much did I spend over the last 7 days?", "amount_lookup", "deterministic", "rolling_days"),
-            ("How much did I spend over the last 52 days?", "amount_lookup", "deterministic", "rolling_days"),
+            (
+                "How much did I spend over the last 7 days?",
+                "amount_lookup",
+                "deterministic",
+                "rolling_days",
+            ),
+            (
+                "How much did I spend over the last 52 days?",
+                "amount_lookup",
+                "deterministic",
+                "rolling_days",
+            ),
             ("What did I spend in 2026-03?", "amount_lookup", "deterministic", "month"),
             ("What is my top category?", "top_category_lookup", "deterministic", "rolling_30d"),
-            ("What category did I spend most on last month?", "top_category_lookup", "deterministic", "month"),
+            (
+                "What category did I spend most on last month?",
+                "top_category_lookup",
+                "deterministic",
+                "month",
+            ),
             ("List my latest transactions", "recent_transactions", "deterministic", "rolling_30d"),
             # Conservative fallback to parser/clarification for mixed/ambiguous
-            ("Top category this month and how do I reduce it?", "general", "clarification", "unknown"),
-            ("List my latest transactions and suggest optimizations", "general", "clarification", "unknown"),
-            ("What is this month spending and why did it rise?", "general", "clarification", "unknown"),
+            (
+                "Top category this month and how do I reduce it?",
+                "general",
+                "clarification",
+                "unknown",
+            ),
+            (
+                "List my latest transactions and suggest optimizations",
+                "general",
+                "clarification",
+                "unknown",
+            ),
+            (
+                "What is this month spending and why did it rise?",
+                "general",
+                "clarification",
+                "unknown",
+            ),
             ("What is my spending total?", "general", "clarification", "unknown"),
             ("compare 2026-01 vs 2026-02", "general", "clarification", "unknown"),
             ("expense status?", "general", "clarification", "unknown"),
             # Extreme period text
-            ("How much did I spend in the last 500 days?", "amount_lookup", "deterministic", "rolling_days"),
+            (
+                "How much did I spend in the last 500 days?",
+                "amount_lookup",
+                "deterministic",
+                "rolling_days",
+            ),
             ("How much did I spend in the last -3 days?", "general", "clarification", "unknown"),
         ]
         for prompt, expected_intent, expected_answer_source, expected_period_type in cases:
@@ -268,13 +343,23 @@ class TestChatServiceContract(unittest.TestCase):
             ("2026-01 vs 2026-02", "general", "clarification", "unknown"),
             # Top category with punctuation and mixed clause
             ("top spend category this month?", "top_category_lookup", "deterministic", "month"),
-            ("top spend category this month, recommend changes", "general", "clarification", "unknown"),
+            (
+                "top spend category this month, recommend changes",
+                "general",
+                "clarification",
+                "unknown",
+            ),
             # Recent tx mixed with strategy
             ("latest activity", "general", "clarification", "unknown"),
             ("latest activity + optimization plan", "general", "clarification", "unknown"),
             # Extreme rolling windows
             ("what did i spend over last 1 days", "amount_lookup", "deterministic", "rolling_days"),
-            ("what did i spend over last 365 days", "amount_lookup", "deterministic", "rolling_days"),
+            (
+                "what did i spend over last 365 days",
+                "amount_lookup",
+                "deterministic",
+                "rolling_days",
+            ),
             # Invalid or malformed period should clarify
             ("what did i spend over last 0 days", "amount_lookup", "deterministic", "rolling_days"),
             ("what did i spend in 19-03", "general", "clarification", "unknown"),
@@ -333,11 +418,21 @@ class TestChatServiceContract(unittest.TestCase):
             # Clear deterministic intents
             ("How much did I spend this month?", "amount_lookup", "deterministic", "month"),
             ("How much did I spend this year?", "amount_lookup", "deterministic", "year"),
-            ("How much did I spend last 20 days?", "amount_lookup", "deterministic", "rolling_days"),
+            (
+                "How much did I spend last 20 days?",
+                "amount_lookup",
+                "deterministic",
+                "rolling_days",
+            ),
             ("What is my top category?", "top_category_lookup", "deterministic", "rolling_30d"),
             ("Show my recent transactions", "recent_transactions", "deterministic", "rolling_30d"),
             # Mixed/advisory/explainer intents should stay conservative
-            ("Top category this month and how can I reduce it?", "general", "clarification", "unknown"),
+            (
+                "Top category this month and how can I reduce it?",
+                "general",
+                "clarification",
+                "unknown",
+            ),
             ("Explain why this month is higher", "explain", "llm", "month"),
             ("How much did I spend?", "general", "clarification", "unknown"),
             # Fragments / noisy prompts in current baseline behavior
@@ -372,7 +467,12 @@ class TestChatServiceContract(unittest.TestCase):
             ("2026-05 spending why up", "explain", "llm", "month"),
             ("recent tx and top category", "general", "clarification", "unknown"),
             ("top category 2026/05", "top_category_lookup", "deterministic", "month"),
-            ("show me latest tx for last week", "recent_transactions", "deterministic", "rolling_days"),
+            (
+                "show me latest tx for last week",
+                "recent_transactions",
+                "deterministic",
+                "rolling_days",
+            ),
             ("how much did i spend this week", "amount_lookup", "deterministic", "rolling_days"),
             ("how much did i spend this wk?", "amount_lookup", "deterministic", "rolling_days"),
             ("compare 2026-05 and 2026-04 and suggest plan", "general", "clarification", "unknown"),
@@ -405,7 +505,12 @@ class TestChatServiceContract(unittest.TestCase):
             "intent_candidates": ["planning", "general"],
             "intent_source": "llm",
             "needs_clarification": False,
-            "entities": {"metric": "unknown", "period_type": "unknown", "period_key": "", "scope_hint": "current_scope"},
+            "entities": {
+                "metric": "unknown",
+                "period_type": "unknown",
+                "period_key": "",
+                "scope_hint": "current_scope",
+            },
             "clarification_question": "",
             "response_mode": "llm",
         }
@@ -443,7 +548,12 @@ class TestChatServiceContract(unittest.TestCase):
             "intent_candidates": ["planning", "general"],
             "intent_source": "llm",
             "needs_clarification": False,
-            "entities": {"metric": "unknown", "period_type": "unknown", "period_key": "", "scope_hint": "current_scope"},
+            "entities": {
+                "metric": "unknown",
+                "period_type": "unknown",
+                "period_key": "",
+                "scope_hint": "current_scope",
+            },
             "clarification_question": "",
             "response_mode": "llm",
         }
@@ -466,7 +576,12 @@ class TestChatServiceContract(unittest.TestCase):
         }
 
         response = service.handle_chat(payload, user_id="demo-user")
-        self.assertTrue(any(("$" in action or any(ch.isdigit() for ch in action)) for action in response["actions"]))
+        self.assertTrue(
+            any(
+                ("$" in action or any(ch.isdigit() for ch in action))
+                for action in response["actions"]
+            )
+        )
         self.assertTrue(any("Food And Drink Fast Food" in action for action in response["actions"]))
 
     def test_chat_fallback_contract_on_exception(self):
@@ -477,14 +592,21 @@ class TestChatServiceContract(unittest.TestCase):
         def get_detailed_snapshot(_user_id):
             return "snapshot"
 
-        service = ChatService(generate_reply=generate_reply, get_detailed_snapshot=get_detailed_snapshot)
+        service = ChatService(
+            generate_reply=generate_reply, get_detailed_snapshot=get_detailed_snapshot
+        )
         service.router.classify = lambda _message, _history: {
             "intent": "planning",
             "intent_confidence": 0.9,
             "intent_candidates": ["planning", "general"],
             "intent_source": "llm",
             "needs_clarification": False,
-            "entities": {"metric": "unknown", "period_type": "unknown", "period_key": "", "scope_hint": "current_scope"},
+            "entities": {
+                "metric": "unknown",
+                "period_type": "unknown",
+                "period_key": "",
+                "scope_hint": "current_scope",
+            },
             "clarification_question": "",
             "response_mode": "llm",
         }
@@ -512,7 +634,9 @@ class TestChatServiceContract(unittest.TestCase):
         def get_detailed_snapshot(_user_id):
             raise AssertionError("Server snapshot should not be called")
 
-        service = ChatService(generate_reply=generate_reply, get_detailed_snapshot=get_detailed_snapshot)
+        service = ChatService(
+            generate_reply=generate_reply, get_detailed_snapshot=get_detailed_snapshot
+        )
 
         payload = {
             "prompt": "What should I do next?",
@@ -637,7 +761,9 @@ class TestChatServiceContract(unittest.TestCase):
         self.assertEqual(response["resolved_query"]["intent"], "amount_lookup")
         self.assertEqual(response["resolved_query"]["period_type"], "month")
         self.assertEqual(response["resolved_query"]["period_key"], current_month)
-        self.assertIn(f"do not see recorded expenses for {current_month}", response["reply"].lower())
+        self.assertIn(
+            f"do not see recorded expenses for {current_month}", response["reply"].lower()
+        )
         self.assertNotIn("last 30 days", response["reply"].lower())
 
     def test_month_lookup_prefers_month_index_over_selected_month_anchor(self):
@@ -696,7 +822,12 @@ class TestChatServiceContract(unittest.TestCase):
             "intent_source": "llm",
             "needs_clarification": False,
             "response_mode": "llm",
-            "entities": {"metric": "expenses", "period_type": "month", "period_key": "2026-03", "scope_hint": "current_scope"},
+            "entities": {
+                "metric": "expenses",
+                "period_type": "month",
+                "period_key": "2026-03",
+                "scope_hint": "current_scope",
+            },
             "clarification_question": "",
         }
         payload = {
@@ -714,7 +845,9 @@ class TestChatServiceContract(unittest.TestCase):
             _ = generation_config
             raise AssertionError("LLM answer path should not run for deterministic amount intent")
 
-        service = ChatService(generate_reply=generate_reply, get_detailed_snapshot=lambda _user: "snapshot")
+        service = ChatService(
+            generate_reply=generate_reply, get_detailed_snapshot=lambda _user: "snapshot"
+        )
         service.router.classify = lambda _message, _history: {
             "intent": "amount_lookup",
             "intent_confidence": 0.95,
@@ -747,14 +880,21 @@ class TestChatServiceContract(unittest.TestCase):
             calls["count"] += 1
             return '{"reply":"Spending rose due to dining and shopping.","insights":["Dining spend increased month-over-month."],"actions":["Set a dining cap for the next 14 days."]}'
 
-        service = ChatService(generate_reply=generate_reply, get_detailed_snapshot=lambda _user: "snapshot")
+        service = ChatService(
+            generate_reply=generate_reply, get_detailed_snapshot=lambda _user: "snapshot"
+        )
         service.router.classify = lambda _message, _history: {
             "intent": "explain",
             "intent_confidence": 0.92,
             "intent_candidates": ["explain", "planning"],
             "intent_source": "llm",
             "needs_clarification": False,
-            "entities": {"metric": "expenses", "period_type": "month", "period_key": "2026-03", "scope_hint": "current_scope"},
+            "entities": {
+                "metric": "expenses",
+                "period_type": "month",
+                "period_key": "2026-03",
+                "scope_hint": "current_scope",
+            },
             "clarification_question": "",
         }
         payload = {
@@ -772,14 +912,21 @@ class TestChatServiceContract(unittest.TestCase):
             _ = generation_config
             raise AssertionError("LLM answer should not run when clarification is required")
 
-        service = ChatService(generate_reply=generate_reply, get_detailed_snapshot=lambda _user: "snapshot")
+        service = ChatService(
+            generate_reply=generate_reply, get_detailed_snapshot=lambda _user: "snapshot"
+        )
         service.router.classify = lambda _message, _history: {
             "intent": "amount_lookup",
             "intent_confidence": 0.41,
             "intent_candidates": ["amount_lookup", "general"],
             "intent_source": "llm",
             "needs_clarification": True,
-            "entities": {"metric": "expenses", "period_type": "unknown", "period_key": "", "scope_hint": "current_scope"},
+            "entities": {
+                "metric": "expenses",
+                "period_type": "unknown",
+                "period_key": "",
+                "scope_hint": "current_scope",
+            },
             "clarification_question": "Which month should I use?",
         }
         payload = {
@@ -897,19 +1044,31 @@ class TestChatServiceContract(unittest.TestCase):
             return service
 
         high_response = make_service(0.80).handle_chat(
-            {"prompt": "How much did I spend in 2026-03?", "history": [], "spending_summary": summary},
+            {
+                "prompt": "How much did I spend in 2026-03?",
+                "history": [],
+                "spending_summary": summary,
+            },
             user_id="demo-user",
         )
         self.assertNotEqual(high_response["answer_source"], "clarification")
 
         mid_response = make_service(0.55).handle_chat(
-            {"prompt": "How much did I spend in 2026-03?", "history": [], "spending_summary": summary},
+            {
+                "prompt": "How much did I spend in 2026-03?",
+                "history": [],
+                "spending_summary": summary,
+            },
             user_id="demo-user",
         )
         self.assertNotEqual(mid_response["answer_source"], "clarification")
 
         low_response = make_service(0.30).handle_chat(
-            {"prompt": "How much did I spend in 2026-03?", "history": [], "spending_summary": summary},
+            {
+                "prompt": "How much did I spend in 2026-03?",
+                "history": [],
+                "spending_summary": summary,
+            },
             user_id="demo-user",
         )
         self.assertEqual(low_response["answer_source"], "clarification")
@@ -919,7 +1078,9 @@ class TestChatServiceContract(unittest.TestCase):
             '{"reply":"fallback llm","insights":["x"],"actions":["y"]}'
         )
         summary = self._summary_fixture()
-        last_month = date_cls.fromordinal(date_cls.today().replace(day=1).toordinal() - 1).strftime("%Y-%m")
+        last_month = date_cls.fromordinal(date_cls.today().replace(day=1).toordinal() - 1).strftime(
+            "%Y-%m"
+        )
         summary["month_index"][last_month] = {
             "income": 1100,
             "expenses": 260,
@@ -947,9 +1108,15 @@ class TestChatServiceContract(unittest.TestCase):
             '{"reply":"fallback llm","insights":["x"],"actions":["y"]}'
         )
         summary = self._summary_fixture()
-        last_month = date_cls.fromordinal(date_cls.today().replace(day=1).toordinal() - 1).strftime("%Y-%m")
-        prev_month = date_cls.fromordinal(date_cls.today().replace(day=1).toordinal() - 32).strftime("%Y-%m")
-        prev2_month = date_cls.fromordinal(date_cls.today().replace(day=1).toordinal() - 62).strftime("%Y-%m")
+        last_month = date_cls.fromordinal(date_cls.today().replace(day=1).toordinal() - 1).strftime(
+            "%Y-%m"
+        )
+        prev_month = date_cls.fromordinal(
+            date_cls.today().replace(day=1).toordinal() - 32
+        ).strftime("%Y-%m")
+        prev2_month = date_cls.fromordinal(
+            date_cls.today().replace(day=1).toordinal() - 62
+        ).strftime("%Y-%m")
         summary["month_index"][last_month] = {
             "income": 1100,
             "expenses": 260,
@@ -1000,7 +1167,9 @@ class TestChatServiceContract(unittest.TestCase):
         self.assertIn("$880", response["reply"])
 
     def test_model_response_mode_deterministic_for_factual(self):
-        service = self._service_with_reply('{"reply":"fallback llm","insights":["x"],"actions":["y"]}')
+        service = self._service_with_reply(
+            '{"reply":"fallback llm","insights":["x"],"actions":["y"]}'
+        )
         service.router.classify = lambda _message, _history: {
             "intent": "amount_lookup",
             "intent_confidence": 0.9,
@@ -1008,11 +1177,20 @@ class TestChatServiceContract(unittest.TestCase):
             "intent_source": "llm",
             "needs_clarification": False,
             "response_mode": "deterministic",
-            "entities": {"metric": "expenses", "period_type": "month", "period_key": "2026-03", "scope_hint": "current_scope"},
+            "entities": {
+                "metric": "expenses",
+                "period_type": "month",
+                "period_key": "2026-03",
+                "scope_hint": "current_scope",
+            },
             "clarification_question": "",
         }
         response = service.handle_chat(
-            {"prompt": "How much did I spend in 2026-03?", "history": [], "spending_summary": self._summary_fixture()},
+            {
+                "prompt": "How much did I spend in 2026-03?",
+                "history": [],
+                "spending_summary": self._summary_fixture(),
+            },
             user_id="demo-user",
         )
         self.assertEqual(response["answer_source"], "deterministic")
@@ -1025,7 +1203,9 @@ class TestChatServiceContract(unittest.TestCase):
             calls["count"] += 1
             return '{"reply":"Plan with weekly reviews.","insights":["Recent expenses are concentrated."],"actions":["Set a weekly budget cap."]}'
 
-        service = ChatService(generate_reply=generate_reply, get_detailed_snapshot=lambda _u: "snapshot")
+        service = ChatService(
+            generate_reply=generate_reply, get_detailed_snapshot=lambda _u: "snapshot"
+        )
         service.router.classify = lambda _message, _history: {
             "intent": "planning",
             "intent_confidence": 0.88,
@@ -1033,11 +1213,20 @@ class TestChatServiceContract(unittest.TestCase):
             "intent_source": "llm",
             "needs_clarification": False,
             "response_mode": "llm",
-            "entities": {"metric": "unknown", "period_type": "unknown", "period_key": "", "scope_hint": "current_scope"},
+            "entities": {
+                "metric": "unknown",
+                "period_type": "unknown",
+                "period_key": "",
+                "scope_hint": "current_scope",
+            },
             "clarification_question": "",
         }
         response = service.handle_chat(
-            {"prompt": "How should I plan next month?", "history": [], "spending_summary": self._summary_fixture()},
+            {
+                "prompt": "How should I plan next month?",
+                "history": [],
+                "spending_summary": self._summary_fixture(),
+            },
             user_id="demo-user",
         )
         self.assertEqual(calls["count"], 1)
@@ -1048,7 +1237,9 @@ class TestChatServiceContract(unittest.TestCase):
             _ = generation_config
             raise AssertionError("LLM should not run when mode is corrected to clarification")
 
-        service = ChatService(generate_reply=generate_reply, get_detailed_snapshot=lambda _u: "snapshot")
+        service = ChatService(
+            generate_reply=generate_reply, get_detailed_snapshot=lambda _u: "snapshot"
+        )
         service.router.classify = lambda _message, _history: {
             "intent": "amount_lookup",
             "intent_confidence": 0.9,
@@ -1056,11 +1247,20 @@ class TestChatServiceContract(unittest.TestCase):
             "intent_source": "llm",
             "needs_clarification": False,
             "response_mode": "deterministic",
-            "entities": {"metric": "expenses", "period_type": "unknown", "period_key": "", "scope_hint": "current_scope"},
+            "entities": {
+                "metric": "expenses",
+                "period_type": "unknown",
+                "period_key": "",
+                "scope_hint": "current_scope",
+            },
             "clarification_question": "Which month should I use?",
         }
         response = service.handle_chat(
-            {"prompt": "How much did I spend?", "history": [], "spending_summary": self._summary_fixture()},
+            {
+                "prompt": "How much did I spend?",
+                "history": [],
+                "spending_summary": self._summary_fixture(),
+            },
             user_id="demo-user",
         )
         self.assertEqual(response["answer_source"], "clarification")
@@ -1076,8 +1276,18 @@ class TestChatServiceContract(unittest.TestCase):
             ("Analyze my spending last month", "explain", "llm", "month"),
             ("analyst my spending last month", "explain", "llm", "month"),
             ("How much did I spend in 2026/13?", "general", "clarification", "unknown"),
-            ("Top category this month and how can I reduce it?", "general", "clarification", "unknown"),
-            ("Show recent transactions for last week and explain trend", "general", "clarification", "unknown"),
+            (
+                "Top category this month and how can I reduce it?",
+                "general",
+                "clarification",
+                "unknown",
+            ),
+            (
+                "Show recent transactions for last week and explain trend",
+                "general",
+                "clarification",
+                "unknown",
+            ),
             ("last 30 days spending", "amount_lookup", "deterministic", "rolling_30d"),
             ("last 30 day spend", "amount_lookup", "hybrid", "rolling_30d"),
             ("last30d spending", "amount_lookup", "deterministic", "rolling_30d"),
@@ -1124,7 +1334,12 @@ class TestChatServiceContract(unittest.TestCase):
             "intent_source": "llm",
             "needs_clarification": False,
             "response_mode": "llm",
-            "entities": {"metric": "expenses", "period_type": "rolling_30d", "period_key": "rolling_30d", "scope_hint": "current_scope"},
+            "entities": {
+                "metric": "expenses",
+                "period_type": "rolling_30d",
+                "period_key": "rolling_30d",
+                "scope_hint": "current_scope",
+            },
             "clarification_question": "",
         }
         summary = self._frontend_v3_summary_fixture()
@@ -1151,7 +1366,12 @@ class TestChatServiceContract(unittest.TestCase):
             "intent_source": "llm",
             "needs_clarification": False,
             "response_mode": "llm",
-            "entities": {"metric": "expenses", "period_type": "month", "period_key": "2026-05", "scope_hint": "current_scope"},
+            "entities": {
+                "metric": "expenses",
+                "period_type": "month",
+                "period_key": "2026-05",
+                "scope_hint": "current_scope",
+            },
             "clarification_question": "",
         }
         summary = self._frontend_v3_summary_fixture()
@@ -1188,7 +1408,9 @@ class TestIntentRouterFallback(unittest.TestCase):
     def test_fallback_to_rule_when_llm_intent_invalid(self):
         def invalid_classifier(_prompt, generation_config=None):
             _ = generation_config
-            return '{"intent":"invalid_label","confidence":0.9,"intent_candidates":["invalid_label"]}'
+            return (
+                '{"intent":"invalid_label","confidence":0.9,"intent_candidates":["invalid_label"]}'
+            )
 
         router = IntentRouter(classify_with_llm=invalid_classifier)
         result = router.classify("How can I plan my budget?", history=[])

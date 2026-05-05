@@ -76,18 +76,30 @@ class IntentRouter:
         "what if",
     )
     MONTH_NAME_TO_NUM = {
-        "january": 1, "jan": 1,
-        "february": 2, "feb": 2,
-        "march": 3, "mar": 3,
-        "april": 4, "apr": 4,
+        "january": 1,
+        "jan": 1,
+        "february": 2,
+        "feb": 2,
+        "march": 3,
+        "mar": 3,
+        "april": 4,
+        "apr": 4,
         "may": 5,
-        "june": 6, "jun": 6,
-        "july": 7, "jul": 7,
-        "august": 8, "aug": 8,
-        "september": 9, "sep": 9, "sept": 9,
-        "october": 10, "oct": 10,
-        "november": 11, "nov": 11,
-        "december": 12, "dec": 12,
+        "june": 6,
+        "jun": 6,
+        "july": 7,
+        "jul": 7,
+        "august": 8,
+        "aug": 8,
+        "september": 9,
+        "sep": 9,
+        "sept": 9,
+        "october": 10,
+        "oct": 10,
+        "november": 11,
+        "nov": 11,
+        "december": 12,
+        "dec": 12,
     }
 
     def __init__(self, classify_with_llm=None):
@@ -272,7 +284,9 @@ class IntentRouter:
             "spend" in text or "spent" in text or "spending" in text or "expenses" in text
         ):
             return True
-        if re.search(r"\b(how is|how was)\s+my\s+spending\s+(this|last)\s+(month|year|week)\b", text):
+        if re.search(
+            r"\b(how is|how was)\s+my\s+spending\s+(this|last)\s+(month|year|week)\b", text
+        ):
             return True
         if re.search(r"\bspending\s+(in|for)\s+(20\d{2}-\d{2}|20\d{2})\b", text):
             return True
@@ -324,7 +338,8 @@ class IntentRouter:
         return {
             "intent": intent,
             "intent_confidence": confidence,
-            "intent_candidates": candidates or ([intent, "general"] if intent != "general" else ["general"]),
+            "intent_candidates": candidates
+            or ([intent, "general"] if intent != "general" else ["general"]),
             "intent_source": "rule",
             "needs_clarification": needs_clarification,
             "entities": entities,
@@ -413,7 +428,11 @@ class IntentRouter:
                 candidates=["explain", "general"],
             )
 
-        if any(k in text for k in self.RECENT_TX_KEYWORDS) and not has_advice_or_reason and not has_multiple_clauses:
+        if (
+            any(k in text for k in self.RECENT_TX_KEYWORDS)
+            and not has_advice_or_reason
+            and not has_multiple_clauses
+        ):
             recent_period_type = period_type if period_type != "unknown" else "rolling_30d"
             recent_period_key = period_key if period_key else "rolling_30d"
             return self._build_rule_result(
@@ -429,9 +448,13 @@ class IntentRouter:
             )
 
         if (
-            any(k in text for k in self.TOP_CATEGORY_KEYWORDS)
-            or (("top" in text or "most" in text or "highest" in text) and "category" in text)
-        ) and not has_advice_or_reason and not has_multiple_clauses:
+            (
+                any(k in text for k in self.TOP_CATEGORY_KEYWORDS)
+                or (("top" in text or "most" in text or "highest" in text) and "category" in text)
+            )
+            and not has_advice_or_reason
+            and not has_multiple_clauses
+        ):
             top_period_type = period_type if period_type != "unknown" else "rolling_30d"
             top_period_key = period_key if period_key else "rolling_30d"
             return self._build_rule_result(
@@ -454,7 +477,11 @@ class IntentRouter:
             and not has_multiple_clauses
         ):
             _, extracted_period_key = self._extract_period(text)
-            year_key = extracted_period_key if extracted_period_key and len(extracted_period_key) == 4 else str(date_cls.today().year)
+            year_key = (
+                extracted_period_key
+                if extracted_period_key and len(extracted_period_key) == 4
+                else str(date_cls.today().year)
+            )
             return self._build_rule_result(
                 intent="month_overview",
                 confidence=1.0,
@@ -618,19 +645,33 @@ class IntentRouter:
         if intent == "amount_lookup":
             if entities.get("metric", "unknown") == "unknown":
                 return False, "Do you want expenses, income, or net amount?"
-            if entities.get("period_type", "unknown") == "unknown" or not entities.get("period_key"):
-                return False, "Which time period should I use (for example, 2026-05 or last 30 days)?"
+            if entities.get("period_type", "unknown") == "unknown" or not entities.get(
+                "period_key"
+            ):
+                return (
+                    False,
+                    "Which time period should I use (for example, 2026-05 or last 30 days)?",
+                )
 
         if intent == "category_spending":
             if not self._is_reasonable_category(entities.get("category", "")):
-                return False, "Which category should I use (for example, Food, Transport, or Subscriptions)?"
+                return (
+                    False,
+                    "Which category should I use (for example, Food, Transport, or Subscriptions)?",
+                )
 
         if intent == "compare_periods":
             if not self._has_compare_pair(entities):
-                return False, "Please provide two periods to compare, for example 2026-03 vs 2026-04."
+                return (
+                    False,
+                    "Please provide two periods to compare, for example 2026-03 vs 2026-04.",
+                )
 
         if entities.get("period_type", "unknown") == "unknown" and entities.get("period_key"):
-            return False, "Please provide a valid period format, for example 2026-05 or last 30 days."
+            return (
+                False,
+                "Please provide a valid period format, for example 2026-05 or last 30 days.",
+            )
 
         return True, ""
 

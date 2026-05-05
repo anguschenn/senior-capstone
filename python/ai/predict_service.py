@@ -84,14 +84,20 @@ class PredictService:
             for item in at_risk[:3]
         ]
         next_actions = [
-            {"id": f"cap_{item['category'].lower().replace(' ', '_')}", "label": f"Cap {item['category']} spending this week"}
+            {
+                "id": f"cap_{item['category'].lower().replace(' ', '_')}",
+                "label": f"Cap {item['category']} spending this week",
+            }
             for item in at_risk[:3]
         ]
         if not next_actions and has_spend_signal:
             # Baseline actions for low-risk periods: still actionable without overreacting.
             next_actions = [
                 {"id": "monitor_weekly", "label": "Monitor top category weekly"},
-                {"id": "review_before_cycle", "label": "Review top spending category before next cycle"},
+                {
+                    "id": "review_before_cycle",
+                    "label": "Review top spending category before next cycle",
+                },
             ]
         why = [
             "Forecast uses deterministic budget ratio thresholds.",
@@ -124,9 +130,13 @@ class PredictService:
         }
         alerts = []
         if share >= 0.25:
-            alerts.append({"level": "high", "message": "Subscriptions exceed 25% of monthly expenses"})
+            alerts.append(
+                {"level": "high", "message": "Subscriptions exceed 25% of monthly expenses"}
+            )
         elif share >= 0.15:
-            alerts.append({"level": "med", "message": "Subscriptions exceed 15% of monthly expenses"})
+            alerts.append(
+                {"level": "med", "message": "Subscriptions exceed 15% of monthly expenses"}
+            )
         next_actions = [
             {"id": "review_subscriptions", "label": "Review top 3 subscriptions"},
             {"id": "cancel_unused", "label": "Cancel unused subscriptions"},
@@ -145,8 +155,12 @@ class PredictService:
         current_savings = to_float(goal.get("current_savings", 0))
         monthly_contribution = to_float(goal.get("monthly_contribution", 0))
         totals = (summary or {}).get("totals") or {}
-        monthly_surplus = max(0.0, to_float(totals.get("income_month", 0)) - to_float(totals.get("expenses_month", 0)))
-        effective_contribution = monthly_contribution if monthly_contribution > 0 else monthly_surplus
+        monthly_surplus = max(
+            0.0, to_float(totals.get("income_month", 0)) - to_float(totals.get("expenses_month", 0))
+        )
+        effective_contribution = (
+            monthly_contribution if monthly_contribution > 0 else monthly_surplus
+        )
         remaining = max(0.0, target_amount - current_savings)
 
         months_to_goal = None
@@ -161,7 +175,9 @@ class PredictService:
                 y, m, d = [int(x) for x in target_date.split("-")]
                 today = dt.date.today()
                 deadline = dt.date(y, m, d)
-                months_left = max(0, (deadline.year - today.year) * 12 + (deadline.month - today.month))
+                months_left = max(
+                    0, (deadline.year - today.year) * 12 + (deadline.month - today.month)
+                )
                 if months_to_goal is not None:
                     on_track = months_to_goal <= months_left
             except Exception:
@@ -246,8 +262,8 @@ class PredictService:
                 view_mode, budget_progress
             )
         elif predict_type == "subscription_cost_forecast":
-            forecast, why, alerts, next_actions, signal_strength, sufficient = self._subscription_cost(
-                summary, subscriptions
+            forecast, why, alerts, next_actions, signal_strength, sufficient = (
+                self._subscription_cost(summary, subscriptions)
             )
         else:
             forecast, why, alerts, next_actions, signal_strength, sufficient = self._savings_goal(
@@ -302,7 +318,11 @@ class PredictService:
                 )
                 reply = self.generate_reply(
                     prompt,
-                    generation_config={"temperature": 0.2, "maxOutputTokens": 220, "responseMimeType": "application/json"},
+                    generation_config={
+                        "temperature": 0.2,
+                        "maxOutputTokens": 220,
+                        "responseMimeType": "application/json",
+                    },
                 )
                 parsed = extract_json_object(reply)
                 if isinstance(parsed, dict):
@@ -311,7 +331,11 @@ class PredictService:
                         copy = maybe_copy
                     raw_why = parsed.get("why")
                     if isinstance(raw_why, list):
-                        why_out = [clamp_str(item, 160) for item in raw_why if isinstance(item, str) and item.strip()][:3] or why_out
+                        why_out = [
+                            clamp_str(item, 160)
+                            for item in raw_why
+                            if isinstance(item, str) and item.strip()
+                        ][:3] or why_out
             except Exception:
                 # Keep deterministic output when LLM rewrite fails.
                 fallback_used = True

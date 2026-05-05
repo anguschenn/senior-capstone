@@ -12,18 +12,30 @@ class ChatService:
     """Orchestrates AI chat with validated financial context and safe fallbacks."""
 
     MONTH_NAME_TO_NUM = {
-        "january": 1, "jan": 1,
-        "february": 2, "feb": 2,
-        "march": 3, "mar": 3,
-        "april": 4, "apr": 4,
+        "january": 1,
+        "jan": 1,
+        "february": 2,
+        "feb": 2,
+        "march": 3,
+        "mar": 3,
+        "april": 4,
+        "apr": 4,
         "may": 5,
-        "june": 6, "jun": 6,
-        "july": 7, "jul": 7,
-        "august": 8, "aug": 8,
-        "september": 9, "sep": 9, "sept": 9,
-        "october": 10, "oct": 10,
-        "november": 11, "nov": 11,
-        "december": 12, "dec": 12,
+        "june": 6,
+        "jun": 6,
+        "july": 7,
+        "jul": 7,
+        "august": 8,
+        "aug": 8,
+        "september": 9,
+        "sep": 9,
+        "sept": 9,
+        "october": 10,
+        "oct": 10,
+        "november": 11,
+        "nov": 11,
+        "december": 12,
+        "dec": 12,
     }
     HIGH_CONFIDENCE_THRESHOLD = 0.70
     MID_CONFIDENCE_THRESHOLD = 0.45
@@ -40,14 +52,22 @@ class ChatService:
         totals = summary.get("totals") or {}
         categories = summary.get("top_expense_categories") or []
         recent = summary.get("recent_transactions") or []
-        cat_text = ", ".join(
-            f"{c.get('category')} ${float(c.get('amount', 0)):.0f}" for c in categories[:5]
-        ) or "none"
-        recent_text = ", ".join(
-            f"{t.get('date')} {t.get('name')} ${float(t.get('amount', 0)):.0f}"
-            for t in recent[:5]
-        ) or "none"
-        annual = summary.get("annual_summary") if isinstance(summary.get("annual_summary"), dict) else {}
+        cat_text = (
+            ", ".join(
+                f"{c.get('category')} ${float(c.get('amount', 0)):.0f}" for c in categories[:5]
+            )
+            or "none"
+        )
+        recent_text = (
+            ", ".join(
+                f"{t.get('date')} {t.get('name')} ${float(t.get('amount', 0)):.0f}"
+                for t in recent[:5]
+            )
+            or "none"
+        )
+        annual = (
+            summary.get("annual_summary") if isinstance(summary.get("annual_summary"), dict) else {}
+        )
         annual_totals = annual.get("totals") if isinstance(annual.get("totals"), dict) else {}
         annual_categories = (
             annual.get("top_expense_categories_year")
@@ -64,21 +84,35 @@ class ChatService:
             if isinstance(annual.get("monthly_expense_trend"), list)
             else []
         )
-        annual_cat_text = ", ".join(
-            f"{c.get('category')} ${float(c.get('amount', 0)):.0f}" for c in annual_categories[:5]
-        ) or "none"
-        high_month_text = ", ".join(
-            f"{m.get('month')} ${float(m.get('expenses', 0)):.0f}"
-            for m in monthly_expense_ranking[:3]
-            if isinstance(m, dict)
-        ) or "none"
-        trend_tail = monthly_expense_trend[-3:] if len(monthly_expense_trend) > 3 else monthly_expense_trend
-        trend_text = ", ".join(
-            f"{m.get('month')} {float(m.get('expenses', 0)):.0f}"
-            for m in trend_tail
-            if isinstance(m, dict)
-        ) or "none"
-        month_index = summary.get("month_index") if isinstance(summary.get("month_index"), dict) else {}
+        annual_cat_text = (
+            ", ".join(
+                f"{c.get('category')} ${float(c.get('amount', 0)):.0f}"
+                for c in annual_categories[:5]
+            )
+            or "none"
+        )
+        high_month_text = (
+            ", ".join(
+                f"{m.get('month')} ${float(m.get('expenses', 0)):.0f}"
+                for m in monthly_expense_ranking[:3]
+                if isinstance(m, dict)
+            )
+            or "none"
+        )
+        trend_tail = (
+            monthly_expense_trend[-3:] if len(monthly_expense_trend) > 3 else monthly_expense_trend
+        )
+        trend_text = (
+            ", ".join(
+                f"{m.get('month')} {float(m.get('expenses', 0)):.0f}"
+                for m in trend_tail
+                if isinstance(m, dict)
+            )
+            or "none"
+        )
+        month_index = (
+            summary.get("month_index") if isinstance(summary.get("month_index"), dict) else {}
+        )
         rankings = summary.get("rankings") if isinstance(summary.get("rankings"), dict) else {}
         top_months = (
             rankings.get("highest_spending_months")
@@ -99,16 +133,22 @@ class ChatService:
                 key=lambda x: float((x or {}).get("expenses", 0) or 0),
                 reverse=True,
             )
-        v2_month_text = ", ".join(
-            f"{clamp_str(m.get('month', ''), 16)} ${float(m.get('expenses', 0)):.0f}"
-            for m in top_months[:3]
-            if isinstance(m, dict) and clamp_str(m.get("month", ""), 16)
-        ) or "none"
-        v2_day_text = ", ".join(
-            f"{clamp_str(d.get('date', ''), 16)} ${float(d.get('expenses', 0)):.0f}"
-            for d in top_days_recent[:3]
-            if isinstance(d, dict) and clamp_str(d.get("date", ""), 16)
-        ) or "none"
+        v2_month_text = (
+            ", ".join(
+                f"{clamp_str(m.get('month', ''), 16)} ${float(m.get('expenses', 0)):.0f}"
+                for m in top_months[:3]
+                if isinstance(m, dict) and clamp_str(m.get("month", ""), 16)
+            )
+            or "none"
+        )
+        v2_day_text = (
+            ", ".join(
+                f"{clamp_str(d.get('date', ''), 16)} ${float(d.get('expenses', 0)):.0f}"
+                for d in top_days_recent[:3]
+                if isinstance(d, dict) and clamp_str(d.get("date", ""), 16)
+            )
+            or "none"
+        )
         year = int(annual.get("year", 0) or 0)
         annual_text = (
             f"; year: {year}; "
@@ -156,9 +196,7 @@ class ChatService:
         annual_expense_tx = int(annual_totals.get("expense_tx_count_year", 0) or 0)
         annual_year = int(annual.get("year", 0) or 0)
 
-        annual_has_signal = (
-            annual_income > 0 or annual_expenses > 0 or annual_expense_tx > 0
-        )
+        annual_has_signal = annual_income > 0 or annual_expenses > 0 or annual_expense_tx > 0
         annual_top_text = ", ".join(
             f"{c.get('category')} ${float(c.get('amount', 0)):.0f}" for c in annual_categories[:3]
         )
@@ -177,7 +215,9 @@ class ChatService:
         if intent == "what_if":
             return "Given current snapshot, a lower discretionary spend should improve month-end cash flow."
         if intent == "planning":
-            return "Start with a fixed monthly target, cap top spending categories, and review weekly."
+            return (
+                "Start with a fixed monthly target, cap top spending categories, and review weekly."
+            )
         return f"Based on your recent snapshot: income ${income:.0f}, expenses ${expenses:.0f} over 30 days."
 
     def _split_points(self, text, max_items=3):
@@ -257,7 +297,9 @@ class ChatService:
             reply = jsonish_candidate
         return reply, insights[:3], actions[:3]
 
-    def _estimate_confidence(self, context_source, used_summary, tx_count_30d, summary_effectively_empty):
+    def _estimate_confidence(
+        self, context_source, used_summary, tx_count_30d, summary_effectively_empty
+    ):
         """Derive a bounded confidence score for UI display."""
         if context_source == "rule_fallback":
             return 0.35
@@ -390,9 +432,8 @@ class ChatService:
             has_number = re.search(r"(\$?\d+(\.\d+)?)", lower) is not None
             risky_rate_claim = ("per day" in lower or "average" in lower) and has_number
             risky_frequency_claim = (
-                (" times " in f" {lower} " or "times recently" in lower or "times this" in lower)
-                and has_number
-            )
+                " times " in f" {lower} " or "times recently" in lower or "times this" in lower
+            ) and has_number
             if risky_rate_claim or risky_frequency_claim:
                 sanitized.append(
                     "Spending pressure appears concentrated in a few discretionary categories in your recent summary."
@@ -410,17 +451,15 @@ class ChatService:
         has_number = re.search(r"(\$?\d+(\.\d+)?)", lower) is not None
         risky_rate_claim = ("per day" in lower or "average" in lower) and has_number
         risky_frequency_claim = (
-            (" times " in f" {lower} " or "times recently" in lower or "times this" in lower)
-            and has_number
-        )
+            " times " in f" {lower} " or "times recently" in lower or "times this" in lower
+        ) and has_number
         # Generic consistency guard: when text states a total and also mentions
         # component dollar amounts, no component should exceed the total.
         total_match = re.search(r"\btotal\s+\$([0-9]+(?:\.[0-9]+)?)", lower)
         if total_match:
             total = float(total_match.group(1))
             dollar_values = [
-                float(m.group(1))
-                for m in re.finditer(r"\$([0-9]+(?:\.[0-9]+)?)", lower)
+                float(m.group(1)) for m in re.finditer(r"\$([0-9]+(?:\.[0-9]+)?)", lower)
             ]
             component_values = [v for v in dollar_values if abs(v - total) > 1e-9]
             if any(v > total for v in component_values):
@@ -454,16 +493,8 @@ class ChatService:
         text = clamp_str(message or "", 4000).lower()
         if not text:
             return False
-        has_category_term = (
-            "category" in text
-            or "categories" in text
-        )
-        has_top_term = (
-            "most" in text
-            or "top" in text
-            or "highest" in text
-            or "max" in text
-        )
+        has_category_term = "category" in text or "categories" in text
+        has_top_term = "most" in text or "top" in text or "highest" in text or "max" in text
         if has_category_term and (has_top_term or "spend" in text):
             return True
         if "what category did i spend most on" in text:
@@ -760,7 +791,11 @@ class ChatService:
         if first_n:
             count = max(2, min(12, int(first_n.group(1))))
             year_match = re.search(r"\b(20\d{2})\b", text)
-            year = int(year_match.group(1)) if year_match else int(default_year or date_cls.today().year)
+            year = (
+                int(year_match.group(1))
+                if year_match
+                else int(default_year or date_cls.today().year)
+            )
             return [f"{year}-{m:02d}" for m in range(1, count + 1)]
 
         return []
@@ -816,7 +851,7 @@ class ChatService:
             return True
         if "monthly spending" in text or "month by month" in text:
             return True
-        return ("months" in text and "spend" in text)
+        return "months" in text and "spend" in text
 
     def _months_overview_anchor(self, summary):
         """Build authoritative month ranking sentence from summary fields."""
@@ -837,12 +872,8 @@ class ChatService:
                     normalized.append((month, expenses))
                 normalized = [item for item in normalized if item[1] > 0][:3]
                 if normalized:
-                    text = ", ".join(
-                        f"{month} (${expenses:.0f})" for month, expenses in normalized
-                    )
-                    return (
-                        f"Highest spending months for {self._scope_label(summary)}: {text}."
-                    )
+                    text = ", ".join(f"{month} (${expenses:.0f})" for month, expenses in normalized)
+                    return f"Highest spending months for {self._scope_label(summary)}: {text}."
         annual = summary.get("annual_summary")
         if not isinstance(annual, dict):
             month_index = summary.get("month_index")
@@ -856,9 +887,7 @@ class ChatService:
                 rows = [row for row in rows if row[1] > 0][:3]
                 if rows:
                     text = ", ".join(f"{month} (${expenses:.0f})" for month, expenses in rows)
-                    return (
-                        f"Highest spending months for {self._scope_label(summary)}: {text}."
-                    )
+                    return f"Highest spending months for {self._scope_label(summary)}: {text}."
             return ""
         ranking = annual.get("monthly_expense_ranking")
         if not isinstance(ranking, list):
@@ -890,7 +919,11 @@ class ChatService:
                 if clamp_str(x.strip(), 16)
             ]
             if len(range_keys) >= 2:
-                annual = summary.get("annual_summary") if isinstance(summary.get("annual_summary"), dict) else {}
+                annual = (
+                    summary.get("annual_summary")
+                    if isinstance(summary.get("annual_summary"), dict)
+                    else {}
+                )
                 monthly_top_categories = (
                     annual.get("monthly_top_categories")
                     if isinstance(annual.get("monthly_top_categories"), list)
@@ -914,14 +947,22 @@ class ChatService:
                         return ""
                 if not by_category:
                     return ""
-                top_category, top_amount = sorted(by_category.items(), key=lambda kv: kv[1], reverse=True)[0]
+                top_category, top_amount = sorted(
+                    by_category.items(), key=lambda kv: kv[1], reverse=True
+                )[0]
                 return (
                     f"For {range_keys[0]} to {range_keys[-1]}, based on monthly top-category summaries for "
                     f"{self._scope_label(summary)}, the top category is {top_category} at about ${top_amount:.0f}."
                 )
-        annual = summary.get("annual_summary") if isinstance(summary.get("annual_summary"), dict) else {}
+        annual = (
+            summary.get("annual_summary") if isinstance(summary.get("annual_summary"), dict) else {}
+        )
         spec = query_spec if isinstance(query_spec, dict) else {}
-        requested_year = clamp_str(spec.get("period_key", ""), 8) if clamp_str(spec.get("period_type", ""), 24) == "year" else ""
+        requested_year = (
+            clamp_str(spec.get("period_key", ""), 8)
+            if clamp_str(spec.get("period_type", ""), 24) == "year"
+            else ""
+        )
         annual_year = str(int(annual.get("year", 0) or 0))
         if requested_year and annual_year and requested_year != annual_year:
             return (
@@ -930,7 +971,9 @@ class ChatService:
             )
         annual_year_int = int(annual.get("year", 0) or 0)
         month_key = self._extract_specific_month_key(message, annual_year_int)
-        month_index = summary.get("month_index") if isinstance(summary.get("month_index"), dict) else {}
+        month_index = (
+            summary.get("month_index") if isinstance(summary.get("month_index"), dict) else {}
+        )
         if month_key:
             month_row = month_index.get(month_key)
             if isinstance(month_row, dict):
@@ -1013,6 +1056,7 @@ class ChatService:
             rows.append((date, name, amount))
         if not rows:
             return ""
+
         def _fmt_amount(value):
             abs_value = abs(float(value or 0))
             sign = "-" if value < 0 else "+"
@@ -1053,8 +1097,12 @@ class ChatService:
             return ""
         period_type = clamp_str(spec.get("period_type", ""), 24)
         period_key = clamp_str(spec.get("period_key", ""), 64)
-        month_index = summary.get("month_index") if isinstance(summary.get("month_index"), dict) else {}
-        annual = summary.get("annual_summary") if isinstance(summary.get("annual_summary"), dict) else {}
+        month_index = (
+            summary.get("month_index") if isinstance(summary.get("month_index"), dict) else {}
+        )
+        annual = (
+            summary.get("annual_summary") if isinstance(summary.get("annual_summary"), dict) else {}
+        )
         annual_top = (
             annual.get("top_expense_categories_year")
             if isinstance(annual.get("top_expense_categories_year"), list)
@@ -1122,7 +1170,9 @@ class ChatService:
             return ""
 
         mode = self._timeframe_mode(message)
-        annual = summary.get("annual_summary") if isinstance(summary.get("annual_summary"), dict) else {}
+        annual = (
+            summary.get("annual_summary") if isinstance(summary.get("annual_summary"), dict) else {}
+        )
         annual_categories = (
             annual.get("top_expense_categories_year")
             if isinstance(annual.get("top_expense_categories_year"), list)
@@ -1161,7 +1211,9 @@ class ChatService:
         spec_type = clamp_str(spec.get("period_type", ""), 24)
         spec_key = clamp_str(spec.get("period_key", ""), 64)
         mode = self._timeframe_mode(message)
-        month_index = summary.get("month_index") if isinstance(summary.get("month_index"), dict) else {}
+        month_index = (
+            summary.get("month_index") if isinstance(summary.get("month_index"), dict) else {}
+        )
         day_index_recent = (
             summary.get("day_index_recent")
             if isinstance(summary.get("day_index_recent"), dict)
@@ -1172,9 +1224,13 @@ class ChatService:
             if isinstance(summary.get("month_day_index"), dict)
             else {}
         )
-        annual = summary.get("annual_summary") if isinstance(summary.get("annual_summary"), dict) else {}
+        annual = (
+            summary.get("annual_summary") if isinstance(summary.get("annual_summary"), dict) else {}
+        )
         annual_year = int(annual.get("year", 0) or 0)
-        year_index = summary.get("year_index") if isinstance(summary.get("year_index"), dict) else {}
+        year_index = (
+            summary.get("year_index") if isinstance(summary.get("year_index"), dict) else {}
+        )
         annual_totals = annual.get("totals") if isinstance(annual.get("totals"), dict) else {}
         annual_categories = (
             annual.get("top_expense_categories_year")
@@ -1193,7 +1249,9 @@ class ChatService:
         )
 
         if spec_type == "month_range":
-            month_keys = [clamp_str(x.strip(), 16) for x in spec_key.split(",") if clamp_str(x.strip(), 16)]
+            month_keys = [
+                clamp_str(x.strip(), 16) for x in spec_key.split(",") if clamp_str(x.strip(), 16)
+            ]
             if len(month_keys) >= 2:
                 total = 0.0
                 for key in month_keys:
@@ -1258,7 +1316,11 @@ class ChatService:
                 f"for {self._scope_label(summary)}."
             )
 
-        date_key = spec_key if spec_type == "day" else self._extract_specific_date_key(message, annual_year)
+        date_key = (
+            spec_key
+            if spec_type == "day"
+            else self._extract_specific_date_key(message, annual_year)
+        )
         if date_key:
             v2_day = day_index_recent.get(date_key)
             if isinstance(v2_day, dict):
@@ -1289,7 +1351,11 @@ class ChatService:
                 return f"For {date_key}, recorded expenses for {self._scope_label(summary)} are about ${amount:.0f}."
             return f"I do not see recorded expenses for {date_key} in the current summary for {self._scope_label(summary)}."
 
-        month_key = spec_key if spec_type == "month" else self._extract_specific_month_key(message, annual_year)
+        month_key = (
+            spec_key
+            if spec_type == "month"
+            else self._extract_specific_month_key(message, annual_year)
+        )
         if month_key:
             v2_month = month_index.get(month_key)
             if isinstance(v2_month, dict):
@@ -1422,7 +1488,9 @@ class ChatService:
     def _sanitize_response_mode(self, model_mode, intent, query_spec, fallback_mode):
         """Combine model-selected mode with local safety checks."""
         allowed = {"deterministic", "llm", "hybrid", "clarification"}
-        mode = model_mode if isinstance(model_mode, str) and model_mode in allowed else fallback_mode
+        mode = (
+            model_mode if isinstance(model_mode, str) and model_mode in allowed else fallback_mode
+        )
         factual_intents = {
             "amount_lookup",
             "top_category_lookup",
@@ -1443,7 +1511,15 @@ class ChatService:
         merged = dict(base_spec or {})
         if not isinstance(entities, dict):
             return merged
-        for key in ("metric", "period_type", "period_key", "scope", "intent", "category", "compare_to"):
+        for key in (
+            "metric",
+            "period_type",
+            "period_key",
+            "scope",
+            "intent",
+            "category",
+            "compare_to",
+        ):
             value = entities.get(key)
             if not isinstance(value, str):
                 continue
@@ -1521,8 +1597,12 @@ class ChatService:
             left, right = self._extract_compare_periods_from_message(message)
         if not (left and right):
             return "", ["period"]
-        month_index = summary.get("month_index") if isinstance(summary.get("month_index"), dict) else {}
-        year_index = summary.get("year_index") if isinstance(summary.get("year_index"), dict) else {}
+        month_index = (
+            summary.get("month_index") if isinstance(summary.get("month_index"), dict) else {}
+        )
+        year_index = (
+            summary.get("year_index") if isinstance(summary.get("year_index"), dict) else {}
+        )
 
         def _lookup(period):
             if re.match(r"^20\d{2}-\d{2}$", period):
@@ -1534,7 +1614,11 @@ class ChatService:
                 row = year_index.get(period)
                 if isinstance(row, dict):
                     return float(row.get("expenses", 0) or 0), "year"
-                annual = summary.get("annual_summary") if isinstance(summary.get("annual_summary"), dict) else {}
+                annual = (
+                    summary.get("annual_summary")
+                    if isinstance(summary.get("annual_summary"), dict)
+                    else {}
+                )
                 annual_year = str(int(annual.get("year", 0) or 0))
                 if annual_year == period:
                     totals = annual.get("totals") if isinstance(annual.get("totals"), dict) else {}
@@ -1627,7 +1711,9 @@ class ChatService:
         intent_source = intent_result.get("intent_source", "rule")
         needs_clarification = bool(intent_result.get("needs_clarification", False))
         model_response_mode = clamp_str(intent_result.get("response_mode", ""), 24)
-        entities = intent_result.get("entities") if isinstance(intent_result.get("entities"), dict) else {}
+        entities = (
+            intent_result.get("entities") if isinstance(intent_result.get("entities"), dict) else {}
+        )
         clarification_question = clamp_str(intent_result.get("clarification_question", ""), 180)
         query_spec = {
             "intent": clamp_str(intent, 24) or "general",
@@ -1728,7 +1814,9 @@ class ChatService:
                 return build_chat_response(
                     reply=recent_anchor,
                     insights=["Recent transactions are read directly from validated summary rows."],
-                    actions=["Ask for a specific date range or merchant if you want a narrower slice."],
+                    actions=[
+                        "Ask for a specific date range or merchant if you want a narrower slice."
+                    ],
                     citations=["deterministic_anchor"],
                     intent=intent,
                     intent_confidence=intent_confidence,
@@ -1795,7 +1883,9 @@ class ChatService:
                 return build_chat_response(
                     reply=category_anchor,
                     insights=["Category amount is read from validated summary category indexes."],
-                    actions=["Ask another period (month/year/last 30 days) to compare this category trend."],
+                    actions=[
+                        "Ask another period (month/year/last 30 days) to compare this category trend."
+                    ],
                     citations=["deterministic_anchor"],
                     intent=intent,
                     intent_confidence=intent_confidence,
@@ -1951,7 +2041,9 @@ class ChatService:
                     missing_fields=[],
                 )
         if intent == "compare_periods" and self._should_use_deterministic(intent, query_spec):
-            compare_anchor, compare_missing = self._compare_periods_anchor(summary, query_spec, message)
+            compare_anchor, compare_missing = self._compare_periods_anchor(
+                summary, query_spec, message
+            )
             if compare_anchor:
                 self._debug_route_log(
                     intent_source=intent_source,
@@ -1968,8 +2060,12 @@ class ChatService:
                 )
                 return build_chat_response(
                     reply=compare_anchor,
-                    insights=["Period comparison is calculated directly from validated summary indexes."],
-                    actions=["Ask a follow-up to break down the largest categories for each period."],
+                    insights=[
+                        "Period comparison is calculated directly from validated summary indexes."
+                    ],
+                    actions=[
+                        "Ask a follow-up to break down the largest categories for each period."
+                    ],
                     citations=["deterministic_anchor"],
                     intent=intent,
                     intent_confidence=intent_confidence,
@@ -2000,7 +2096,9 @@ class ChatService:
             )
             return build_chat_response(
                 reply="I can compare periods once you specify exact windows (for example, 2026-02 vs 2026-03).",
-                insights=["Period comparison requires two explicit windows and available summary data for both."],
+                insights=[
+                    "Period comparison requires two explicit windows and available summary data for both."
+                ],
                 actions=["Ask: Compare 2026-02 and 2026-03 expenses for this scope."],
                 citations=["clarification"],
                 intent=intent,
@@ -2026,27 +2124,38 @@ class ChatService:
             # Ask model for strict JSON output so Flutter can render structured cards.
             reply = self.generate_reply(
                 prompt,
-                generation_config={"temperature": 0.3, "maxOutputTokens": 420, "responseMimeType": "application/json"},
+                generation_config={
+                    "temperature": 0.3,
+                    "maxOutputTokens": 420,
+                    "responseMimeType": "application/json",
+                },
             )
             parsed = extract_json_object(reply)
             if isinstance(parsed, dict):
-                raw_reply = (
-                    parsed.get("reply")
-                    or parsed.get("copy")
-                    or parsed.get("answer")
-                    or ""
-                )
+                raw_reply = parsed.get("reply") or parsed.get("copy") or parsed.get("answer") or ""
                 if isinstance(raw_reply, str):
                     reply_text = clamp_str(raw_reply, 2500)
                 else:
                     reply_text = ""
 
-                raw_insights = parsed.get("insights") if isinstance(parsed.get("insights"), list) else parsed.get("why")
-                raw_actions = parsed.get("actions") if isinstance(parsed.get("actions"), list) else parsed.get("next_actions")
+                raw_insights = (
+                    parsed.get("insights")
+                    if isinstance(parsed.get("insights"), list)
+                    else parsed.get("why")
+                )
+                raw_actions = (
+                    parsed.get("actions")
+                    if isinstance(parsed.get("actions"), list)
+                    else parsed.get("next_actions")
+                )
                 if isinstance(raw_insights, list):
-                    insights = [clamp_str(x, 220) for x in raw_insights if isinstance(x, str) and x.strip()][:3]
+                    insights = [
+                        clamp_str(x, 220) for x in raw_insights if isinstance(x, str) and x.strip()
+                    ][:3]
                 if isinstance(raw_actions, list):
-                    actions = [clamp_str(x, 220) for x in raw_actions if isinstance(x, str) and x.strip()][:3]
+                    actions = [
+                        clamp_str(x, 220) for x in raw_actions if isinstance(x, str) and x.strip()
+                    ][:3]
 
                 if not reply_text:
                     reply_text = self._fallback_reply(intent, summary)
@@ -2067,7 +2176,9 @@ class ChatService:
             reply_text = clamp_str(reply_text, 2500)
             reply_text = self._sanitize_claim_text(reply_text)
             reply_text = self._dedupe_reply(reply_text, history, summary)
-            if mode in ("deterministic", "hybrid") and (intent == "amount_lookup" or self._asks_amount(message)):
+            if mode in ("deterministic", "hybrid") and (
+                intent == "amount_lookup" or self._asks_amount(message)
+            ):
                 anchor = self._amount_anchor(summary, message, query_spec=query_spec)
                 if anchor:
                     # Deterministic numeric anchor must be authoritative when user asks amount.
@@ -2078,14 +2189,20 @@ class ChatService:
                     if supplement:
                         reply_text = clamp_str(f"{reply_text} {supplement}".strip(), 2500)
                         answer_source = "hybrid"
-            if mode in ("deterministic", "hybrid") and (intent == "month_overview" or self._asks_month_overview(message)):
+            if mode in ("deterministic", "hybrid") and (
+                intent == "month_overview" or self._asks_month_overview(message)
+            ):
                 month_anchor = self._months_overview_anchor(summary)
                 if month_anchor and month_anchor.lower() not in (reply_text or "").lower():
                     reply_text = clamp_str(f"{reply_text} {month_anchor}".strip(), 2500)
                     answer_source = "hybrid"
             insights = self._sanitize_insights_accuracy(insights)
-            insights = [clamp_str(x, 220) for x in (insights or []) if isinstance(x, str) and x.strip()][:3]
-            actions = [clamp_str(x, 220) for x in (actions or []) if isinstance(x, str) and x.strip()][:3]
+            insights = [
+                clamp_str(x, 220) for x in (insights or []) if isinstance(x, str) and x.strip()
+            ][:3]
+            actions = [
+                clamp_str(x, 220) for x in (actions or []) if isinstance(x, str) and x.strip()
+            ][:3]
             actions = [self._sanitize_claim_text(x) for x in actions]
             actions = self._enforce_action_quality(actions, summary)
         except Exception:

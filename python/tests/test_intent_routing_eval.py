@@ -38,9 +38,13 @@ class TestIntentRoutingEval(unittest.TestCase):
                 correct += 1
         accuracy = correct / len(dataset)
         clarification_rate = clarifications / len(dataset)
-        print(f"[intent-eval] samples={len(dataset)} accuracy={accuracy:.3f} clarification_rate={clarification_rate:.3f}")
+        print(
+            f"[intent-eval] samples={len(dataset)} accuracy={accuracy:.3f} clarification_rate={clarification_rate:.3f}"
+        )
         for expected in sorted(confusion.keys()):
-            row = ", ".join(f"{pred}:{count}" for pred, count in sorted(confusion[expected].items()))
+            row = ", ".join(
+                f"{pred}:{count}" for pred, count in sorted(confusion[expected].items())
+            )
             print(f"[intent-eval] expected={expected} -> {row}")
         self.assertGreaterEqual(accuracy, 0.75)
 
