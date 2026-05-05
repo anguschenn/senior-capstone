@@ -4,8 +4,8 @@ from flask import Blueprint, current_app, jsonify, request
 
 from ai.response_utils import confidence_label, short_copy
 from ai.validators import clamp_str
-from auth import UserAuthError, is_rate_limited_for_ai, require_supabase_user_id
 from api.http_helpers import log_route_error
+from auth import UserAuthError, is_rate_limited_for_ai, require_supabase_user_id
 
 ai_bp = Blueprint("ai", __name__)
 

@@ -1,7 +1,7 @@
 """Shared HTTP helpers for Flask routes."""
 
-from flask import jsonify
 import plaid
+from flask import jsonify
 
 from plaid_sync import IdentityStateError, format_error
 
@@ -9,14 +9,9 @@ from plaid_sync import IdentityStateError, format_error
 def identity_error_response(error: IdentityStateError, route_name: str):
     reason = getattr(error, "reason", "")
     print(f"{route_name} identity error: {reason}: {type(error).__name__}")
-    if reason == IdentityStateError.DEMO_IDENTITY_MISSING:
-        return jsonify({
-            "error": "Demo identity is not configured",
-            "error_code": reason,
-        }), 503
     if reason == IdentityStateError.STORED_ITEM_NOT_FOUND:
         return jsonify({
-            "error": "No connected Plaid item for demo identity",
+            "error": "No connected Plaid item for current user",
             "error_code": reason,
         }), 409
     if reason == IdentityStateError.STORED_ACCESS_TOKEN_MISSING:

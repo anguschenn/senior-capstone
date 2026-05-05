@@ -5,7 +5,7 @@ from .explainers import build_chat_prompt
 from .intent_router import IntentRouter
 from .parsers import extract_json_object
 from .schemas import build_chat_response
-from .validators import sanitize_history, sanitize_spending_summary, clamp_str
+from .validators import clamp_str, sanitize_history, sanitize_spending_summary
 
 
 class ChatService:
@@ -1181,11 +1181,6 @@ class ChatService:
             if isinstance(annual.get("top_expense_categories_year"), list)
             else []
         )
-        monthly_top_categories = (
-            annual.get("monthly_top_categories")
-            if isinstance(annual.get("monthly_top_categories"), list)
-            else []
-        )
         daily_expense_totals = (
             annual.get("daily_expense_totals")
             if isinstance(annual.get("daily_expense_totals"), list)
@@ -1656,33 +1651,6 @@ class ChatService:
         context_source = "frontend_summary"
         used_summary = summary is not None
 
-        income_30d = float(summary_meta.get("income_30d", 0) or 0)
-        expenses_30d = float(summary_meta.get("expenses_30d", 0) or 0)
-        expense_tx_30d = int(summary_meta.get("expense_tx_count_30d", 0) or 0)
-        annual_summary = (summary or {}).get("annual_summary") if isinstance(summary, dict) else {}
-        if not isinstance(annual_summary, dict):
-            annual_summary = {}
-        annual_totals = (
-            annual_summary.get("totals")
-            if isinstance(annual_summary.get("totals"), dict)
-            else {}
-        )
-        if not isinstance(annual_totals, dict):
-            annual_totals = {}
-        annual_income = float(annual_totals.get("income_year", 0) or 0)
-        annual_expenses = float(annual_totals.get("expenses_year", 0) or 0)
-        annual_expense_tx = int(annual_totals.get("expense_tx_count_year", 0) or 0)
-        annual_has_signal = annual_income > 0 or annual_expenses > 0 or annual_expense_tx > 0
-        summary_effectively_empty = (
-            summary is None
-            or (
-                income_30d <= 0
-                and expenses_30d <= 0
-                and tx_count_30d <= 0
-                and expense_tx_30d <= 0
-                and not annual_has_signal
-            )
-        )
         # Product rule: chat only uses app-sent summary; no server DB read fallback.
         context_text = self._summary_to_text(summary)
         if summary is None:

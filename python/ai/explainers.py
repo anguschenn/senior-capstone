@@ -1,6 +1,5 @@
 import json
 
-
 # Intent-specific prompt headers used to slightly tune response framing.
 CHAT_PROMPTS = {
     "amount_lookup": (

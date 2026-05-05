@@ -20,6 +20,8 @@ from plaid.model.item_public_token_exchange_request import ItemPublicTokenExchan
 from plaid.model.link_token_create_request import LinkTokenCreateRequest
 from plaid.model.link_token_create_request_user import LinkTokenCreateRequestUser
 
+from api.http_helpers import identity_error_response, log_route_error, plaid_error_response
+from auth import UserAuthError, require_supabase_user_id
 from config import (
     PLAID_COUNTRY_CODES,
     PLAID_ENV,
@@ -37,9 +39,6 @@ from plaid_sync import (
     sync_transactions_to_supabase,
 )
 from supabase_repo import supabase
-from auth import UserAuthError, require_supabase_user_id
-
-from api.http_helpers import identity_error_response, log_route_error, plaid_error_response
 
 plaid_bp = Blueprint("plaid", __name__)
 RECENT_TRANSACTIONS_LIMIT = 20
