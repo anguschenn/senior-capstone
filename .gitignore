@@ -56,5 +56,11 @@ node/.env
 #vscode
 .vscode
 
+# Claude Code
+CLAUDE.md
+.claude/
+
 #Python virtual nv
 python/venv/*
+python/__pycache__/
+*.pyc
