@@ -3,7 +3,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 /// Typed access to environment variables loaded from .env at startup.
 class EnvConfig {
   EnvConfig._();
-  static const bool _forceSkipAuthForNow = true;
+  static const bool _forceSkipAuthForNow = false;
 
   static late final EnvConfig instance;
 

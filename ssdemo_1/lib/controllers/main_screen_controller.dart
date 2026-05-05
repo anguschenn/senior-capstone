@@ -6,6 +6,7 @@ import '../models/app_models.dart';
 import '../services/auth_service.dart';
 import '../services/budget_service.dart';
 import '../services/category_service.dart';
+import '../services/plaid_service.dart';
 import '../services/sync_service.dart';
 import '../utils/app_helpers.dart';
 
@@ -86,22 +87,34 @@ class MainScreenController extends ChangeNotifier {
   Future<void> connectBankAndPullData() async {
     if (syncing) return;
     syncing = true;
-    syncStatus = 'Syncing...';
+    syncStatus = 'Opening Plaid Link...';
     notifyListeners();
 
-    await SyncService.instance.triggerBankSync();
-
     try {
+      final publicToken = await PlaidService.instance.openLink();
+
+      if (publicToken == null) {
+        // Web platform or user cancelled — fall back to syncing existing data.
+        syncStatus = 'Refreshing...';
+        notifyListeners();
+        await SyncService.instance.triggerBankSync();
+      } else {
+        syncStatus = 'Connecting bank...';
+        notifyListeners();
+        await PlaidService.instance.exchangePublicToken(publicToken);
+        syncStatus = 'Syncing transactions...';
+        notifyListeners();
+        await SyncService.instance.triggerBankSync();
+      }
+
       final result = await SyncService.instance.refreshFromSupabase(
         reviewedCategoryByTxId,
         selectedMonth,
       );
       _applySyncResult(result);
-      syncStatus = result.hasData
-          ? 'Connected: using database data'
-          : 'No DB data found';
+      syncStatus = result.hasData ? 'Connected' : 'No data found';
     } catch (e) {
-      syncStatus = 'Sync failed: $e';
+      syncStatus = 'Connection failed: $e';
     } finally {
       syncing = false;
       notifyListeners();
