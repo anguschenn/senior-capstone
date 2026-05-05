@@ -37,9 +37,7 @@ PLAID_REDIRECT_URI = _empty_to_none("PLAID_REDIRECT_URI")
 OLLAMA_MODEL = _empty_to_none("OLLAMA_MODEL") or "llama3"
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
 
-# ── Demo identity ────────────────────────────────────────────────────
-DEMO_USER_ID = _empty_to_none("DEMO_USER_ID")
-DEMO_PLAID_ITEM_ID = _empty_to_none("DEMO_PLAID_ITEM_ID")
+# ── Backend API auth ─────────────────────────────────────────────────
 INTERNAL_API_KEY = _empty_to_none("INTERNAL_API_KEY")
 
 # ── Caching ──────────────────────────────────────────────────────────

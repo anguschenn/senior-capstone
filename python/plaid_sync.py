@@ -11,8 +11,6 @@ from plaid.model.products import Products
 from plaid.model.transactions_sync_request import TransactionsSyncRequest
 
 from config import (
-    DEMO_PLAID_ITEM_ID,
-    DEMO_USER_ID,
     PLAID_CLIENT_ID,
     PLAID_ENV,
     PLAID_PRODUCTS,
@@ -22,7 +20,6 @@ from supabase_repo import supabase
 
 
 class IdentityStateError(RuntimeError):
-    DEMO_IDENTITY_MISSING = "demo_identity_missing"
     STORED_ITEM_NOT_FOUND = "stored_item_not_found"
     STORED_ACCESS_TOKEN_MISSING = "stored_access_token_missing"
 
@@ -49,17 +46,7 @@ client = plaid_api.PlaidApi(api_client)
 products = [Products(p) for p in PLAID_PRODUCTS]
 
 
-def require_demo_identity() -> tuple[str, str]:
-    if not DEMO_USER_ID or not DEMO_PLAID_ITEM_ID:
-        raise IdentityStateError(
-            IdentityStateError.DEMO_IDENTITY_MISSING,
-            "Missing DEMO_USER_ID or DEMO_PLAID_ITEM_ID. Set both in python/.env.",
-        )
-    return DEMO_USER_ID, DEMO_PLAID_ITEM_ID
-
-
-def get_stored_item_credentials() -> tuple[str, str]:
-    user_id, plaid_item_id = require_demo_identity()
+def get_stored_item_credentials(user_id: str, plaid_item_id: str) -> tuple[str, str]:
     row = (
         supabase.table("plaid_items")
         .select("access_token,item_id")
@@ -71,7 +58,7 @@ def get_stored_item_credentials() -> tuple[str, str]:
     if not row.data:
         raise IdentityStateError(
             IdentityStateError.STORED_ITEM_NOT_FOUND,
-            "No stored plaid_items record for configured demo identity",
+            "No stored plaid_items record for current user",
         )
     record = row.data[0]
     access_token = record.get("access_token")

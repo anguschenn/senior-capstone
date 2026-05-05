@@ -21,8 +21,6 @@ from plaid.model.link_token_create_request import LinkTokenCreateRequest
 from plaid.model.link_token_create_request_user import LinkTokenCreateRequestUser
 
 from config import (
-    DEMO_PLAID_ITEM_ID,
-    DEMO_USER_ID,
     PLAID_COUNTRY_CODES,
     PLAID_ENV,
     PLAID_PRODUCTS,
@@ -35,11 +33,11 @@ from plaid_sync import (
     poll_with_retries,
     pretty_print_response,
     products,
-    require_demo_identity,
     save_accounts_to_supabase,
     sync_transactions_to_supabase,
 )
 from supabase_repo import supabase
+from auth import UserAuthError, require_supabase_user_id
 
 from api.http_helpers import identity_error_response, log_route_error, plaid_error_response
 
@@ -60,7 +58,7 @@ def _load_recent_transactions(user_id: str, limit: int = RECENT_TRANSACTIONS_LIM
 
 @plaid_bp.route("/api/info", methods=["GET"])
 def info():
-    has_configured_identity = bool(DEMO_USER_ID and DEMO_PLAID_ITEM_ID)
+    has_configured_identity = True
     payload = {
         "products": PLAID_PRODUCTS,
         "plaid_env": PLAID_ENV,
@@ -73,10 +71,13 @@ def info():
         return jsonify(payload), 200
 
     try:
-        get_stored_item_credentials()
+        user_id = require_supabase_user_id()
+        get_stored_item_credentials(user_id, user_id)
         payload["has_stored_item"] = True
         payload["identity_status"] = "ready"
         return jsonify(payload), 200
+    except UserAuthError as error:
+        return jsonify({**payload, "error": str(error)}), 401
     except IdentityStateError as error:
         if error.reason == IdentityStateError.STORED_ITEM_NOT_FOUND:
             payload["identity_status"] = "configured_no_item"
@@ -87,9 +88,6 @@ def info():
                 **payload,
                 "error": "Stored Plaid item is invalid",
             }), 409
-        if error.reason == IdentityStateError.DEMO_IDENTITY_MISSING:
-            payload["identity_status"] = "not_configured"
-            return jsonify(payload), 200
         log_route_error("/api/info identity", error)
         return jsonify({
             **payload,
@@ -131,7 +129,8 @@ def set_access_token():
     if not public_token:
         return jsonify({"error": "Missing public_token"}), 400
     try:
-        user_id, plaid_item_id = require_demo_identity()
+        user_id = require_supabase_user_id()
+        plaid_item_id = user_id
         exchange_request = ItemPublicTokenExchangeRequest(public_token=public_token)
         exchange_response = client.item_public_token_exchange(exchange_request)
         exchange_data = exchange_response.to_dict()
@@ -156,6 +155,8 @@ def set_access_token():
             "accounts_synced": accounts_synced,
             "request_id": exchange_data.get("request_id"),
         })
+    except UserAuthError as error:
+        return jsonify({"error": str(error)}), 401
     except IdentityStateError as error:
         return identity_error_response(error, "/api/set_access_token")
     except plaid.ApiException as error:
@@ -165,10 +166,13 @@ def set_access_token():
 @plaid_bp.route("/api/auth", methods=["GET"])
 def get_auth():
     try:
-        access_token, _ = get_stored_item_credentials()
+        user_id = require_supabase_user_id()
+        access_token, _ = get_stored_item_credentials(user_id, user_id)
         response = client.auth_get(AuthGetRequest(access_token=access_token))
         pretty_print_response(response.to_dict())
         return jsonify(response.to_dict())
+    except UserAuthError as error:
+        return jsonify({"error": str(error)}), 401
     except IdentityStateError as error:
         return identity_error_response(error, "/api/auth")
     except plaid.ApiException as error:
@@ -179,8 +183,9 @@ def get_auth():
 def get_transactions():
     started_at = time.time()
     try:
-        user_id, plaid_item_id = require_demo_identity()
-        access_token, _ = get_stored_item_credentials()
+        user_id = require_supabase_user_id()
+        plaid_item_id = user_id
+        access_token, _ = get_stored_item_credentials(user_id, plaid_item_id)
         stats = sync_transactions_to_supabase(user_id, plaid_item_id, access_token)
         current_app.config["snapshot_service"].invalidate(user_id)
         print(f"Sync complete for user {user_id}: {stats}")
@@ -198,6 +203,8 @@ def get_transactions():
             "transactions": rows,
             "sync": {**stats, "duration_ms": elapsed_ms},
         })
+    except UserAuthError as error:
+        return jsonify({"error": str(error)}), 401
     except IdentityStateError as error:
         return identity_error_response(error, "/api/transactions")
     except plaid.ApiException as error:
@@ -210,10 +217,13 @@ def get_transactions():
 @plaid_bp.route("/api/balance", methods=["GET"])
 def get_balance():
     try:
-        access_token, _ = get_stored_item_credentials()
+        user_id = require_supabase_user_id()
+        access_token, _ = get_stored_item_credentials(user_id, user_id)
         response = client.accounts_balance_get(AccountsBalanceGetRequest(access_token=access_token))
         pretty_print_response(response.to_dict())
         return jsonify(response.to_dict())
+    except UserAuthError as error:
+        return jsonify({"error": str(error)}), 401
     except IdentityStateError as error:
         return identity_error_response(error, "/api/balance")
     except plaid.ApiException as error:
@@ -223,10 +233,13 @@ def get_balance():
 @plaid_bp.route("/api/accounts", methods=["GET"])
 def get_accounts():
     try:
-        access_token, _ = get_stored_item_credentials()
+        user_id = require_supabase_user_id()
+        access_token, _ = get_stored_item_credentials(user_id, user_id)
         response = client.accounts_get(AccountsGetRequest(access_token=access_token))
         pretty_print_response(response.to_dict())
         return jsonify(response.to_dict())
+    except UserAuthError as error:
+        return jsonify({"error": str(error)}), 401
     except IdentityStateError as error:
         return identity_error_response(error, "/api/accounts")
     except plaid.ApiException as error:
@@ -236,7 +249,8 @@ def get_accounts():
 @plaid_bp.route("/api/assets", methods=["GET"])
 def get_assets():
     try:
-        access_token, _ = get_stored_item_credentials()
+        user_id = require_supabase_user_id()
+        access_token, _ = get_stored_item_credentials(user_id, user_id)
         create_request = AssetReportCreateRequest(
             access_tokens=[access_token],
             days_requested=60,
@@ -267,6 +281,8 @@ def get_assets():
             "json": asset_report_json.to_dict(),
             "pdf": base64.b64encode(pdf.read()).decode("utf-8"),
         })
+    except UserAuthError as error:
+        return jsonify({"error": str(error)}), 401
     except IdentityStateError as error:
         return identity_error_response(error, "/api/assets")
     except plaid.ApiException as error:
@@ -276,7 +292,8 @@ def get_assets():
 @plaid_bp.route("/api/item", methods=["GET"])
 def item():
     try:
-        access_token, _ = get_stored_item_credentials()
+        user_id = require_supabase_user_id()
+        access_token, _ = get_stored_item_credentials(user_id, user_id)
         response = client.item_get(ItemGetRequest(access_token=access_token))
         institution_response = client.institutions_get_by_id(
             InstitutionsGetByIdRequest(
@@ -291,6 +308,8 @@ def item():
             "item": response.to_dict()["item"],
             "institution": institution_response.to_dict()["institution"],
         })
+    except UserAuthError as error:
+        return jsonify({"error": str(error)}), 401
     except IdentityStateError as error:
         return identity_error_response(error, "/api/item")
     except plaid.ApiException as error:
