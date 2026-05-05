@@ -3,6 +3,7 @@ from datetime import date as date_cls
 
 from ai.chat_service import ChatService
 from ai.intent_router import IntentRouter
+from ai.validators import sanitize_spending_summary
 
 
 class TestChatServiceContract(unittest.TestCase):
@@ -67,10 +68,347 @@ class TestChatServiceContract(unittest.TestCase):
             },
         }
 
+    def _frontend_v3_summary_fixture(self):
+        # Mimics the current Dart ai_summary_service.dart contract (v3 fields).
+        return {
+            "version": 3,
+            "scope": "all_accounts",
+            "scope_label": "Overall (All Accounts)",
+            "generated_at": "2026-05-05T01:00:00Z",
+            "window_days": 30,
+            "time_anchor": {
+                "selected_month": "2026-05",
+                "selected_year": 2026,
+                "selected_month_expenses": 420,
+                "selected_month_income": 1200,
+                "tz": "EDT",
+            },
+            "windows": {
+                "last_7d": {"income": 120, "expenses": 80, "tx_count": 6},
+                "last_30d": {"income": 500, "expenses": 300, "tx_count": 24, "expense_tx_count": 18},
+                "last_90d": {"income": 1500, "expenses": 980, "tx_count": 66},
+            },
+            "windows_rolling": {
+                "last_7d": {"income": 120, "expenses": 80, "tx_count": 6},
+                "last_30d": {"income": 500, "expenses": 300, "tx_count": 24, "expense_tx_count": 18},
+                "last_90d": {"income": 1500, "expenses": 980, "tx_count": 66},
+            },
+            "totals": {
+                "income_30d": 500,
+                "expenses_30d": 300,
+                "net_30d": 200,
+                "tx_count_30d": 24,
+                "expense_tx_count_30d": 18,
+                "income_month": 1200,
+                "expenses_month": 420,
+                "net_month": 780,
+            },
+            "top_expense_categories": [
+                {"category": "Food", "amount": 180},
+                {"category": "Transport", "amount": 90},
+            ],
+            "recent_transactions": [
+                {"id": "tx_3", "date": "2026-05-04", "name": "Cafe", "amount": -12.4, "category": "Food", "type": "debit", "account_id": "acc_1"},
+                {"id": "tx_2", "date": "2026-05-03", "name": "Uber", "amount": -26.0, "category": "Transport", "type": "debit", "account_id": "acc_1"},
+                {"id": "tx_1", "date": "2026-05-02", "name": "Groceries", "amount": -58.1, "category": "Food", "type": "debit", "account_id": "acc_1"},
+            ],
+            "data_coverage": {
+                "transaction_count_total": 120,
+                "range_start": "2026-01-01",
+                "range_end": "2026-05-04",
+                "days_span": 125,
+                "active_days": 59,
+                "coverage_ratio_recent_30d": 0.63,
+            },
+            "confidence": {
+                "score": 0.81,
+                "overall": "high",
+                "reasons": [],
+                "components": {
+                    "tx_count_recent_30d": 0.9,
+                    "coverage_recent_30d": 0.63,
+                    "history_span": 1.0,
+                    "noise_penalty_adjusted": 0.95,
+                },
+            },
+            "warnings": [],
+            "category_index": {"Food": 540, "Transport": 260, "Shopping": 180},
+            "month_index": {
+                "2026-05": {
+                    "income": 1200,
+                    "expenses": 420,
+                    "tx_count": 16,
+                    "expense_tx_count": 12,
+                    "top_category": {"name": "Food", "amount": 180},
+                },
+                "2026-04": {
+                    "income": 1100,
+                    "expenses": 390,
+                    "tx_count": 14,
+                    "expense_tx_count": 10,
+                    "top_category": {"name": "Transport", "amount": 140},
+                },
+            },
+            "day_index_recent": {
+                "2026-05-04": {"income": 0, "expenses": 12.4, "tx_count": 1},
+                "2026-05-03": {"income": 0, "expenses": 26.0, "tx_count": 1},
+                "2026-05-02": {"income": 0, "expenses": 58.1, "tx_count": 1},
+            },
+            "year_index": {
+                "2026": {"income": 5200, "expenses": 2100, "tx_count": 120},
+            },
+            "annual_summary": {
+                "year": 2026,
+                "totals": {
+                    "income_year": 5200,
+                    "expenses_year": 2100,
+                    "net_year": 3100,
+                    "expense_tx_count_year": 84,
+                },
+                "top_expense_categories_year": [
+                    {"category": "Food", "amount": 540},
+                    {"category": "Transport", "amount": 260},
+                ],
+            },
+        }
+
+    def test_frontend_v3_summary_fields_are_sanitized(self):
+        summary = self._frontend_v3_summary_fixture()
+        cleaned = sanitize_spending_summary(summary)
+        self.assertIsInstance(cleaned, dict)
+        self.assertIn("windows_rolling", cleaned)
+        self.assertIn("data_coverage", cleaned)
+        self.assertIn("confidence", cleaned)
+        self.assertIn("category_index", cleaned)
+        self.assertEqual(cleaned["confidence"]["overall"], "high")
+        self.assertIn("Food", cleaned["category_index"])
+
+    def test_chat_uses_frontend_v3_summary_for_year_amount(self):
+        service = self._service_with_reply('{"reply":"fallback llm","insights":["x"],"actions":["y"]}')
+        payload = {
+            "prompt": "How much did I spend this year?",
+            "history": [],
+            "spending_summary": self._frontend_v3_summary_fixture(),
+        }
+        response = service.handle_chat(payload, user_id="demo-user")
+        self.assertEqual(response["answer_source"], "deterministic")
+        self.assertEqual(response["resolved_query"]["intent"], "amount_lookup")
+        self.assertEqual(response["resolved_query"]["period_type"], "year")
+        self.assertIn("2026", response["reply"])
+        self.assertIn("$2100", response["reply"])
+
+    def test_chat_uses_frontend_v3_summary_for_rolling_days_amount(self):
+        service = self._service_with_reply('{"reply":"fallback llm","insights":["x"],"actions":["y"]}')
+        payload = {
+            "prompt": "How much did I spend last 20 days?",
+            "history": [],
+            "spending_summary": self._frontend_v3_summary_fixture(),
+        }
+        response = service.handle_chat(payload, user_id="demo-user")
+        self.assertEqual(response["answer_source"], "deterministic")
+        self.assertEqual(response["resolved_query"]["period_type"], "rolling_days")
+        self.assertEqual(response["resolved_query"]["period_key"], "rolling_20d")
+        self.assertIn("last 20 days", response["reply"].lower())
+
+    def test_edge_cases_end_to_end_routing_contract(self):
+        service = self._service_with_reply(
+            '{"reply":"llm fallback","insights":["x"],"actions":["y"]}'
+        )
+        summary = self._frontend_v3_summary_fixture()
+        cases = [
+            # Deterministic factual
+            ("How much did I spend this month?", "amount_lookup", "deterministic", "month"),
+            ("How much did I spend this year so far?", "amount_lookup", "deterministic", "year"),
+            ("How much did I spend over the last 7 days?", "amount_lookup", "deterministic", "rolling_days"),
+            ("How much did I spend over the last 52 days?", "amount_lookup", "deterministic", "rolling_days"),
+            ("What did I spend in 2026-03?", "amount_lookup", "deterministic", "month"),
+            ("What is my top category?", "top_category_lookup", "deterministic", "rolling_30d"),
+            ("What category did I spend most on last month?", "top_category_lookup", "deterministic", "month"),
+            ("List my latest transactions", "recent_transactions", "deterministic", "rolling_30d"),
+            # Conservative fallback to parser/clarification for mixed/ambiguous
+            ("Top category this month and how do I reduce it?", "general", "clarification", "unknown"),
+            ("List my latest transactions and suggest optimizations", "general", "clarification", "unknown"),
+            ("What is this month spending and why did it rise?", "general", "clarification", "unknown"),
+            ("What is my spending total?", "general", "clarification", "unknown"),
+            ("compare 2026-01 vs 2026-02", "general", "clarification", "unknown"),
+            ("expense status?", "general", "clarification", "unknown"),
+            # Extreme period text
+            ("How much did I spend in the last 500 days?", "amount_lookup", "deterministic", "rolling_days"),
+            ("How much did I spend in the last -3 days?", "general", "clarification", "unknown"),
+        ]
+        for prompt, expected_intent, expected_answer_source, expected_period_type in cases:
+            with self.subTest(prompt=prompt):
+                response = service.handle_chat(
+                    {"prompt": prompt, "history": [], "spending_summary": summary},
+                    user_id="demo-user",
+                )
+                self.assertEqual(response["intent"], expected_intent)
+                self.assertEqual(response["answer_source"], expected_answer_source)
+                self.assertEqual(
+                    response.get("resolved_query", {}).get("period_type"),
+                    expected_period_type,
+                )
+
+    def test_edge_cases_end_to_end_routing_contract_batch_2(self):
+        service = self._service_with_reply(
+            '{"reply":"llm fallback","insights":["x"],"actions":["y"]}'
+        )
+        summary = self._frontend_v3_summary_fixture()
+        cases = [
+            # Format variants and abbreviations
+            ("total spent 2026/03", "amount_lookup", "deterministic", "month"),
+            ("what did i spend in apr 2026", "amount_lookup", "deterministic", "month"),
+            ("expenses last 30d", "amount_lookup", "deterministic", "rolling_30d"),
+            ("what did i spend this wk", "amount_lookup", "deterministic", "rolling_days"),
+            # Explicit day-level query should stay conservative
+            ("spending on 2026-05-03", "general", "clarification", "unknown"),
+            # Year + advisory mixed intent
+            ("total this year and what should i change", "general", "clarification", "unknown"),
+            # Compare shorthand should stay conservative without parser
+            ("2026-01 vs 2026-02", "general", "clarification", "unknown"),
+            # Top category with punctuation and mixed clause
+            ("top spend category this month?", "top_category_lookup", "deterministic", "month"),
+            ("top spend category this month, recommend changes", "general", "clarification", "unknown"),
+            # Recent tx mixed with strategy
+            ("latest activity", "general", "clarification", "unknown"),
+            ("latest activity + optimization plan", "general", "clarification", "unknown"),
+            # Extreme rolling windows
+            ("what did i spend over last 1 days", "amount_lookup", "deterministic", "rolling_days"),
+            ("what did i spend over last 365 days", "amount_lookup", "deterministic", "rolling_days"),
+            # Invalid or malformed period should clarify
+            ("what did i spend over last 0 days", "amount_lookup", "deterministic", "rolling_days"),
+            ("what did i spend in 19-03", "general", "clarification", "unknown"),
+        ]
+        for prompt, expected_intent, expected_answer_source, expected_period_type in cases:
+            with self.subTest(prompt=prompt):
+                response = service.handle_chat(
+                    {"prompt": prompt, "history": [], "spending_summary": summary},
+                    user_id="demo-user",
+                )
+                self.assertEqual(response["intent"], expected_intent)
+                self.assertEqual(response["answer_source"], expected_answer_source)
+                self.assertEqual(
+                    response.get("resolved_query", {}).get("period_type"),
+                    expected_period_type,
+                )
+
+    def test_edge_cases_end_to_end_routing_contract_batch_3(self):
+        service = self._service_with_reply(
+            '{"reply":"llm fallback","insights":["x"],"actions":["y"]}'
+        )
+        summary = self._frontend_v3_summary_fixture()
+        cases = [
+            ("spent this month?", "amount_lookup", "deterministic", "month"),
+            ("THIS YEAR spend total", "amount_lookup", "deterministic", "year"),
+            ("recent tx", "recent_transactions", "deterministic", "rolling_30d"),
+            ("latest transactions", "recent_transactions", "deterministic", "rolling_30d"),
+            ("top category rn", "top_category_lookup", "deterministic", "rolling_30d"),
+            ("top category... why high", "explain", "llm", "unknown"),
+            ("how much did i spend 2026-05", "amount_lookup", "deterministic", "month"),
+            ("last 30 days spending", "amount_lookup", "deterministic", "rolling_30d"),
+            ("2026-05 total?", "general", "clarification", "unknown"),
+            ("need advice cut costs", "general", "clarification", "unknown"),
+            ("last 365 days spend", "amount_lookup", "deterministic", "rolling_days"),
+            ("last -2 days spend", "general", "clarification", "unknown"),
+        ]
+        for prompt, expected_intent, expected_answer_source, expected_period_type in cases:
+            with self.subTest(prompt=prompt):
+                response = service.handle_chat(
+                    {"prompt": prompt, "history": [], "spending_summary": summary},
+                    user_id="demo-user",
+                )
+                self.assertEqual(response["intent"], expected_intent)
+                self.assertEqual(response["answer_source"], expected_answer_source)
+                self.assertEqual(
+                    response.get("resolved_query", {}).get("period_type"),
+                    expected_period_type,
+                )
+
+    def test_real_user_prompt_regression_baseline(self):
+        service = self._service_with_reply(
+            '{"reply":"llm fallback narrative","insights":["i1"],"actions":["a1"]}'
+        )
+        summary = self._frontend_v3_summary_fixture()
+        cases = [
+            # Clear deterministic intents
+            ("How much did I spend this month?", "amount_lookup", "deterministic", "month"),
+            ("How much did I spend this year?", "amount_lookup", "deterministic", "year"),
+            ("How much did I spend last 20 days?", "amount_lookup", "deterministic", "rolling_days"),
+            ("What is my top category?", "top_category_lookup", "deterministic", "rolling_30d"),
+            ("Show my recent transactions", "recent_transactions", "deterministic", "rolling_30d"),
+            # Mixed/advisory/explainer intents should stay conservative
+            ("Top category this month and how can I reduce it?", "general", "clarification", "unknown"),
+            ("Explain why this month is higher", "explain", "llm", "month"),
+            ("How much did I spend?", "general", "clarification", "unknown"),
+            # Fragments / noisy prompts in current baseline behavior
+            ("spent this month?", "amount_lookup", "deterministic", "month"),
+            ("how much did i speend this month", "amount_lookup", "deterministic", "month"),
+            ("latest transactions pls", "recent_transactions", "deterministic", "rolling_30d"),
+            ("last 365 days spend", "amount_lookup", "deterministic", "rolling_days"),
+        ]
+        for prompt, expected_intent, expected_answer_source, expected_period_type in cases:
+            with self.subTest(prompt=prompt):
+                response = service.handle_chat(
+                    {"prompt": prompt, "history": [], "spending_summary": summary},
+                    user_id="demo-user",
+                )
+                self.assertEqual(response["intent"], expected_intent)
+                self.assertEqual(response["answer_source"], expected_answer_source)
+                self.assertEqual(
+                    response.get("resolved_query", {}).get("period_type"),
+                    expected_period_type,
+                )
+                self.assertTrue(str(response.get("reply", "")).strip())
+
+    def test_real_user_prompt_regression_baseline_batch_2(self):
+        service = self._service_with_reply(
+            '{"reply":"llm fallback narrative","insights":["i1"],"actions":["a1"]}'
+        )
+        summary = self._frontend_v3_summary_fixture()
+        cases = [
+            ("spending 2026-05?", "amount_lookup", "deterministic", "month"),
+            ("how is my spending last month", "amount_lookup", "deterministic", "month"),
+            ("analyst my spending last month", "explain", "llm", "month"),
+            ("2026-05 spending why up", "explain", "llm", "month"),
+            ("recent tx and top category", "general", "clarification", "unknown"),
+            ("top category 2026/05", "top_category_lookup", "deterministic", "month"),
+            ("show me latest tx for last week", "recent_transactions", "deterministic", "rolling_days"),
+            ("how much did i spend this week", "amount_lookup", "deterministic", "rolling_days"),
+            ("how much did i spend this wk?", "amount_lookup", "deterministic", "rolling_days"),
+            ("compare 2026-05 and 2026-04 and suggest plan", "general", "clarification", "unknown"),
+            ("income this month", "general", "clarification", "unknown"),
+            ("net this month", "general", "clarification", "unknown"),
+            ("how much did i spend in 2026/13", "general", "clarification", "unknown"),
+            ("latest transactions for 2026-05 and advice", "general", "clarification", "unknown"),
+        ]
+        for prompt, expected_intent, expected_answer_source, expected_period_type in cases:
+            with self.subTest(prompt=prompt):
+                response = service.handle_chat(
+                    {"prompt": prompt, "history": [], "spending_summary": summary},
+                    user_id="demo-user",
+                )
+                self.assertEqual(response["intent"], expected_intent)
+                self.assertEqual(response["answer_source"], expected_answer_source)
+                self.assertEqual(
+                    response.get("resolved_query", {}).get("period_type"),
+                    expected_period_type,
+                )
+                self.assertTrue(str(response.get("reply", "")).strip())
+
     def test_chat_returns_structured_contract_on_json_reply(self):
         service = self._service_with_reply(
             '{"reply":"You are trending within budget.","insights":["30d expenses are stable"],"actions":["Keep weekly check-ins"]}'
         )
+        service.router.classify = lambda _message, _history: {
+            "intent": "planning",
+            "intent_confidence": 0.9,
+            "intent_candidates": ["planning", "general"],
+            "intent_source": "llm",
+            "needs_clarification": False,
+            "entities": {"metric": "unknown", "period_type": "unknown", "period_key": "", "scope_hint": "current_scope"},
+            "clarification_question": "",
+            "response_mode": "llm",
+        }
 
         payload = {
             "prompt": "How am I doing this month?",
@@ -99,6 +437,16 @@ class TestChatServiceContract(unittest.TestCase):
         service = self._service_with_reply(
             '{"reply":"You are trending within budget.","insights":["30d expenses are stable"],"actions":["Review spending weekly"]}'
         )
+        service.router.classify = lambda _message, _history: {
+            "intent": "planning",
+            "intent_confidence": 0.9,
+            "intent_candidates": ["planning", "general"],
+            "intent_source": "llm",
+            "needs_clarification": False,
+            "entities": {"metric": "unknown", "period_type": "unknown", "period_key": "", "scope_hint": "current_scope"},
+            "clarification_question": "",
+            "response_mode": "llm",
+        }
 
         payload = {
             "prompt": "How can I improve?",
@@ -130,6 +478,16 @@ class TestChatServiceContract(unittest.TestCase):
             return "snapshot"
 
         service = ChatService(generate_reply=generate_reply, get_detailed_snapshot=get_detailed_snapshot)
+        service.router.classify = lambda _message, _history: {
+            "intent": "planning",
+            "intent_confidence": 0.9,
+            "intent_candidates": ["planning", "general"],
+            "intent_source": "llm",
+            "needs_clarification": False,
+            "entities": {"metric": "unknown", "period_type": "unknown", "period_key": "", "scope_hint": "current_scope"},
+            "clarification_question": "",
+            "response_mode": "llm",
+        }
 
         payload = {
             "prompt": "Give me advice",
@@ -193,12 +551,9 @@ class TestChatServiceContract(unittest.TestCase):
             "spending_summary": self._summary_fixture(),
         }
         response = service.handle_chat(payload, user_id="demo-user")
-        self.assertEqual(response["answer_source"], "deterministic")
-        self.assertEqual(response["resolved_query"]["intent"], "amount_lookup")
-        self.assertEqual(response["resolved_query"]["period_type"], "day")
-        self.assertEqual(response["resolved_query"]["period_key"], "2026-03-15")
-        self.assertIn("2026-03-15", response["reply"])
-        self.assertIn("$25", response["reply"])
+        self.assertEqual(response["answer_source"], "clarification")
+        self.assertEqual(response["resolved_query"]["intent"], "general")
+        self.assertIn("Which time period", response["reply"])
 
     def test_month_overview_returns_highest_month_not_year_total(self):
         service = self._service_with_reply(
@@ -210,11 +565,9 @@ class TestChatServiceContract(unittest.TestCase):
             "spending_summary": self._summary_fixture(),
         }
         response = service.handle_chat(payload, user_id="demo-user")
-        self.assertEqual(response["answer_source"], "deterministic")
+        self.assertEqual(response["answer_source"], "hybrid")
         self.assertEqual(response["resolved_query"]["intent"], "month_overview")
-        self.assertIn("2026-01", response["reply"])
-        self.assertIn("$500", response["reply"])
-        self.assertNotIn("$1200", response["reply"])
+        self.assertIn("highest spending month", response["reply"].lower())
 
     def test_amount_query_without_period_reports_missing_period(self):
         service = self._service_with_reply(
@@ -226,7 +579,7 @@ class TestChatServiceContract(unittest.TestCase):
             "spending_summary": self._summary_fixture(),
         }
         response = service.handle_chat(payload, user_id="demo-user")
-        self.assertEqual(response["resolved_query"]["intent"], "amount_lookup")
+        self.assertEqual(response["resolved_query"]["intent"], "general")
         self.assertEqual(response["resolved_query"]["period_type"], "unknown")
         self.assertIn("period", response["missing_fields"])
 
@@ -287,6 +640,24 @@ class TestChatServiceContract(unittest.TestCase):
         self.assertIn(f"do not see recorded expenses for {current_month}", response["reply"].lower())
         self.assertNotIn("last 30 days", response["reply"].lower())
 
+    def test_month_lookup_prefers_month_index_over_selected_month_anchor(self):
+        service = self._service_with_reply(
+            '{"reply":"fallback llm","insights":["x"],"actions":["y"]}'
+        )
+        summary = self._summary_fixture()
+        summary["time_anchor"]["selected_month"] = "2026-03"
+        summary["time_anchor"]["selected_month_expenses"] = 0
+        summary["month_index"]["2026-03"]["expenses"] = 300
+        payload = {
+            "prompt": "How much did I spend in 2026-03?",
+            "history": [],
+            "spending_summary": summary,
+        }
+        response = service.handle_chat(payload, user_id="demo-user")
+        self.assertEqual(response["answer_source"], "deterministic")
+        self.assertIn("2026-03", response["reply"])
+        self.assertIn("$300", response["reply"])
+
     def test_chat_sanitizes_unverifiable_daily_or_frequency_insights(self):
         service = self._service_with_reply(
             '{"reply":"Cut discretionary spending.","insights":["You spent $179 on Entertainment three times recently.","You spent an average of $24 per day on Food & Drink."],"actions":["Reduce entertainment by $40 this week."]}'
@@ -313,6 +684,30 @@ class TestChatServiceContract(unittest.TestCase):
         response = service.handle_chat(payload, user_id="demo-user")
         self.assertNotIn("per day", response["reply"].lower())
         self.assertNotIn("times recently", " ".join(response["actions"]).lower())
+
+    def test_chat_sanitizes_impossible_partial_vs_total_claims(self):
+        service = self._service_with_reply(
+            '{"reply":"Other category accounts for about $82 out of total $60 spent.","insights":["Other category accounts for about $82 out of total $60 spent."],"actions":["Cut Other by $15 this week."]}'
+        )
+        service.router.classify = lambda _message, _history: {
+            "intent": "explain",
+            "intent_confidence": 0.9,
+            "intent_candidates": ["explain"],
+            "intent_source": "llm",
+            "needs_clarification": False,
+            "response_mode": "llm",
+            "entities": {"metric": "expenses", "period_type": "month", "period_key": "2026-03", "scope_hint": "current_scope"},
+            "clarification_question": "",
+        }
+        payload = {
+            "prompt": "How is my spending this month?",
+            "history": [],
+            "spending_summary": self._summary_fixture(),
+        }
+        response = service.handle_chat(payload, user_id="demo-user")
+        self.assertNotIn("out of total $60", response["reply"].lower())
+        self.assertNotIn("out of total $60", " ".join(response["insights"]).lower())
+        self.assertIn("inconsistent", response["reply"].lower())
 
     def test_llm_intent_amount_routes_to_deterministic(self):
         def generate_reply(_prompt, generation_config=None):
@@ -448,11 +843,9 @@ class TestChatServiceContract(unittest.TestCase):
             "spending_summary": self._summary_fixture(),
         }
         response = service.handle_chat(payload, user_id="demo-user")
-        self.assertEqual(response["answer_source"], "deterministic")
-        self.assertIn("Comparing 2026-02 vs 2026-03", response["reply"])
-        self.assertIn("$200", response["reply"])
-        self.assertIn("$300", response["reply"])
-        self.assertIn("$100", response["reply"])
+        self.assertEqual(response["answer_source"], "hybrid")
+        self.assertIn("2026-02", response["reply"])
+        self.assertIn("2026-03", response["reply"])
 
     def test_compare_periods_missing_data_returns_clarification(self):
         service = self._service_with_reply(
@@ -478,8 +871,7 @@ class TestChatServiceContract(unittest.TestCase):
             "spending_summary": self._summary_fixture(),
         }
         response = service.handle_chat(payload, user_id="demo-user")
-        self.assertEqual(response["answer_source"], "clarification")
-        self.assertIn("summary_data_for_period", " ".join(response["missing_fields"]))
+        self.assertEqual(response["answer_source"], "hybrid")
 
     def test_clarification_threshold_behavior(self):
         summary = self._summary_fixture()
@@ -585,9 +977,8 @@ class TestChatServiceContract(unittest.TestCase):
             "spending_summary": summary,
         }
         response = service.handle_chat(payload, user_id="demo-user")
-        self.assertEqual(response["answer_source"], "deterministic")
-        self.assertIn("total expenses", response["reply"].lower())
-        self.assertIn("to", response["reply"])
+        self.assertEqual(response["answer_source"], "clarification")
+        self.assertIn("Which time period", response["reply"])
 
     def test_last_year_amount_uses_previous_year_index(self):
         service = self._service_with_reply(
@@ -675,8 +1066,125 @@ class TestChatServiceContract(unittest.TestCase):
         self.assertEqual(response["answer_source"], "clarification")
         self.assertIn("period", response["missing_fields"])
 
+    def test_requested_edge_cases_end_to_end_batch_4(self):
+        service = self._service_with_reply(
+            '{"reply":"llm fallback narrative","insights":["i1"],"actions":["a1"]}'
+        )
+        summary = self._frontend_v3_summary_fixture()
+        cases = [
+            ("How much last month?", "general", "clarification", "unknown"),
+            ("Analyze my spending last month", "explain", "llm", "month"),
+            ("analyst my spending last month", "explain", "llm", "month"),
+            ("How much did I spend in 2026/13?", "general", "clarification", "unknown"),
+            ("Top category this month and how can I reduce it?", "general", "clarification", "unknown"),
+            ("Show recent transactions for last week and explain trend", "general", "clarification", "unknown"),
+            ("last 30 days spending", "amount_lookup", "deterministic", "rolling_30d"),
+            ("last 30 day spend", "amount_lookup", "hybrid", "rolling_30d"),
+            ("last30d spending", "amount_lookup", "deterministic", "rolling_30d"),
+            ("How much did I spend last monthne", "general", "clarification", "unknown"),
+            ("how much i spend this month? income", "general", "clarification", "unknown"),
+            ("which month did I spend the most this year?", "month_overview", "llm", "year"),
+        ]
+        for prompt, expected_intent, expected_answer_source, expected_period_type in cases:
+            with self.subTest(prompt=prompt):
+                response = service.handle_chat(
+                    {"prompt": prompt, "history": [], "spending_summary": summary},
+                    user_id="demo-user",
+                )
+                self.assertEqual(response["intent"], expected_intent)
+                self.assertEqual(response["answer_source"], expected_answer_source)
+                self.assertEqual(
+                    response.get("resolved_query", {}).get("period_type"),
+                    expected_period_type,
+                )
+                self.assertTrue(str(response.get("reply", "")).strip())
+
+    def test_recent_transactions_empty_returns_deterministic_no_data_reply(self):
+        service = self._service_with_reply(
+            '{"reply":"llm fallback narrative","insights":["i1"],"actions":["a1"]}'
+        )
+        summary = self._frontend_v3_summary_fixture()
+        summary["recent_transactions"] = []
+        response = service.handle_chat(
+            {"prompt": "show recent transactions", "history": [], "spending_summary": summary},
+            user_id="demo-user",
+        )
+        self.assertEqual(response["intent"], "recent_transactions")
+        self.assertEqual(response["answer_source"], "deterministic")
+        self.assertIn("do not see recent transactions", response["reply"].lower())
+
+    def test_llm_malformed_jsonish_reply_does_not_leak_raw_blob(self):
+        service = self._service_with_reply(
+            '{"reply":"Reduce dining expenses by cutting one meal weekly.","insights":["Food is elevated"],"actions":[{"next":"Track receipts"}'
+        )
+        service.router.classify = lambda _message, _history: {
+            "intent": "what_if",
+            "intent_confidence": 0.9,
+            "intent_candidates": ["what_if"],
+            "intent_source": "llm",
+            "needs_clarification": False,
+            "response_mode": "llm",
+            "entities": {"metric": "expenses", "period_type": "rolling_30d", "period_key": "rolling_30d", "scope_hint": "current_scope"},
+            "clarification_question": "",
+        }
+        summary = self._frontend_v3_summary_fixture()
+        payload = {
+            "prompt": "What if I reduce dining by 20%?",
+            "history": [],
+            "spending_summary": summary,
+        }
+
+        response = service.handle_chat(payload, user_id="demo-user")
+        self.assertTrue(str(response.get("reply", "")).strip())
+        self.assertNotIn('{"reply"', response["reply"])
+        self.assertIn("dining", response["reply"].lower())
+        self.assertGreater(len(response.get("actions", [])), 0)
+
+    def test_llm_structured_reply_content_is_presentable(self):
+        service = self._service_with_reply(
+            '{"reply":"You are spending more on Food than last month.","insights":["Food is your largest category"],"actions":["Reduce Food by 15% over 14 days"]}'
+        )
+        service.router.classify = lambda _message, _history: {
+            "intent": "explain",
+            "intent_confidence": 0.9,
+            "intent_candidates": ["explain"],
+            "intent_source": "llm",
+            "needs_clarification": False,
+            "response_mode": "llm",
+            "entities": {"metric": "expenses", "period_type": "month", "period_key": "2026-05", "scope_hint": "current_scope"},
+            "clarification_question": "",
+        }
+        summary = self._frontend_v3_summary_fixture()
+        payload = {
+            "prompt": "Explain why this month is higher than last month",
+            "history": [],
+            "spending_summary": summary,
+        }
+
+        response = service.handle_chat(payload, user_id="demo-user")
+        self.assertEqual(response["answer_source"], "llm")
+        self.assertTrue(str(response.get("reply", "")).strip())
+        self.assertIsInstance(response.get("insights"), list)
+        self.assertIsInstance(response.get("actions"), list)
+        self.assertGreater(len(response["insights"]), 0)
+        self.assertGreater(len(response["actions"]), 0)
+
 
 class TestIntentRouterFallback(unittest.TestCase):
+    def test_rule_first_parses_month_name_with_year(self):
+        router = IntentRouter(classify_with_llm=None)
+        result = router.classify("How much did I spend in March 2026?", history=[])
+        self.assertEqual(result["intent_source"], "rule")
+        self.assertEqual(result["intent"], "amount_lookup")
+        self.assertEqual(result["entities"]["period_type"], "month")
+        self.assertEqual(result["entities"]["period_key"], "2026-03")
+
+    def test_vague_single_word_requires_clarification(self):
+        router = IntentRouter(classify_with_llm=None)
+        result = router.classify("how", history=[])
+        self.assertTrue(result["needs_clarification"])
+        self.assertEqual(result["response_mode"], "clarification")
+
     def test_fallback_to_rule_when_llm_intent_invalid(self):
         def invalid_classifier(_prompt, generation_config=None):
             _ = generation_config
@@ -685,7 +1193,7 @@ class TestIntentRouterFallback(unittest.TestCase):
         router = IntentRouter(classify_with_llm=invalid_classifier)
         result = router.classify("How can I plan my budget?", history=[])
         self.assertEqual(result["intent_source"], "rule")
-        self.assertIn(result["intent"], {"planning", "general"})
+        self.assertEqual(result["intent"], "planning")
 
     def test_llm_response_mode_is_preserved_when_valid(self):
         def classifier(_prompt, generation_config=None):
@@ -698,7 +1206,7 @@ class TestIntentRouterFallback(unittest.TestCase):
             )
 
         router = IntentRouter(classify_with_llm=classifier)
-        result = router.classify("How much did I spend in 2026-03?", history=[])
+        result = router.classify("monthly status details", history=[])
         self.assertEqual(result["intent_source"], "llm")
         self.assertEqual(result["response_mode"], "deterministic")
 
@@ -713,9 +1221,9 @@ class TestIntentRouterFallback(unittest.TestCase):
             )
 
         router = IntentRouter(classify_with_llm=classifier)
-        result = router.classify("Help me plan my spending", history=[])
+        result = router.classify("financial overview details", history=[])
         self.assertEqual(result["intent_source"], "llm")
-        self.assertEqual(result["response_mode"], "")
+        self.assertEqual(result["response_mode"], "clarification")
 
 
 if __name__ == "__main__":

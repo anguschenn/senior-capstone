@@ -21,6 +21,7 @@ class AiApiClient {
   Future<AiChatResponse> sendChat({
     required Uri uri,
     required String apiKey,
+    String? accessToken,
     required String prompt,
     required List<AiChatMessage> history,
     required Map<String, dynamic> spendingSummary,
@@ -28,6 +29,7 @@ class AiApiClient {
     final parsed = await _postJson(
       uri: uri,
       apiKey: apiKey,
+      accessToken: accessToken,
       body: {
         'prompt': prompt,
         'history': history.map((item) => item.toJson()).toList(),
@@ -40,6 +42,7 @@ class AiApiClient {
   Future<AiBudgetSuggestionResponse> fetchBudgetSuggestions({
     required Uri uri,
     required String apiKey,
+    String? accessToken,
     required Map<String, dynamic> spendingSummary,
     required List<Map<String, dynamic>> budgetProgress,
     required String viewMode,
@@ -48,6 +51,7 @@ class AiApiClient {
     final parsed = await _postJson(
       uri: uri,
       apiKey: apiKey,
+      accessToken: accessToken,
       body: {
         'spending_summary': spendingSummary,
         'budget_progress': budgetProgress,
@@ -61,13 +65,22 @@ class AiApiClient {
   Future<Map<String, dynamic>> _postJson({
     required Uri uri,
     required String apiKey,
+    String? accessToken,
     required Map<String, dynamic> body,
   }) async {
     try {
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+      };
+      final token = accessToken?.trim() ?? '';
+      if (token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
       final response = await http
           .post(
             uri,
-            headers: {'Content-Type': 'application/json', 'x-api-key': apiKey},
+            headers: headers,
             body: jsonEncode(body),
           )
           .timeout(const Duration(seconds: 30));

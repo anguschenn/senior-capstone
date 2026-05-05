@@ -54,35 +54,11 @@ class AppTransaction {
       accountType.toLowerCase().trim() == 'depository';
 
   bool get isExpense =>
-      amount != 0 &&
-      (isDepositoryAccount
-          ? amount > 0
-          : _isExpenseByFallback(
-              amount: amount,
-              pfcDetailed: category,
-              pfcPrimary: primaryCategory,
-              usesCheckingSavingsPolarity: usesCheckingSavingsPolarity,
-            ));
+      amount != 0 && amount > 0;
 
   bool get isInflow => amount != 0 && !isExpense;
 
-  bool get isIncome =>
-      amount != 0 &&
-      (isDepositoryAccount
-          ? amount < 0
-          : (_directionByPfc(
-                      pfcDetailed: category,
-                      pfcPrimary: primaryCategory,
-                    ) ==
-                    _TxDirection.income ||
-                (isInflow &&
-                    isDepositIncomeSignal(
-                      transactionType: transactionType,
-                      category: category,
-                      primaryCategory: primaryCategory,
-                      name: name,
-                      description: description,
-                    ))));
+  bool get isIncome => amount != 0 && amount < 0;
 
   bool get isRefundIncome => isIncome && _isRefundLike();
 
@@ -103,10 +79,10 @@ class AppTransaction {
     final merchant = (row['merchant_name'] as String?)?.trim();
     final fallbackName = (row['name'] as String?)?.trim();
     final description = (row['name'] as String?)?.trim();
-    final name = (merchant?.isNotEmpty ?? false)
-        ? merchant!
-        : ((fallbackName?.isNotEmpty ?? false)
-              ? fallbackName!
+    final name = (fallbackName?.isNotEmpty ?? false)
+        ? fallbackName!
+        : ((merchant?.isNotEmpty ?? false)
+              ? merchant!
               : ((description?.isNotEmpty ?? false)
                     ? description!
                     : 'Unknown'));
@@ -168,7 +144,9 @@ class AppTransaction {
       pending: ((row['pending'] as bool?) ?? false),
       confidence: confidence,
       userId: userId,
-      rawMerchantName: merchant ?? '',
+      rawMerchantName: (fallbackName?.isNotEmpty ?? false)
+          ? fallbackName!
+          : (merchant ?? ''),
       rawPfcPrimary: rawCategory ?? '',
       rawPfcDetailed: rawDetailedCategory ?? '',
     );
@@ -222,21 +200,6 @@ class AppTransaction {
   }) =>
       _directionByPfc(pfcDetailed: pfcDetailed, pfcPrimary: pfcPrimary) !=
       _TxDirection.unknown;
-
-  static bool _isExpenseByFallback({
-    required double amount,
-    required String pfcDetailed,
-    required String pfcPrimary,
-    required bool usesCheckingSavingsPolarity,
-  }) {
-    final byPfc = _directionByPfc(
-      pfcDetailed: pfcDetailed,
-      pfcPrimary: pfcPrimary,
-    );
-    if (byPfc == _TxDirection.expense) return true;
-    if (byPfc == _TxDirection.income) return false;
-    return usesCheckingSavingsPolarity ? amount < 0 : amount > 0;
-  }
 
   bool _isRefundLike() {
     final text =

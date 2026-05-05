@@ -139,15 +139,13 @@ class _MainScreenState extends State<MainScreen> {
       children: [
         Scaffold(
           body: body,
-          floatingActionButton: EnvConfig.instance.skipAuth
-              ? null
-              : FloatingActionButton.small(
-                  heroTag: 'sign-out',
-                  onPressed: () async {
-                    await AuthService.instance.signOut();
-                  },
-                  child: const Icon(Icons.logout),
-                ),
+          floatingActionButton: FloatingActionButton.small(
+            heroTag: 'sign-out',
+            onPressed: () async {
+              await AuthService.instance.signOut();
+            },
+            child: const Icon(Icons.logout),
+          ),
           bottomNavigationBar: NavigationBar(
             selectedIndex: c.tabIndex,
             onDestinationSelected: c.selectTab,

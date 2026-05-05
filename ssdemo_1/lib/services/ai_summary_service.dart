@@ -18,7 +18,9 @@ class AiSummaryService {
     // Prefer frontend pre-aggregated blocks when available.
     for (final key in [
       'totals',
-      'windows',
+      'windows_anchor',
+      'windows_rolling',
+      'window_definition',
       'year_index',
       'month_index',
       'day_index_recent',
@@ -29,6 +31,10 @@ class AiSummaryService {
       'budget_alerts',
       'annual_summary',
       'time_anchor',
+      'data_coverage',
+      'confidence',
+      'warnings',
+      'category_index',
     ]) {
       final value = precomputed[key];
       if (value != null) {
@@ -78,6 +84,55 @@ class AiSummaryService {
 
   String _dateKey(DateTime date) => date.toIso8601String().split('T').first;
 
+  double _clamp01(double value) {
+    if (value < 0) return 0;
+    if (value > 1) return 1;
+    return value;
+  }
+
+  bool _isTransferLike(AppTransaction tx, String category) {
+    // Transfer-like filtering is only for expense-side category aggregation.
+    if (!tx.isExpense) return false;
+
+    final primarySignal = tx.rawPfcPrimary.toLowerCase();
+    final detailedSignal = tx.rawPfcDetailed.toLowerCase();
+    final combinedPfc = '$primarySignal $detailedSignal';
+    if (combinedPfc.contains('loan_payments') ||
+        combinedPfc.contains('credit_card_payment') ||
+        combinedPfc.contains('transfer_out') ||
+        combinedPfc.contains('transfer') ||
+        combinedPfc.contains('internal')) {
+      return true;
+    }
+
+    final text = [
+      category,
+      tx.transactionType,
+      tx.name,
+      tx.description,
+    ].join(' ').toLowerCase();
+    if (text.contains('transfer') || text.contains('internal transfer')) {
+      return true;
+    }
+    if (text.contains('credit card payment') ||
+        text.contains('loan payment') ||
+        text.contains('payment thank you') ||
+        text.contains('autopay')) {
+      return true;
+    }
+
+    // Peer-transfer app names alone are too broad; require transfer/payment intent.
+    final hasP2pApp = text.contains('zelle') ||
+        text.contains('venmo') ||
+        text.contains('cash app');
+    final hasTransferIntent = text.contains('payment') ||
+        text.contains('pay to') ||
+        text.contains('transfer') ||
+        text.contains('cashout') ||
+        text.contains('withdrawal');
+    return hasP2pApp && hasTransferIntent;
+  }
+
   Map<String, dynamic> build({
     required List<AppTransaction> transactions,
     required List<BudgetCategoryProgress> budgetProgress,
@@ -88,15 +143,19 @@ class AiSummaryService {
     Map<String, String> reviewedCategoryByTxId = const <String, String>{},
     DateTime? focusMonth,
   }) {
+    final now = DateTime.now();
+    final focus = focusMonth ?? now;
     final anchor = DateTime(
-      (focusMonth ?? DateTime.now()).year,
-      (focusMonth ?? DateTime.now()).month,
+      focus.year,
+      focus.month,
       1,
     );
-    final now = DateTime.now();
     final cutoff30d = anchor.subtract(const Duration(days: 30));
     final cutoff7d = anchor.subtract(const Duration(days: 7));
     final cutoff90d = anchor.subtract(const Duration(days: 90));
+    final rollingCutoff30d = now.subtract(const Duration(days: 30));
+    final rollingCutoff7d = now.subtract(const Duration(days: 7));
+    final rollingCutoff90d = now.subtract(const Duration(days: 90));
     final cutoffRecentDays = anchor.subtract(const Duration(days: 120));
 
     double income30d = 0;
@@ -114,10 +173,20 @@ class AiSummaryService {
     double income7d = 0;
     double expenses7d = 0;
     int txCount7d = 0;
+    double income7dRolling = 0;
+    double expenses7dRolling = 0;
+    int txCount7dRolling = 0;
 
     double income90d = 0;
     double expenses90d = 0;
     int txCount90d = 0;
+    double income30dRolling = 0;
+    double expenses30dRolling = 0;
+    int txCount30dRolling = 0;
+    int expenseTxCount30dRolling = 0;
+    double income90dRolling = 0;
+    double expenses90dRolling = 0;
+    int txCount90dRolling = 0;
 
     final annualYear = anchor.year;
     double annualIncome = 0;
@@ -125,6 +194,13 @@ class AiSummaryService {
     int annualExpenseTxCount = 0;
     final annualCategoryTotals = <String, double>{};
     final annualExpensesOnly = <AppTransaction>[];
+    final categoryTotalsAll = <String, double>{};
+    final activeDayKeys = <String>{};
+    final recent30dActiveDayKeys = <String>{};
+    DateTime? earliestTxDate;
+    DateTime? latestTxDate;
+    int expenseTxCountAll = 0;
+    int transferLikeExpenseTxCount = 0;
 
     String effectiveCategoryFor(AppTransaction tx) {
       final reviewed = (reviewedCategoryByTxId[tx.id] ?? '').trim();
@@ -135,6 +211,16 @@ class AiSummaryService {
     for (final tx in transactions) {
       final effectiveCategory = effectiveCategoryFor(tx);
       final dateKey = _dateKey(tx.date);
+      activeDayKeys.add(dateKey);
+      if (!tx.date.isBefore(rollingCutoff30d)) {
+        recent30dActiveDayKeys.add(dateKey);
+      }
+      if (earliestTxDate == null || tx.date.isBefore(earliestTxDate)) {
+        earliestTxDate = tx.date;
+      }
+      if (latestTxDate == null || tx.date.isAfter(latestTxDate)) {
+        latestTxDate = tx.date;
+      }
       final monthKey = _monthKey(tx.date);
       final monthBucket = monthTotals.putIfAbsent(
         monthKey,
@@ -152,11 +238,20 @@ class AiSummaryService {
       if (!tx.date.isBefore(cutoff30d)) {
         txCount30d += 1;
       }
+      if (!tx.date.isBefore(rollingCutoff30d)) {
+        txCount30dRolling += 1;
+      }
       if (!tx.date.isBefore(cutoff7d)) {
         txCount7d += 1;
       }
+      if (!tx.date.isBefore(rollingCutoff7d)) {
+        txCount7dRolling += 1;
+      }
       if (!tx.date.isBefore(cutoff90d)) {
         txCount90d += 1;
+      }
+      if (!tx.date.isBefore(rollingCutoff90d)) {
+        txCount90dRolling += 1;
       }
 
       if (tx.isIncome) {
@@ -167,17 +262,27 @@ class AiSummaryService {
         if (!tx.date.isBefore(cutoff30d)) {
           income30d += income;
         }
+        if (!tx.date.isBefore(rollingCutoff30d)) {
+          income30dRolling += income;
+        }
         if (!tx.date.isBefore(cutoff7d)) {
           income7d += income;
         }
+        if (!tx.date.isBefore(rollingCutoff7d)) {
+          income7dRolling += income;
+        }
         if (!tx.date.isBefore(cutoff90d)) {
           income90d += income;
+        }
+        if (!tx.date.isBefore(rollingCutoff90d)) {
+          income90dRolling += income;
         }
         if (tx.date.year == annualYear) {
           annualIncome += income;
         }
       } else if (tx.isExpense) {
         final expense = tx.expenseAmount;
+        expenseTxCountAll += 1;
         monthBucket['expenses'] = (monthBucket['expenses'] as double) + expense;
         monthBucket['expense_tx_count'] =
             (monthBucket['expense_tx_count'] as int) + 1;
@@ -189,19 +294,38 @@ class AiSummaryService {
           expenses30d += expense;
           expenseTxCount30d += 1;
         }
+        if (!tx.date.isBefore(rollingCutoff30d)) {
+          expenses30dRolling += expense;
+          expenseTxCount30dRolling += 1;
+        }
         if (!tx.date.isBefore(cutoff7d)) {
           expenses7d += expense;
+        }
+        if (!tx.date.isBefore(rollingCutoff7d)) {
+          expenses7dRolling += expense;
         }
         if (!tx.date.isBefore(cutoff90d)) {
           expenses90d += expense;
         }
+        if (!tx.date.isBefore(rollingCutoff90d)) {
+          expenses90dRolling += expense;
+        }
         if (tx.date.year == annualYear) {
           annualExpenses += expense;
           annualExpenseTxCount += 1;
+        }
+
+        if (_isTransferLike(tx, effectiveCategory)) {
+          transferLikeExpenseTxCount += 1;
+          continue;
+        }
+
+        if (tx.date.year == annualYear) {
           annualExpensesOnly.add(tx);
         }
 
-        if (_isTransferLikeCategory(effectiveCategory)) continue;
+        categoryTotalsAll[effectiveCategory] =
+            (categoryTotalsAll[effectiveCategory] ?? 0) + expense;
 
         final monthCategoryBucket = monthCategoryTotals.putIfAbsent(
           monthKey,
@@ -221,13 +345,22 @@ class AiSummaryService {
       }
     }
 
-    for (final tx in transactions.take(3)) {
+    final sortedRecent = [...transactions]
+      ..sort((a, b) {
+        final byDate = b.date.compareTo(a.date);
+        if (byDate != 0) return byDate;
+        return b.id.compareTo(a.id);
+      });
+    for (final tx in sortedRecent.take(3)) {
       final effectiveCategory = effectiveCategoryFor(tx);
       recent.add({
+        'id': tx.id,
         'date': _dateKey(tx.date),
         'name': tx.name,
         'amount': tx.amount,
         'category': effectiveCategory,
+        'type': tx.transactionType,
+        'account_id': tx.accountId,
       });
     }
 
@@ -411,35 +544,88 @@ class AiSummaryService {
     final anomalies = <Map<String, dynamic>>[];
     if (annualExpensesOnly.isNotEmpty) {
       final rankedExpenses = [...annualExpensesOnly]
-        ..sort((a, b) => b.amount.compareTo(a.amount));
+        ..sort((a, b) => b.expenseAmount.compareTo(a.expenseAmount));
       for (final tx in rankedExpenses.take(5)) {
         final effectiveCategory = effectiveCategoryFor(tx);
         anomalies.add({
           'date': _dateKey(tx.date),
           'name': tx.name,
-          'amount': tx.amount,
+          'amount': tx.expenseAmount,
           'category': effectiveCategory,
         });
       }
     }
 
+    final daysSpan = (earliestTxDate == null || latestTxDate == null)
+        ? 0
+        : latestTxDate.difference(earliestTxDate).inDays + 1;
+    final coverageRatioRecent30d = recent30dActiveDayKeys.length / 30.0;
+    final transferLikeExpenseRatio = expenseTxCountAll == 0
+        ? 0.0
+        : transferLikeExpenseTxCount / expenseTxCountAll;
+    final txCountScore = _clamp01(txCount30dRolling / 20.0);
+    final coverageScore = _clamp01(coverageRatioRecent30d);
+    final historyScore = _clamp01(daysSpan / 120.0);
+    final noiseScore = _clamp01(1.0 - transferLikeExpenseRatio);
+    final confidenceScore = _clamp01(
+      (txCountScore * 0.35) +
+          (coverageScore * 0.3) +
+          (historyScore * 0.2) +
+          (noiseScore * 0.15),
+    );
+    final confidenceOverall = confidenceScore >= 0.75
+        ? 'high'
+        : (confidenceScore >= 0.45 ? 'medium' : 'low');
+    final warnings = <String>[];
+    if (txCount30dRolling < 5 || coverageRatioRecent30d < 0.2) {
+      warnings.add('sparse_recent_data');
+    }
+    if (daysSpan > 0 && daysSpan < 60) {
+      warnings.add('possible_missing_history');
+    }
+    if (transferLikeExpenseRatio > 0.4) {
+      warnings.add('contains_transfer_like_noise');
+    }
+
     final computed = {
-      'version': 2,
+      'version': 3,
       'generated_at': now.toIso8601String(),
       'scope': selectedAccountId == kAllAccountsId
           ? 'all_accounts'
           : 'single_account',
       'scope_label': scopeLabel,
+      'data_coverage': {
+        'transaction_count_total': transactions.length,
+        'range_start': earliestTxDate == null ? null : _dateKey(earliestTxDate),
+        'range_end': latestTxDate == null ? null : _dateKey(latestTxDate),
+        'days_span': daysSpan,
+        'active_days': activeDayKeys.length,
+        'coverage_ratio_recent_30d': coverageRatioRecent30d,
+      },
+      'confidence': {
+        'score': confidenceScore,
+        'overall': confidenceOverall,
+        'reasons': warnings,
+        'components': {
+          'tx_count_recent_30d': txCountScore,
+          'coverage_recent_30d': coverageScore,
+          'history_span': historyScore,
+          'noise_penalty_adjusted': noiseScore,
+        },
+      },
+      'warnings': warnings,
+      'category_index': categoryTotalsAll,
       'time_anchor': {
         'selected_month': _monthKey(anchor),
         'selected_year': anchor.year,
-        // This is the exact month total already shown in frontend cards.
-        'selected_month_expenses': stats.monthlyExpenses,
-        'selected_month_income': stats.monthlyIncome,
         'tz': now.timeZoneName,
       },
       'window_days': 30,
-      'windows': {
+      'window_definition': {
+        'windows_anchor': 'anchor_based_selected_month',
+        'windows_rolling': 'rolling_from_generated_at',
+      },
+      'windows_anchor': {
         'last_7d': {
           'income': income7d,
           'expenses': expenses7d,
@@ -455,6 +641,24 @@ class AiSummaryService {
           'income': income90d,
           'expenses': expenses90d,
           'tx_count': txCount90d,
+        },
+      },
+      'windows_rolling': {
+        'last_7d': {
+          'income': income7dRolling,
+          'expenses': expenses7dRolling,
+          'tx_count': txCount7dRolling,
+        },
+        'last_30d': {
+          'income': income30dRolling,
+          'expenses': expenses30dRolling,
+          'tx_count': txCount30dRolling,
+          'expense_tx_count': expenseTxCount30dRolling,
+        },
+        'last_90d': {
+          'income': income90dRolling,
+          'expenses': expenses90dRolling,
+          'tx_count': txCount90dRolling,
         },
       },
       'year_index': yearIndex,

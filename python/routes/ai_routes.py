@@ -4,9 +4,8 @@ from flask import Blueprint, current_app, jsonify, request
 
 from ai.response_utils import confidence_label, short_copy
 from ai.validators import clamp_str
-from auth import is_rate_limited_for_ai
-from plaid_sync import IdentityStateError, require_demo_identity
-from api.http_helpers import identity_error_response, log_route_error
+from auth import UserAuthError, is_rate_limited_for_ai, require_supabase_user_id
+from api.http_helpers import log_route_error
 
 ai_bp = Blueprint("ai", __name__)
 
@@ -17,11 +16,11 @@ def ai_chat():
         return jsonify({"error": "Rate limit exceeded"}), 429
     body = request.get_json(silent=True) or {}
     try:
-        user_id, _ = require_demo_identity()
+        user_id = require_supabase_user_id()
         response = current_app.config["chat_service"].handle_chat(body, user_id=user_id)
         return jsonify(response)
-    except IdentityStateError as error:
-        return identity_error_response(error, "/api/ai/chat")
+    except UserAuthError as error:
+        return jsonify({"error": str(error)}), 401
     except ValueError as error:
         return jsonify({"error": str(error)}), 400
     except Exception as error:

@@ -72,6 +72,10 @@ class HomePage extends StatelessWidget {
     final incomeTitle = 'Income ($periodLabel)';
     final expensesTitle = 'Expenses ($periodLabel)';
     final cashFlowLabel = 'Cash Flow ($periodLabel)';
+    final sevenDaysAgo = DateTime.now().subtract(const Duration(days: 7));
+    final recentTransactions = transactions
+        .where((tx) => tx.date.isAfter(sevenDaysAgo))
+        .toList();
 
     // Review queue shows low-confidence transactions (income + expense).
     final pendingReviewTransactions = lowConfidenceTransactions.where((tx) {
@@ -247,15 +251,15 @@ class HomePage extends StatelessWidget {
           // Most recent transaction preview shown on the dashboard.
           // Recent transactions show the latest few rows from the active account filter.
           const Text(
-            'Recent Transactions',
+            'Recent Transactions (Last 7 Days)',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
-          if (transactions.isEmpty)
+          if (recentTransactions.isEmpty)
             const Padding(
               padding: EdgeInsets.only(top: 8),
-              child: Text('No transactions yet. Tap Connect or Refresh.'),
+              child: Text('No transactions in the last 7 days.'),
             ),
-          ...transactions.take(3).map((tx) {
+          ...recentTransactions.map((tx) {
             final effectiveCategory = tx.isIncome
                 ? 'Income'
                 : (reviewedCategoryByTxId[tx.id] ??

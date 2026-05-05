@@ -25,6 +25,85 @@ class CategoryService {
     return v.isEmpty ? '_' : v;
   }
 
+  String _keywordFallbackCategory(String merchantName, String transactionName) {
+    final text = '${merchantName.trim()} ${transactionName.trim()}'.toLowerCase();
+    if (text.contains('openai') ||
+        text.contains('chatgpt') ||
+        text.contains('spotify') ||
+        text.contains('netflix') ||
+        text.contains('apple.com/bill') ||
+        text.contains('youtube premium')) {
+      return 'Subscriptions';
+    }
+    if (text.contains('starbucks') ||
+        text.contains('mcdonald') ||
+        text.contains('doordash') ||
+        text.contains('ubereats')) {
+      return 'Food';
+    }
+    if (text.contains('paypal transfer') ||
+        text.contains('zelle payment') ||
+        text.contains('venmo') ||
+        text.contains('payment to chase card') ||
+        text.contains('transfer ppd') ||
+        text.contains('cash deposit')) {
+      return 'Fees & Transfers';
+    }
+    return '';
+  }
+
+  CategoryDecision? _strongSignalOverride({
+    required String pfcPrimary,
+    required String pfcDetailed,
+    required String merchantName,
+    required String transactionName,
+  }) {
+    final primary = pfcPrimary.toLowerCase();
+    final detailed = pfcDetailed.toLowerCase();
+    final text = '${merchantName.trim()} ${transactionName.trim()}'.toLowerCase();
+
+    // High-confidence payment/transfer classes from provider signals.
+    if (detailed.contains('loan_payments_credit_card_payment') ||
+        detailed.contains('transfer_out_account_transfer') ||
+        detailed.contains('transfer_in_deposit') ||
+        detailed.contains('bank_fees')) {
+      return const CategoryDecision(
+        category: 'Fees & Transfers',
+        confidence: 'high',
+      );
+    }
+    if (primary.contains('loan_payments') ||
+        primary.contains('transfer_out') ||
+        primary.contains('transfer_in') ||
+        primary.contains('bank_fees')) {
+      return const CategoryDecision(
+        category: 'Fees & Transfers',
+        confidence: 'high',
+      );
+    }
+
+    // High-confidence merchant/name signals.
+    if (text.contains('payment to chase card') ||
+        text.contains('paypal transfer') ||
+        text.contains('zelle payment') ||
+        text.contains('venmo')) {
+      return const CategoryDecision(
+        category: 'Fees & Transfers',
+        confidence: 'high',
+      );
+    }
+    if (text.contains('openai') ||
+        text.contains('chatgpt') ||
+        text.contains('spotify') ||
+        text.contains('netflix')) {
+      return const CategoryDecision(
+        category: 'Subscriptions',
+        confidence: 'high',
+      );
+    }
+    return null;
+  }
+
   String buildRuleKey({
     required String merchantName,
     required String pfcPrimary,
@@ -45,7 +124,7 @@ class CategoryService {
 
   String ruleKeyForRawTransaction(Map<String, dynamic> row) {
     final merchantName =
-        ((row['merchant_name'] as String?) ?? (row['name'] as String?) ?? '')
+        ((row['name'] as String?) ?? (row['merchant_name'] as String?) ?? '')
             .trim();
     final pfcPrimary = ((row['pfc_primary'] as String?) ?? '').trim();
     final pfcDetailed =
@@ -107,7 +186,17 @@ class CategoryService {
   CategoryDecision classifyByPfcSignals({
     required String pfcPrimary,
     required String pfcDetailed,
+    String merchantName = '',
+    String transactionName = '',
   }) {
+    final strong = _strongSignalOverride(
+      pfcPrimary: pfcPrimary,
+      pfcDetailed: pfcDetailed,
+      merchantName: merchantName,
+      transactionName: transactionName,
+    );
+    if (strong != null) return strong;
+
     final primaryCategory = budgetCategoryFromPfc(
       pfcDetailed: '',
       pfcPrimary: pfcPrimary,
@@ -116,24 +205,37 @@ class CategoryService {
       pfcDetailed: pfcDetailed,
       pfcPrimary: '',
     );
-    final hasPrimarySignal =
-        pfcPrimary.trim().isNotEmpty && primaryCategory != 'Other';
-    final hasDetailedSignal =
-        pfcDetailed.trim().isNotEmpty && detailedCategory != 'Other';
-    if (hasPrimarySignal && hasDetailedSignal) {
-      if (normalizeCategoryKey(primaryCategory) ==
-          normalizeCategoryKey(detailedCategory)) {
-        return CategoryDecision(category: detailedCategory, confidence: 'high');
-      }
-      return CategoryDecision(category: detailedCategory, confidence: 'mid');
+    final keywordCategory = _keywordFallbackCategory(
+      merchantName,
+      transactionName,
+    );
+
+    final hits = <String>[
+      if (pfcPrimary.trim().isNotEmpty && primaryCategory != 'Other')
+        primaryCategory,
+      if (pfcDetailed.trim().isNotEmpty && detailedCategory != 'Other')
+        detailedCategory,
+      if (keywordCategory.isNotEmpty) keywordCategory,
+    ];
+
+    if (hits.isEmpty) {
+      return const CategoryDecision(category: 'Other', confidence: 'low');
     }
-    if (hasDetailedSignal) {
-      return CategoryDecision(category: detailedCategory, confidence: 'mid');
+
+    final normalizedUnique = <String>{
+      for (final category in hits) normalizeCategoryKey(category),
+    };
+
+    // Product rule:
+    // - Only one signal hit => low confidence (send to review queue).
+    // - Multiple hits but conflicting categories => low confidence.
+    if (hits.length == 1 || normalizedUnique.length > 1) {
+      return CategoryDecision(category: hits.first, confidence: 'low');
     }
-    if (hasPrimarySignal) {
-      return CategoryDecision(category: primaryCategory, confidence: 'mid');
-    }
-    return const CategoryDecision(category: 'Other', confidence: 'low');
+
+    final resolved = hits.last;
+    final confidence = hits.length >= 3 ? 'high' : 'mid';
+    return CategoryDecision(category: resolved, confidence: confidence);
   }
 
   Future<List<CategoryOption>> ensureBaseCategories(String userId) async {
