@@ -73,15 +73,13 @@ class SyncService {
     DateTime selectedMonth,
   ) async {
     final userId = AuthService.instance.currentUserId;
-    final useUnscopedReads =
-        EnvConfig.instance.skipAuth && EnvConfig.instance.devUnscopedReads;
     final now = DateTime.now();
     final focused = normalizedMonthOption(selectedMonth);
     final monthYear = _monthKey(focused);
 
     final accountsRows = await AccountService.instance.fetchAccountRows(
       userId,
-      unscoped: useUnscopedReads,
+      unscoped: false,
     );
     final accountMetaById = {
       for (final row in accountsRows)
@@ -100,46 +98,27 @@ class SyncService {
       userId,
     );
 
-    final budgetRows = useUnscopedReads
-        ? await AppSupabase.client
-              .from('budgets')
-              .select('id,category_id,monthly_limit,month_year')
-              .eq('month_year', monthYear)
-        : await AppSupabase.client
-              .from('budgets')
-              .select('id,category_id,monthly_limit,month_year')
-              .eq('user_id', userId)
-              .eq('month_year', monthYear);
+    final budgetRows = await AppSupabase.client
+        .from('budgets')
+        .select('id,category_id,monthly_limit,month_year')
+        .eq('user_id', userId)
+        .eq('month_year', monthYear);
 
-    final subscriptionRows = useUnscopedReads
-        ? await AppSupabase.client
-              .from('subscriptions')
-              .select('id,merchant_name,amount,next_charge_date,frequency')
-              .order('next_charge_date', ascending: true)
-              .limit(500)
-        : await AppSupabase.client
-              .from('subscriptions')
-              .select('id,merchant_name,amount,next_charge_date,frequency')
-              .eq('user_id', userId)
-              .order('next_charge_date', ascending: true)
-              .limit(500);
+    final subscriptionRows = await AppSupabase.client
+        .from('subscriptions')
+        .select('id,merchant_name,amount,next_charge_date,frequency')
+        .eq('user_id', userId)
+        .order('next_charge_date', ascending: true)
+        .limit(500);
 
-    final rows = useUnscopedReads
-        ? await AppSupabase.client
-              .from('transactions')
-              .select(
-                'plaid_transaction_id,plaid_account_id,merchant_name,name,category,pfc_primary,pfc_detailed,pfc_confidence,pending,date,amount,user_id',
-              )
-              .order('date', ascending: false)
-              .limit(1000)
-        : await AppSupabase.client
-              .from('transactions')
-              .select(
-                'plaid_transaction_id,plaid_account_id,merchant_name,name,category,pfc_primary,pfc_detailed,pfc_confidence,pending,date,amount,user_id',
-              )
-              .eq('user_id', userId)
-              .order('date', ascending: false)
-              .limit(1000);
+    final rows = await AppSupabase.client
+        .from('transactions')
+        .select(
+          'plaid_transaction_id,plaid_account_id,merchant_name,name,category,pfc_primary,pfc_detailed,pfc_confidence,pending,date,amount,user_id',
+        )
+        .eq('user_id', userId)
+        .order('date', ascending: false)
+        .limit(1000);
 
     // Parse and de-duplicate transactions.
     final txRows = (rows as List).whereType<Map<String, dynamic>>().map((row) {
@@ -152,11 +131,7 @@ class SyncService {
         'subtype': meta['subtype'] ?? '',
       };
     }).toList();
-    final rememberedRulesUserId = (useUnscopedReads
-        ? txRows
-              .map((row) => ((row['user_id'] as String?) ?? '').trim())
-              .firstWhere((id) => id.isNotEmpty, orElse: () => userId)
-        : userId);
+    final rememberedRulesUserId = userId;
     final rememberedRules = await CategoryService.instance
         .fetchRememberedRuleDecisions(rememberedRulesUserId);
     final parsed = txRows.map(AppTransaction.fromMap).toList();
@@ -188,6 +163,12 @@ class SyncService {
                     (txRows[i]['category'] as String?) ??
                     '')
                 .trim(),
+        merchantName:
+            ((txRows[i]['name'] as String?) ??
+                    (txRows[i]['merchant_name'] as String?) ??
+                    '')
+                .trim(),
+        transactionName: ((txRows[i]['name'] as String?) ?? '').trim(),
       );
       autoReviewedCategoryByTxId[tx.id] = decision.category;
       if (decision.confidence == 'low') {

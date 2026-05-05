@@ -1,35 +1,16 @@
 import json
 
-
 # Intent-specific prompt headers used to slightly tune response framing.
 CHAT_PROMPTS = {
-    "amount_lookup": (
-        "Mode: Answer the requested amount directly and precisely."
-    ),
-    "top_category_lookup": (
-        "Mode: Answer the requested top spending category directly."
-    ),
-    "month_overview": (
-        "Mode: Summarize the key monthly spending ranking clearly."
-    ),
-    "compare_periods": (
-        "Mode: Compare periods using explicit numbers and assumptions."
-    ),
-    "explain": (
-        "Mode: Explain root cause clearly and directly."
-    ),
-    "compare": (
-        "Mode: Compare options and state the trade-off."
-    ),
-    "what_if": (
-        "Mode: Evaluate what-if impact with assumptions."
-    ),
-    "planning": (
-        "Mode: Turn goals into concrete steps."
-    ),
-    "general": (
-        "Mode: Give a direct financial answer."
-    ),
+    "amount_lookup": ("Mode: Answer the requested amount directly and precisely."),
+    "top_category_lookup": ("Mode: Answer the requested top spending category directly."),
+    "month_overview": ("Mode: Summarize the key monthly spending ranking clearly."),
+    "compare_periods": ("Mode: Compare periods using explicit numbers and assumptions."),
+    "explain": ("Mode: Explain root cause clearly and directly."),
+    "compare": ("Mode: Compare options and state the trade-off."),
+    "what_if": ("Mode: Evaluate what-if impact with assumptions."),
+    "planning": ("Mode: Turn goals into concrete steps."),
+    "general": ("Mode: Give a direct financial answer."),
 }
 
 
@@ -38,7 +19,7 @@ def build_chat_prompt(intent, message, history, context_text):
     header = CHAT_PROMPTS.get(intent, CHAT_PROMPTS["general"])
     history_lines = []
     for turn in history or []:
-        history_lines.append(f"{turn.get('role','user')}: {turn.get('text','')}")
+        history_lines.append(f"{turn.get('role', 'user')}: {turn.get('text', '')}")
     history_block = "\n".join(history_lines) if history_lines else "none"
     return (
         "You are SmartSpend, a senior personal finance assistant.\n"

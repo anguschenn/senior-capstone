@@ -5,6 +5,7 @@ import '../../constants/app_constants.dart';
 import '../../models/ai/ai_models.dart';
 import '../../models/app_models.dart';
 import '../../services/ai_api_client.dart';
+import '../../services/auth_service.dart';
 import 'ai_response_card.dart';
 
 /// Single chat turn: user prompt + optional structured response.
@@ -158,6 +159,7 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
       final aiRespRaw = await _client.sendChat(
         uri: widget.chatApiUri,
         apiKey: widget.apiKey,
+        accessToken: AuthService.instance.currentAccessToken,
         prompt: prompt,
         history: historyPayload,
         spendingSummary: _activeSummary,

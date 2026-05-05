@@ -101,17 +101,18 @@ def sanitize_spending_summary(summary):
     if isinstance(time_anchor, dict):
         cleaned["time_anchor"] = {
             "selected_month": clamp_str(time_anchor.get("selected_month", ""), 16),
-            "selected_year": max(2000, min(2100, int(to_float(time_anchor.get("selected_year", 2026), 2026)))),
-            "selected_month_expenses": max(0.0, to_float(time_anchor.get("selected_month_expenses", 0))),
-            "selected_month_income": max(0.0, to_float(time_anchor.get("selected_month_income", 0))),
+            "selected_year": max(
+                2000, min(2100, int(to_float(time_anchor.get("selected_year", 2026), 2026)))
+            ),
             "tz": clamp_str(time_anchor.get("tz", ""), 64),
         }
 
-    windows = summary.get("windows")
-    if isinstance(windows, dict):
+    def _sanitize_windows_block(raw_windows):
+        if not isinstance(raw_windows, dict):
+            return None
         cleaned_windows = {}
         for key in ("last_7d", "last_30d", "last_90d"):
-            item = windows.get(key)
+            item = raw_windows.get(key)
             if not isinstance(item, dict):
                 continue
             cleaned_windows[key] = {
@@ -123,8 +124,78 @@ def sanitize_spending_summary(summary):
                 cleaned_windows[key]["expense_tx_count"] = max(
                     0, int(to_float(item.get("expense_tx_count", 0)))
                 )
-        if cleaned_windows:
-            cleaned["windows"] = cleaned_windows
+        return cleaned_windows or None
+
+    windows_anchor = _sanitize_windows_block(summary.get("windows_anchor"))
+    if windows_anchor:
+        cleaned["windows_anchor"] = windows_anchor
+    windows_rolling = _sanitize_windows_block(summary.get("windows_rolling"))
+    if windows_rolling:
+        cleaned["windows_rolling"] = windows_rolling
+
+    category_index = summary.get("category_index")
+    if isinstance(category_index, dict):
+        cleaned_category_index = {}
+        for key, value in list(category_index.items())[:120]:
+            category = clamp_str(key, 64)
+            if not category:
+                continue
+            cleaned_category_index[category] = max(0.0, to_float(value, 0.0))
+        if cleaned_category_index:
+            cleaned["category_index"] = cleaned_category_index
+
+    data_coverage = summary.get("data_coverage")
+    if isinstance(data_coverage, dict):
+        cleaned["data_coverage"] = {
+            "transaction_count_total": max(
+                0, int(to_float(data_coverage.get("transaction_count_total", 0)))
+            ),
+            "range_start": clamp_str(data_coverage.get("range_start", ""), 16),
+            "range_end": clamp_str(data_coverage.get("range_end", ""), 16),
+            "days_span": max(0, int(to_float(data_coverage.get("days_span", 0)))),
+            "active_days": max(0, int(to_float(data_coverage.get("active_days", 0)))),
+            "coverage_ratio_recent_30d": max(
+                0.0,
+                min(1.0, to_float(data_coverage.get("coverage_ratio_recent_30d", 0))),
+            ),
+        }
+
+    confidence = summary.get("confidence")
+    if isinstance(confidence, dict):
+        components = (
+            confidence.get("components") if isinstance(confidence.get("components"), dict) else {}
+        )
+        cleaned["confidence"] = {
+            "score": max(0.0, min(1.0, to_float(confidence.get("score", 0)))),
+            "overall": clamp_str(confidence.get("overall", ""), 16),
+            "reasons": [
+                clamp_str(item, 64)
+                for item in (
+                    confidence.get("reasons") if isinstance(confidence.get("reasons"), list) else []
+                )
+                if clamp_str(item, 64)
+            ][:8],
+            "components": {
+                "tx_count_recent_30d": max(
+                    0.0, min(1.0, to_float(components.get("tx_count_recent_30d", 0)))
+                ),
+                "coverage_recent_30d": max(
+                    0.0, min(1.0, to_float(components.get("coverage_recent_30d", 0)))
+                ),
+                "history_span": max(0.0, min(1.0, to_float(components.get("history_span", 0)))),
+                "noise_penalty_adjusted": max(
+                    0.0, min(1.0, to_float(components.get("noise_penalty_adjusted", 0)))
+                ),
+            },
+        }
+
+    warnings = summary.get("warnings")
+    if isinstance(warnings, list):
+        cleaned["warnings"] = [
+            clamp_str(item, 64)
+            for item in warnings
+            if isinstance(item, str) and clamp_str(item, 64)
+        ][:12]
 
     year_index = summary.get("year_index")
     if isinstance(year_index, dict):
@@ -242,9 +313,7 @@ def sanitize_spending_summary(summary):
             "expenses_30d": max(0.0, to_float(totals.get("expenses_30d", 0))),
             "net_30d": to_float(totals.get("net_30d", 0)),
             "tx_count_30d": max(0, int(to_float(totals.get("tx_count_30d", 0)))),
-            "expense_tx_count_30d": max(
-                0, int(to_float(totals.get("expense_tx_count_30d", 0)))
-            ),
+            "expense_tx_count_30d": max(0, int(to_float(totals.get("expense_tx_count_30d", 0)))),
             "income_month": max(0.0, to_float(totals.get("income_month", 0))),
             "expenses_month": max(0.0, to_float(totals.get("expenses_month", 0))),
             "net_month": to_float(totals.get("net_month", 0)),
@@ -289,12 +358,36 @@ def sanitize_spending_summary(summary):
     annual = summary.get("annual_summary")
     if isinstance(annual, dict):
         annual_totals = annual.get("totals") if isinstance(annual.get("totals"), dict) else {}
-        monthly = annual.get("monthly_breakdown") if isinstance(annual.get("monthly_breakdown"), list) else []
-        categories_year = annual.get("top_expense_categories_year") if isinstance(annual.get("top_expense_categories_year"), list) else []
-        monthly_expense_ranking = annual.get("monthly_expense_ranking") if isinstance(annual.get("monthly_expense_ranking"), list) else []
-        monthly_expense_trend = annual.get("monthly_expense_trend") if isinstance(annual.get("monthly_expense_trend"), list) else []
-        monthly_top_categories = annual.get("monthly_top_categories") if isinstance(annual.get("monthly_top_categories"), list) else []
-        daily_expense_totals = annual.get("daily_expense_totals") if isinstance(annual.get("daily_expense_totals"), list) else []
+        monthly = (
+            annual.get("monthly_breakdown")
+            if isinstance(annual.get("monthly_breakdown"), list)
+            else []
+        )
+        categories_year = (
+            annual.get("top_expense_categories_year")
+            if isinstance(annual.get("top_expense_categories_year"), list)
+            else []
+        )
+        monthly_expense_ranking = (
+            annual.get("monthly_expense_ranking")
+            if isinstance(annual.get("monthly_expense_ranking"), list)
+            else []
+        )
+        monthly_expense_trend = (
+            annual.get("monthly_expense_trend")
+            if isinstance(annual.get("monthly_expense_trend"), list)
+            else []
+        )
+        monthly_top_categories = (
+            annual.get("monthly_top_categories")
+            if isinstance(annual.get("monthly_top_categories"), list)
+            else []
+        )
+        daily_expense_totals = (
+            annual.get("daily_expense_totals")
+            if isinstance(annual.get("daily_expense_totals"), list)
+            else []
+        )
         cleaned["annual_summary"] = {
             "year": max(2000, min(2100, int(to_float(annual.get("year", 2026), 2026)))),
             "totals": {

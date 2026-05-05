@@ -17,9 +17,7 @@ class SmartSpendApp extends StatelessWidget {
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
       ),
-      home: EnvConfig.instance.skipAuth
-          ? const MainScreen()
-          : const _AuthGate(),
+      home: const _AuthGate(),
     );
   }
 }

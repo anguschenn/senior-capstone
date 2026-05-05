@@ -13,19 +13,23 @@ def ai_ping():
     try:
         return jsonify(ping_llm())
     except Exception as error:
-        return jsonify({
-            "ok": False,
-            "model": OLLAMA_MODEL,
-            "error_type": "server_error",
-            "detail": str(error),
-        }), 500
+        return jsonify(
+            {
+                "ok": False,
+                "model": OLLAMA_MODEL,
+                "error_type": "server_error",
+                "detail": str(error),
+            }
+        ), 500
 
 
 @system_bp.route("/api/health", methods=["GET"])
 def health():
-    return jsonify({
-        "ok": True,
-        "version": APP_VERSION,
-        "git_sha": GIT_SHA,
-        "model": OLLAMA_MODEL,
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "version": APP_VERSION,
+            "git_sha": GIT_SHA,
+            "model": OLLAMA_MODEL,
+        }
+    )

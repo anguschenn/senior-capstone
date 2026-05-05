@@ -4,9 +4,8 @@ from flask import Blueprint, current_app, jsonify, request
 
 from ai.response_utils import confidence_label, short_copy
 from ai.validators import clamp_str
-from auth import is_rate_limited_for_ai
-from plaid_sync import IdentityStateError, require_demo_identity
-from api.http_helpers import identity_error_response, log_route_error
+from api.http_helpers import log_route_error
+from auth import UserAuthError, is_rate_limited_for_ai, require_supabase_user_id
 
 ai_bp = Blueprint("ai", __name__)
 
@@ -17,11 +16,11 @@ def ai_chat():
         return jsonify({"error": "Rate limit exceeded"}), 429
     body = request.get_json(silent=True) or {}
     try:
-        user_id, _ = require_demo_identity()
+        user_id = require_supabase_user_id()
         response = current_app.config["chat_service"].handle_chat(body, user_id=user_id)
         return jsonify(response)
-    except IdentityStateError as error:
-        return identity_error_response(error, "/api/ai/chat")
+    except UserAuthError as error:
+        return jsonify({"error": str(error)}), 401
     except ValueError as error:
         return jsonify({"error": str(error)}), 400
     except Exception as error:
@@ -29,7 +28,9 @@ def ai_chat():
         return jsonify(
             {
                 "reply": "I cannot process this request right now. Please try again.",
-                "insights": ["The assistant returned a safe fallback response due to a backend error."],
+                "insights": [
+                    "The assistant returned a safe fallback response due to a backend error."
+                ],
                 "actions": ["Try again in a moment."],
                 "confidence": 0.0,
                 "citations": ["rule_fallback"],
@@ -79,7 +80,9 @@ def ai_budget_suggest():
         if simplified:
             context_source = "deterministic_simplified"
         else:
-            context_source = "rule_fallback" if response.get("fallback_used") else "frontend_summary"
+            context_source = (
+                "rule_fallback" if response.get("fallback_used") else "frontend_summary"
+            )
         return jsonify({"suggestions": suggestions, "context_source": context_source})
     except ValueError as error:
         return jsonify({"error": str(error)}), 400

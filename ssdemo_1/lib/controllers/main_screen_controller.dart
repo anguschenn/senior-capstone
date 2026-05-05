@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../constants/app_constants.dart';
-import '../core/config/env_config.dart';
 import '../models/app_models.dart';
 import '../services/auth_service.dart';
 import '../services/budget_service.dart';
@@ -12,6 +11,7 @@ import '../utils/app_helpers.dart';
 
 /// Owns all mutable state for the main screen and exposes actions for the UI.
 class MainScreenController extends ChangeNotifier {
+  bool _isDisposed = false;
   // Navigation
   int tabIndex = 0;
 
@@ -45,28 +45,31 @@ class MainScreenController extends ChangeNotifier {
     netThisMonth: 0,
   );
 
+  String _monthKey(DateTime date) =>
+      '${date.year}-${date.month.toString().padLeft(2, '0')}';
+
   // --- Actions ---
 
   void selectTab(int i) {
     tabIndex = i;
-    notifyListeners();
+    _notifyListenersSafe();
   }
 
   void selectAccount(String accountId) {
     selectedAccountId = accountId;
-    notifyListeners();
+    _notifyListenersSafe();
   }
 
   void selectMonth(DateTime month) {
     selectedMonth = normalizedMonthOption(month);
-    notifyListeners();
+    _notifyListenersSafe();
   }
 
   Future<void> refreshLiveDataOnly() async {
     if (syncing) return;
     syncing = true;
     syncStatus = 'Refreshing from DB...';
-    notifyListeners();
+    _notifyListenersSafe();
     try {
       final result = await SyncService.instance.refreshFromSupabase(
         reviewedCategoryByTxId,
@@ -80,7 +83,7 @@ class MainScreenController extends ChangeNotifier {
       syncStatus = 'Refresh failed: $e';
     } finally {
       syncing = false;
-      notifyListeners();
+      _notifyListenersSafe();
     }
   }
 
@@ -117,7 +120,7 @@ class MainScreenController extends ChangeNotifier {
       syncStatus = 'Connection failed: $e';
     } finally {
       syncing = false;
-      notifyListeners();
+      _notifyListenersSafe();
     }
   }
 
@@ -142,7 +145,7 @@ class MainScreenController extends ChangeNotifier {
       netThisMonth: 0,
     );
     syncStatus = 'Live data cleared';
-    notifyListeners();
+    _notifyListenersSafe();
   }
 
   void onTransactionCategorySelected(AppTransaction tx, String category) {
@@ -166,10 +169,15 @@ class MainScreenController extends ChangeNotifier {
     manualReviewedTxIds = manualNext;
     confirmedReviewTxIds = confirmedNext;
     _rebuildBudgetProgress();
-    notifyListeners();
+    _notifyListenersSafe();
   }
 
   Future<void> confirmReviewedCategory(String txId) async {
+    if (syncing) return;
+    syncing = true;
+    syncStatus = 'Saving review...';
+    _notifyListenersSafe();
+
     confirmedReviewTxIds = Set<String>.from(confirmedReviewTxIds)..add(txId);
     AppTransaction? tx;
     for (final item in liveTransactions) {
@@ -183,22 +191,31 @@ class MainScreenController extends ChangeNotifier {
           reviewedCategoryByTxId[txId] ??
           CategoryService.instance.budgetBucketFor(tx, reviewedCategoryByTxId);
       final ruleKey = CategoryService.instance.ruleKeyForTransaction(tx);
-      final ruleUserId =
-          (EnvConfig.instance.skipAuth &&
-              EnvConfig.instance.devUnscopedReads &&
-              tx.userId.trim().isNotEmpty)
-          ? tx.userId.trim()
-          : AuthService.instance.currentUserId;
+      final ruleUserId = AuthService.instance.currentUserId;
       final ok = await CategoryService.instance.rememberRuleDecision(
         userId: ruleUserId,
         ruleKey: ruleKey,
         category: category,
       );
-      syncStatus = ok
-          ? 'Review confirmed and saved.'
-          : 'Review confirmed locally, but save failed.';
+      if (ok) {
+        try {
+          final result = await SyncService.instance.refreshFromSupabase(
+            reviewedCategoryByTxId,
+            selectedMonth,
+          );
+          _applySyncResult(result);
+          syncStatus = result.hasData
+              ? 'Review saved. Data refreshed.'
+              : 'Review saved. No DB data yet.';
+        } catch (e) {
+          syncStatus = 'Review saved, but refresh failed: $e';
+        }
+      } else {
+        syncStatus = 'Review confirmed locally, but save failed.';
+      }
     }
-    notifyListeners();
+    syncing = false;
+    _notifyListenersSafe();
   }
 
   Future<void> updateBudgetLimit(String budgetId, double monthlyLimit) async {
@@ -219,7 +236,23 @@ class MainScreenController extends ChangeNotifier {
     final key = normalizeCategoryKey(target.title);
     _manualMonthlyLimitByCategoryKey[key] = monthlyLimit;
     _applyManualLimitOverrides();
-    notifyListeners();
+    syncStatus = 'Saving budget...';
+    _notifyListenersSafe();
+
+    try {
+      final monthYear = _monthKey(normalizedMonthOption(selectedMonth));
+      await BudgetService.instance.upsertMonthlyBudgetByCategoryTitle(
+        userId: AuthService.instance.currentUserId,
+        categoryTitle: target.title,
+        monthlyLimit: monthlyLimit,
+        monthYear: monthYear,
+      );
+      syncStatus = 'Budget saved.';
+    } catch (e) {
+      // Keep optimistic UI state even when persistence fails.
+      syncStatus = 'Saved locally, but DB update failed: $e';
+    }
+    _notifyListenersSafe();
   }
 
   // --- Private helpers ---
@@ -247,11 +280,10 @@ class MainScreenController extends ChangeNotifier {
       for (final txId in confirmedReviewTxIds)
         if (txIdSet.contains(txId)) txId,
     };
-    lowConfidenceReviewTxIds = {
-      ...result.autoLowConfidenceReviewTxIds,
-      for (final txId in lowConfidenceReviewTxIds)
-        if (txIdSet.contains(txId)) txId,
-    };
+    // Always trust the latest classifier output after refresh.
+    // Keeping previous low-confidence ids causes stale review items to linger
+    // even after a remembered rule now classifies them confidently.
+    lowConfidenceReviewTxIds = {...result.autoLowConfidenceReviewTxIds};
     _applyManualLimitOverrides();
     if (selectedAccountId != kAllAccountsId &&
         !result.accountOptions.any((a) => a.accountId == selectedAccountId)) {
@@ -317,5 +349,16 @@ class MainScreenController extends ChangeNotifier {
       now,
       reviewedCategoryByTxId,
     );
+  }
+
+  void _notifyListenersSafe() {
+    if (_isDisposed) return;
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
   }
 }

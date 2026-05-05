@@ -15,6 +15,7 @@ class _AuthPageState extends State<AuthPage> {
   bool _isSignUp = false;
   bool _submitting = false;
   String _error = '';
+  String _message = '';
 
   @override
   void dispose() {
@@ -30,17 +31,42 @@ class _AuthPageState extends State<AuthPage> {
       setState(() => _error = 'Email and password are required.');
       return;
     }
+    final emailRegExp = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+    if (!emailRegExp.hasMatch(email)) {
+      setState(() => _error = 'Please enter a valid email address.');
+      return;
+    }
+    if (password.length < 6) {
+      setState(() => _error = 'Password must be at least 6 characters.');
+      return;
+    }
     setState(() {
       _submitting = true;
       _error = '';
+      _message = '';
     });
     try {
       if (_isSignUp) {
-        await AuthService.instance.signUp(email: email, password: password);
+        final result = await AuthService.instance.signUp(
+          email: email,
+          password: password,
+        );
+        if (!mounted) return;
+        if (result.requiresEmailConfirmation) {
+          setState(() {
+            _message = 'Registration successful. Check your email to confirm.';
+            _isSignUp = false;
+          });
+        } else {
+          setState(() => _message = 'Registration successful. You are signed in.');
+        }
       } else {
         await AuthService.instance.signIn(email: email, password: password);
+        if (!mounted) return;
+        setState(() => _message = 'Sign in successful.');
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() => _error = '$e');
     } finally {
       if (mounted) {
@@ -114,6 +140,10 @@ class _AuthPageState extends State<AuthPage> {
                   if (_error.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     Text(_error, style: const TextStyle(color: Colors.red)),
+                  ],
+                  if (_message.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(_message, style: const TextStyle(color: Colors.green)),
                   ],
                   const SizedBox(height: 20),
                   FilledButton(

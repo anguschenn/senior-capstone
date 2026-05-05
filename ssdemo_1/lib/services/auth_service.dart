@@ -1,7 +1,12 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../core/config/env_config.dart';
 import '../core/config/supabase_client.dart';
+
+class SignUpResult {
+  const SignUpResult({required this.requiresEmailConfirmation});
+
+  final bool requiresEmailConfirmation;
+}
 
 class AuthService {
   const AuthService._();
@@ -18,10 +23,6 @@ class AuthService {
   String get currentUserId {
     final id = currentUser?.id;
     if (id == null || id.isEmpty) {
-      if (EnvConfig.instance.skipAuth &&
-          EnvConfig.instance.demoUserId.trim().isNotEmpty) {
-        return EnvConfig.instance.demoUserId.trim();
-      }
       throw StateError('No authenticated Supabase user.');
     }
     return id;
@@ -32,9 +33,16 @@ class AuthService {
     await ensurePublicUserRecord();
   }
 
-  Future<void> signUp({required String email, required String password}) async {
-    await _auth.signUp(email: email.trim(), password: password);
+  Future<SignUpResult> signUp({
+    required String email,
+    required String password,
+  }) async {
+    final response = await _auth.signUp(
+      email: email.trim(),
+      password: password,
+    );
     await ensurePublicUserRecord();
+    return SignUpResult(requiresEmailConfirmation: response.session == null);
   }
 
   Future<void> signOut() => _auth.signOut();

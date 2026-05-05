@@ -3,7 +3,6 @@ import urllib.request
 
 from config import OLLAMA_HOST, OLLAMA_MODEL
 
-
 _DEFAULT_TIMEOUT_SECONDS = 60
 
 

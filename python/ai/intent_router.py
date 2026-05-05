@@ -1,10 +1,23 @@
 import json
+import re
+from datetime import date as date_cls
 
 
 class IntentRouter:
+    """Hybrid intent router: rule-first, LLM fallback, strict post-LLM validation."""
+
+    VALID_TASK_TYPES = {
+        "factual_query",
+        "advice_request",
+        "causal_explanation",
+        "what_if",
+        "unknown",
+    }
     VALID_INTENTS = {
         "amount_lookup",
         "top_category_lookup",
+        "category_spending",
+        "recent_transactions",
         "month_overview",
         "compare_periods",
         "general",
@@ -12,152 +25,709 @@ class IntentRouter:
         "what_if",
         "planning",
     }
-    CLARIFY_THRESHOLD = 0.55
+    VALID_RESPONSE_MODES = {"deterministic", "hybrid", "llm", "clarification"}
+    VALID_METRICS = {"expenses", "income", "net", "top_category", "unknown"}
+    VALID_PERIOD_TYPES = {
+        "day",
+        "month",
+        "month_range",
+        "year",
+        "rolling_30d",
+        "rolling_days",
+        "custom",
+        "unknown",
+    }
+
+    VAGUE_SINGLE_WORDS = {
+        "money",
+        "spending",
+        "expense",
+        "expenses",
+        "income",
+        "budget",
+        "finance",
+        "help",
+        "how",
+        "why",
+        "what",
+    }
     EXPLAIN_KEYWORDS = ("why", "explain", "reason", "because")
     COMPARE_KEYWORDS = ("compare", "difference", "vs", "versus")
     WHAT_IF_KEYWORDS = ("what if", "if i", "scenario", "simulate")
-    PLANNING_KEYWORDS = ("plan", "goal", "roadmap", "how should i")
-    VALID_RESPONSE_MODES = {"deterministic", "llm", "hybrid", "clarification"}
+    PLANNING_KEYWORDS = ("should", "save", "plan", "goal", "roadmap", "improve")
+    GENERAL_ADVISORY_KEYWORDS = ("advice", "how am i doing", "help me")
+    TOP_CATEGORY_KEYWORDS = ("top category", "highest category", "most category")
+    RECENT_TX_KEYWORDS = ("recent transactions", "latest transactions", "recent activity")
+    AMOUNT_QUERY_HINTS = ("how much", "amount", "total", "spend", "spent", "spending")
+    ADVICE_OR_REASON_KEYWORDS = (
+        "why",
+        "explain",
+        "reason",
+        "because",
+        "analyze",
+        "analysis",
+        "suggest",
+        "advice",
+        "should",
+        "recommend",
+        "reduce",
+        "improve",
+        "plan",
+        "what if",
+    )
+    MONTH_NAME_TO_NUM = {
+        "january": 1,
+        "jan": 1,
+        "february": 2,
+        "feb": 2,
+        "march": 3,
+        "mar": 3,
+        "april": 4,
+        "apr": 4,
+        "may": 5,
+        "june": 6,
+        "jun": 6,
+        "july": 7,
+        "jul": 7,
+        "august": 8,
+        "aug": 8,
+        "september": 9,
+        "sep": 9,
+        "sept": 9,
+        "october": 10,
+        "oct": 10,
+        "november": 11,
+        "nov": 11,
+        "december": 12,
+        "dec": 12,
+    }
 
     def __init__(self, classify_with_llm=None):
         self.classify_with_llm = classify_with_llm
 
+    def _normalize_text_for_routing(self, text):
+        """Apply lightweight typo/abbreviation normalization for routing only."""
+        if not isinstance(text, str):
+            return ""
+        normalized = text.lower().strip()
+        replacements = [
+            (r"\bspeend\b", "spend"),
+            (r"\bspnd\b", "spend"),
+            (r"\bspenging\b", "spending"),
+            (r"\bexpnses?\b", "expenses"),
+            (r"\btranactions\b", "transactions"),
+            (r"\btransctions\b", "transactions"),
+            (r"\bcategroy\b", "category"),
+            (r"\banalyst\b", "analyze"),
+            (r"\banlyze\b", "analyze"),
+            (r"\banalyis\b", "analysis"),
+            (r"\byr\b", "year"),
+            (r"\bwk\b", "week"),
+            (r"\bmo\b", "month"),
+            (r"\btx\b", "transactions"),
+            (r"\btxns\b", "transactions"),
+            (r"\bpls\b", "please"),
+            (r"\bthx\b", "thanks"),
+        ]
+        for pattern, repl in replacements:
+            normalized = re.sub(pattern, repl, normalized)
+        normalized = re.sub(r"\s+", " ", normalized).strip()
+        return normalized
+
+    def _base_entities(
+        self,
+        *,
+        metric="unknown",
+        period_type="unknown",
+        period_key="",
+        category="",
+        compare_to="",
+    ):
+        return {
+            "metric": metric,
+            "period_type": period_type,
+            "period_key": period_key,
+            "category": category,
+            "compare_to": compare_to,
+        }
+
+    def _clarification_result(
+        self,
+        question,
+        source="rule",
+        intent="general",
+        entities=None,
+    ):
+        return {
+            "intent": intent,
+            "intent_confidence": 1.0,
+            "intent_candidates": [intent, "general"] if intent != "general" else ["general"],
+            "intent_source": source,
+            "needs_clarification": True,
+            "entities": entities if isinstance(entities, dict) else self._base_entities(),
+            "clarification_question": (question or "").strip()[:180],
+            "response_mode": "clarification",
+        }
+
+    def _extract_period(self, text):
+        if not text:
+            return ("unknown", "")
+        day_key = re.search(r"\b(20\d{2}-\d{2}-\d{2})\b", text)
+        if day_key:
+            day_value = day_key.group(1)
+            try:
+                date_cls.fromisoformat(day_value)
+                return ("day", day_value)
+            except Exception:
+                return ("invalid", "")
+        month_key = re.search(r"\b(20\d{2})-(\d{2})\b", text)
+        if month_key:
+            year = int(month_key.group(1))
+            month = int(month_key.group(2))
+            if 1 <= month <= 12:
+                return ("month", f"{year}-{month:02d}")
+            return ("invalid", "")
+        year_month_key = re.search(r"\b(20\d{2})/(\d{1,2})\b", text)
+        if year_month_key:
+            year = int(year_month_key.group(1))
+            month = int(year_month_key.group(2))
+            if 1 <= month <= 12:
+                return ("month", f"{year}-{month:02d}")
+            return ("invalid", "")
+        month_range = re.search(r"\blast\s+(\d{1,2})\s+months?\b", text)
+        if month_range:
+            count = max(2, min(12, int(month_range.group(1))))
+            keys = []
+            year, month = date_cls.today().year, date_cls.today().month
+            for _ in range(count):
+                month -= 1
+                if month <= 0:
+                    month = 12
+                    year -= 1
+                keys.append(f"{year}-{month:02d}")
+            keys.reverse()
+            return ("month_range", ",".join(keys))
+        rolling_days = re.search(r"\blast\s+(\d{1,3})\s+days?\b", text)
+        if rolling_days:
+            days = max(1, min(365, int(rolling_days.group(1))))
+            if days == 30:
+                return ("rolling_30d", "rolling_30d")
+            return ("rolling_days", f"rolling_{days}d")
+        rolling_days_compact = re.search(r"\blast\s*(\d{1,3})d\b", text)
+        if rolling_days_compact:
+            days = max(1, min(365, int(rolling_days_compact.group(1))))
+            if days == 30:
+                return ("rolling_30d", "rolling_30d")
+            return ("rolling_days", f"rolling_{days}d")
+        if re.search(r"\b(this week|current week)\b", text):
+            return ("rolling_days", "rolling_7d")
+        if re.search(r"\blast week\b", text):
+            return ("rolling_days", "rolling_7d")
+        if re.search(r"\b30d\b", text):
+            return ("rolling_30d", "rolling_30d")
+        if re.search(r"\b(this month|current month)\b", text):
+            return ("month", date_cls.today().strftime("%Y-%m"))
+        if re.search(r"\blast month\b", text):
+            today = date_cls.today()
+            year = today.year
+            month = today.month - 1
+            if month <= 0:
+                month = 12
+                year -= 1
+            return ("month", f"{year}-{month:02d}")
+        if re.search(r"\b(this year|current year)\b", text):
+            return ("year", str(date_cls.today().year))
+        if re.search(r"\blast year\b", text):
+            return ("year", str(date_cls.today().year - 1))
+        month_name = re.search(
+            r"\b(jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\b",
+            text,
+        )
+        if month_name:
+            year_key = re.search(r"\b(20\d{2})\b", text)
+            year = int(year_key.group(1)) if year_key else date_cls.today().year
+            month = self.MONTH_NAME_TO_NUM[month_name.group(1)]
+            return ("month", f"{year}-{month:02d}")
+        year_key = re.search(r"\b(20\d{2})\b", text)
+        if year_key:
+            return ("year", year_key.group(1))
+        return ("unknown", "")
+
+    def _extract_metric(self, text):
+        if not text:
+            return "unknown"
+        if "income" in text or "earn" in text or "earned" in text:
+            return "income"
+        if "net" in text or "cash flow" in text:
+            return "net"
+        if "top category" in text or "highest category" in text or "most category" in text:
+            return "top_category"
+        if "spend" in text or "spent" in text or "spending" in text or "expense" in text:
+            return "expenses"
+        return "unknown"
+
+    def _is_strong_amount_query(self, text):
+        """Allow deterministic amount routing only for explicit numeric ask forms."""
+        if not text:
+            return False
+        if "how much" in text:
+            return True
+        if "what did i spend" in text or "what was spent" in text:
+            return True
+        if "total spending" in text or "total expenses" in text:
+            return True
+        if re.search(r"\b(spent|spending|expenses?)\s+(this|last)\s+(month|year|week)\b", text):
+            return True
+        if re.search(r"\b(last\s+\d{1,3}\s+days?)\s+(spend|spent|spending|expenses?)\b", text):
+            return True
+        if re.search(r"\blast\s*\d{1,3}d\b", text) and (
+            "spend" in text or "spent" in text or "spending" in text or "expenses" in text
+        ):
+            return True
+        if re.search(
+            r"\b(how is|how was)\s+my\s+spending\s+(this|last)\s+(month|year|week)\b", text
+        ):
+            return True
+        if re.search(r"\bspending\s+(in|for)\s+(20\d{2}-\d{2}|20\d{2})\b", text):
+            return True
+        if re.search(r"\bspending\s+20\d{2}-\d{2}\b", text):
+            return True
+        has_total = "total" in text
+        has_expense_term = (
+            "spend" in text or "spent" in text or "spending" in text or "expenses" in text
+        )
+        return has_total and has_expense_term
+
+    def _contains_any(self, text, keywords):
+        return any(keyword in text for keyword in keywords)
+
+    def _has_subject_signal(self, text, metric, period_type):
+        if metric != "unknown" or period_type != "unknown":
+            return True
+        return any(
+            token in text
+            for token in (
+                "transactions",
+                "transaction",
+                "category",
+                "budget",
+                "cash flow",
+                "cost",
+                "costs",
+                "spending",
+                "expense",
+                "expenses",
+                "income",
+                "save",
+                "saving",
+                "savings",
+            )
+        )
+
+    def _build_rule_result(
+        self,
+        *,
+        intent,
+        confidence,
+        response_mode,
+        entities,
+        candidates=None,
+        needs_clarification=False,
+        clarification_question="",
+    ):
+        return {
+            "intent": intent,
+            "intent_confidence": confidence,
+            "intent_candidates": candidates
+            or ([intent, "general"] if intent != "general" else ["general"]),
+            "intent_source": "rule",
+            "needs_clarification": needs_clarification,
+            "entities": entities,
+            "clarification_question": clarification_question,
+            "response_mode": response_mode,
+        }
+
     def _rule_classify(self, message):
-        text = (message or "").strip().lower()
-        if ("how much" in text or "amount" in text) and (
-            "spend" in text or "spent" in text or "spending" in text
+        # Routing contract (conservative-by-default):
+        # 1) Deterministic/hybrid is allowed only when a strict rule is fully satisfied.
+        # 2) If any required rule condition fails, return None so caller falls back to LLM parsing.
+        # 3) If LLM output is incomplete/invalid, downstream validator should force clarification.
+        text = self._normalize_text_for_routing(message or "")
+        if not text:
+            return self._clarification_result("Please ask a question with a topic and time period.")
+
+        tokens = re.findall(r"[a-z0-9]+", text)
+        if len(tokens) <= 1:
+            if text in self.VAGUE_SINGLE_WORDS:
+                return self._clarification_result(
+                    "Please add context, for example: 'How much did I spend in 2026-05?'"
+                )
+            if len(text) < 4:
+                return self._clarification_result("Please provide a more specific question.")
+
+        period_type, period_key = self._extract_period(text)
+        if period_type == "invalid":
+            return self._clarification_result(
+                "Please provide a valid period format, for example 2026-05 or last 30 days."
+            )
+        has_advice_or_reason = any(k in text for k in self.ADVICE_OR_REASON_KEYWORDS)
+        has_multiple_clauses = (" and " in text) or ("," in text) or (";" in text) or ("+" in text)
+
+        metric = self._extract_metric(text)
+        base_entities = self._base_entities(
+            metric=metric,
+            period_type=period_type,
+            period_key=period_key,
+        )
+
+        if (
+            self._contains_any(text, self.WHAT_IF_KEYWORDS)
+            and self._has_subject_signal(text, metric, period_type)
+            and not has_multiple_clauses
         ):
-            return "amount_lookup"
-        if ("category" in text or "categories" in text) and (
-            "top" in text or "most" in text or "highest" in text
+            return self._build_rule_result(
+                intent="what_if",
+                confidence=0.95,
+                response_mode="llm",
+                entities=base_entities,
+                candidates=["what_if", "planning", "general"],
+            )
+
+        if (
+            self._contains_any(text, self.PLANNING_KEYWORDS)
+            and self._has_subject_signal(text, metric, period_type)
+            and not has_multiple_clauses
         ):
-            return "top_category_lookup"
-        if ("which month" in text or "which months" in text) and (
-            "spend" in text or "spent" in text or "spending" in text
+            return self._build_rule_result(
+                intent="planning",
+                confidence=0.95,
+                response_mode="llm",
+                entities=base_entities,
+                candidates=["planning", "general"],
+            )
+
+        explain_keywords = self.EXPLAIN_KEYWORDS + (
+            "analyze",
+            "analysis",
+            "break down",
+            "breakdown",
+            "review",
+            "trend",
+            "understand",
+        )
+        if (
+            self._contains_any(text, explain_keywords)
+            and self._has_subject_signal(text, metric, period_type)
+            and not has_multiple_clauses
         ):
-            return "month_overview"
-        if any(k in text for k in self.WHAT_IF_KEYWORDS):
-            return "what_if"
-        if any(k in text for k in self.COMPARE_KEYWORDS):
-            return "compare_periods"
-        if any(k in text for k in self.PLANNING_KEYWORDS):
-            return "planning"
-        if any(k in text for k in self.EXPLAIN_KEYWORDS):
-            return "explain"
-        return "general"
+            return self._build_rule_result(
+                intent="explain",
+                confidence=0.95,
+                response_mode="llm",
+                entities=base_entities,
+                candidates=["explain", "general"],
+            )
+
+        if (
+            any(k in text for k in self.RECENT_TX_KEYWORDS)
+            and not has_advice_or_reason
+            and not has_multiple_clauses
+        ):
+            recent_period_type = period_type if period_type != "unknown" else "rolling_30d"
+            recent_period_key = period_key if period_key else "rolling_30d"
+            return self._build_rule_result(
+                intent="recent_transactions",
+                confidence=1.0,
+                response_mode="deterministic",
+                entities=self._base_entities(
+                    metric="unknown",
+                    period_type=recent_period_type,
+                    period_key=recent_period_key,
+                ),
+                candidates=["recent_transactions", "general"],
+            )
+
+        if (
+            (
+                any(k in text for k in self.TOP_CATEGORY_KEYWORDS)
+                or (("top" in text or "most" in text or "highest" in text) and "category" in text)
+            )
+            and not has_advice_or_reason
+            and not has_multiple_clauses
+        ):
+            top_period_type = period_type if period_type != "unknown" else "rolling_30d"
+            top_period_key = period_key if period_key else "rolling_30d"
+            return self._build_rule_result(
+                intent="top_category_lookup",
+                confidence=1.0,
+                response_mode="deterministic",
+                entities=self._base_entities(
+                    metric="top_category",
+                    period_type=top_period_type,
+                    period_key=top_period_key,
+                ),
+                candidates=["top_category_lookup", "general"],
+            )
+
+        if (
+            ("which month" in text or "what month" in text)
+            and ("spend" in text or "spent" in text or "spending" in text)
+            and ("most" in text or "highest" in text or "max" in text)
+            and not has_advice_or_reason
+            and not has_multiple_clauses
+        ):
+            _, extracted_period_key = self._extract_period(text)
+            year_key = (
+                extracted_period_key
+                if extracted_period_key and len(extracted_period_key) == 4
+                else str(date_cls.today().year)
+            )
+            return self._build_rule_result(
+                intent="month_overview",
+                confidence=1.0,
+                response_mode="deterministic",
+                entities=self._base_entities(
+                    metric="expenses",
+                    period_type="year",
+                    period_key=year_key,
+                ),
+                candidates=["month_overview", "general"],
+            )
+
+        amount_like = self._is_strong_amount_query(text)
+        if amount_like and not has_advice_or_reason and not has_multiple_clauses:
+            if metric != "expenses":
+                return None
+            if period_type == "unknown" or not period_key:
+                return None
+            if period_type not in {"rolling_30d", "rolling_days", "month", "year"}:
+                return None
+            return self._build_rule_result(
+                intent="amount_lookup",
+                confidence=1.0,
+                response_mode="hybrid",
+                entities=self._base_entities(
+                    metric=metric,
+                    period_type=period_type,
+                    period_key=period_key,
+                ),
+                candidates=["amount_lookup", "general"],
+            )
+
+        # Uncertain: no confident deterministic rule hit.
+        return None
 
     def _llm_classify(self, message, history=None):
         if not callable(self.classify_with_llm):
             return None
+
         prompt = (
             "Classify user intent for a personal finance assistant.\n"
-            "Return STRICT JSON only with keys:\n"
-            "intent, confidence, intent_candidates, entities, needs_clarification, clarification_question, response_mode.\n"
-            "No markdown, no extra keys.\n"
-            "intent must be one of:\n"
-            '["amount_lookup","top_category_lookup","month_overview","compare_periods","general","explain","what_if","planning"].\n'
-            "confidence must be a number in [0,1].\n"
-            "intent_candidates must be up to 3 intents sorted by likelihood.\n"
-            "entities must be an object with keys:\n"
-            "metric, period_type, period_key, scope_hint.\n"
-            "metric must be one of: expenses, income, net, top_category, unknown.\n"
-            "period_type must be one of: day, month, year, rolling_30d, unknown.\n"
-            "response_mode must be one of: deterministic, llm, hybrid, clarification.\n"
-            "Use deterministic for factual numeric/category lookups with clear period.\n"
-            "Use hybrid for factual queries needing a short explanation.\n"
-            "Use clarification when period/scope is missing.\n"
-            "Use llm for advisory requests (explain/planning/what-if/general).\n"
-            "Use needs_clarification=true when a factual query is missing a clear period.\n"
-            "If needs_clarification=true, clarification_question should ask one short specific question.\n\n"
-            f"User message:\n{message or ''}\n\n"
+            "Return STRICT JSON only in this exact schema:\n"
+            "{"
+            '"task_type":"factual_query|advice_request|causal_explanation|what_if|unknown",'
+            '"intent":"...",'
+            '"response_mode":"deterministic|hybrid|llm|clarification",'
+            '"needs_clarification":false,'
+            '"slots":{"metric":"...","period_type":"...","period_key":"...","category":"","compare_to":""},'
+            '"entities":{"metric":"...","period_type":"...","period_key":"...","category":"","compare_to":""},'
+            '"clarification_question":""'
+            "}\n"
+            "Rules:\n"
+            "- Do NOT compute values.\n"
+            "- Do NOT answer the question.\n"
+            "- Do NOT guess missing information.\n"
+            "- Use clarification when required info is missing.\n"
+            f"Allowed task_type values: {sorted(self.VALID_TASK_TYPES)}\n"
+            f"Allowed intents: {sorted(self.VALID_INTENTS)}\n"
+            f"Allowed period_type values: {sorted(self.VALID_PERIOD_TYPES)}\n"
+            f"User message:\n{message or ''}\n"
             f"Recent history:\n{json.dumps(history or [], ensure_ascii=False)}"
         )
         raw = self.classify_with_llm(
             prompt,
             generation_config={
                 "temperature": 0.0,
-                "maxOutputTokens": 220,
+                "maxOutputTokens": 260,
                 "responseMimeType": "application/json",
             },
         )
-        parsed = json.loads(raw or "{}")
+        return json.loads(raw or "{}")
+
+    def _task_type_to_intent(self, task_type, entities):
+        metric = (entities or {}).get("metric", "unknown")
+        if task_type == "factual_query":
+            if metric == "top_category":
+                return "top_category_lookup"
+            return "amount_lookup"
+        if task_type == "advice_request":
+            return "planning"
+        if task_type == "causal_explanation":
+            return "explain"
+        if task_type == "what_if":
+            return "what_if"
+        return "general"
+
+    def _task_type_to_mode(self, task_type):
+        if task_type == "factual_query":
+            return "hybrid"
+        if task_type in {"advice_request", "causal_explanation", "what_if"}:
+            return "llm"
+        return "clarification"
+
+    def _is_reasonable_category(self, category):
+        if not isinstance(category, str):
+            return False
+        value = category.strip()
+        if not value or len(value) > 64:
+            return False
+        return re.fullmatch(r"[A-Za-z0-9 &/_\-]{2,64}", value) is not None
+
+    def _has_compare_pair(self, entities):
+        period_key = (entities.get("period_key") or "").strip()
+        compare_to = (entities.get("compare_to") or "").strip()
+        if compare_to:
+            return True
+        tokens = [x.strip() for x in re.split(r"[,\|]", period_key) if x.strip()]
+        if len(tokens) >= 2:
+            return True
+        return bool(re.search(r"\bvs\b", period_key, flags=re.IGNORECASE))
+
+    def _validate_llm_result(self, parsed):
+        if not isinstance(parsed, dict):
+            return False, "I could not understand that request. Please rephrase."
+
+        task_type = parsed.get("task_type")
+        if task_type not in self.VALID_TASK_TYPES:
+            task_type = "unknown"
+            parsed["task_type"] = task_type
+
+        slots = parsed.get("slots")
+        if not isinstance(slots, dict):
+            slots = {}
+            parsed["slots"] = slots
         intent = parsed.get("intent")
         if intent not in self.VALID_INTENTS:
-            return None
-        confidence = parsed.get("confidence", 0.0)
-        try:
-            confidence = max(0.0, min(float(confidence), 1.0))
-        except Exception:
-            confidence = 0.0
-        raw_candidates = parsed.get("intent_candidates")
-        candidates = []
-        if isinstance(raw_candidates, list):
-            for item in raw_candidates:
-                if item in self.VALID_INTENTS and item not in candidates:
-                    candidates.append(item)
-                if len(candidates) >= 3:
-                    break
-        if intent not in candidates:
-            candidates.insert(0, intent)
-        entities = parsed.get("entities")
-        if not isinstance(entities, dict):
-            entities = {}
-        metric = entities.get("metric")
-        if metric not in ("expenses", "income", "net", "top_category", "unknown"):
-            metric = "unknown"
-        period_type = entities.get("period_type")
-        if period_type not in ("day", "month", "year", "rolling_30d", "unknown"):
-            period_type = "unknown"
-        period_key = entities.get("period_key")
-        if not isinstance(period_key, str):
-            period_key = ""
-        scope_hint = entities.get("scope_hint")
-        if not isinstance(scope_hint, str) or not scope_hint.strip():
-            scope_hint = "current_scope"
-        needs_clarification = bool(parsed.get("needs_clarification", confidence < self.CLARIFY_THRESHOLD))
-        clarification_question = parsed.get("clarification_question")
-        if not isinstance(clarification_question, str):
-            clarification_question = ""
-        clarification_question = clarification_question.strip()[:180]
+            intent = self._task_type_to_intent(task_type, slots)
+            parsed["intent"] = intent
+        if intent not in self.VALID_INTENTS:
+            return False, "Please ask in a clearer way about spending, income, category, or period."
+
         response_mode = parsed.get("response_mode")
-        if not isinstance(response_mode, str) or response_mode not in self.VALID_RESPONSE_MODES:
-            response_mode = ""
+        if response_mode not in self.VALID_RESPONSE_MODES:
+            response_mode = self._task_type_to_mode(task_type)
+            parsed["response_mode"] = response_mode
+        if response_mode not in self.VALID_RESPONSE_MODES:
+            return False, "I need a bit more detail to route your request safely."
+
+        entities = parsed.get("entities")
+        if isinstance(entities, dict):
+            merged_entities = dict(entities)
+            merged_entities.update({k: v for k, v in slots.items() if isinstance(v, str)})
+            entities = merged_entities
+        else:
+            entities = {k: v for k, v in slots.items() if isinstance(v, str)}
+        parsed["entities"] = entities
+
+        metric = entities.get("metric")
+        if metric not in self.VALID_METRICS:
+            entities["metric"] = "unknown"
+
+        period_type = entities.get("period_type")
+        if period_type not in self.VALID_PERIOD_TYPES:
+            entities["period_type"] = "unknown"
+
+        for key in ("period_key", "category", "compare_to"):
+            value = entities.get(key)
+            entities[key] = value.strip()[:64] if isinstance(value, str) else ""
+
+        # Validation rules required by architecture.
+        if intent == "amount_lookup":
+            if entities.get("metric", "unknown") == "unknown":
+                return False, "Do you want expenses, income, or net amount?"
+            if entities.get("period_type", "unknown") == "unknown" or not entities.get(
+                "period_key"
+            ):
+                return (
+                    False,
+                    "Which time period should I use (for example, 2026-05 or last 30 days)?",
+                )
+
+        if intent == "category_spending":
+            if not self._is_reasonable_category(entities.get("category", "")):
+                return (
+                    False,
+                    "Which category should I use (for example, Food, Transport, or Subscriptions)?",
+                )
+
+        if intent == "compare_periods":
+            if not self._has_compare_pair(entities):
+                return (
+                    False,
+                    "Please provide two periods to compare, for example 2026-03 vs 2026-04.",
+                )
+
+        if entities.get("period_type", "unknown") == "unknown" and entities.get("period_key"):
+            return (
+                False,
+                "Please provide a valid period format, for example 2026-05 or last 30 days.",
+            )
+
+        return True, ""
+
+    def _normalize_llm_result(self, parsed):
+        entities = parsed.get("entities") if isinstance(parsed.get("entities"), dict) else {}
+        intent = parsed.get("intent", "general")
+        task_type = parsed.get("task_type", "unknown")
+        if task_type not in self.VALID_TASK_TYPES:
+            task_type = "unknown"
         return {
             "intent": intent,
-            "intent_confidence": confidence,
-            "intent_candidates": candidates[:3],
+            "task_type": task_type,
+            "intent_confidence": 0.6,
+            "intent_candidates": [intent, "general"] if intent != "general" else ["general"],
             "intent_source": "llm",
-            "needs_clarification": needs_clarification,
+            "needs_clarification": bool(parsed.get("needs_clarification", False)),
             "entities": {
-                "metric": metric,
-                "period_type": period_type,
-                "period_key": period_key.strip()[:24],
-                "scope_hint": scope_hint.strip()[:32],
+                "metric": entities.get("metric", "unknown"),
+                "period_type": entities.get("period_type", "unknown"),
+                "period_key": entities.get("period_key", ""),
+                "category": entities.get("category", ""),
+                "compare_to": entities.get("compare_to", ""),
+                "scope_hint": "current_scope",
             },
-            "clarification_question": clarification_question,
-            "response_mode": response_mode,
+            "clarification_question": (parsed.get("clarification_question") or "").strip()[:180],
+            "response_mode": parsed.get("response_mode", "llm"),
         }
 
     def classify(self, message, history=None):
+        # 1) Rule-based classifier first.
+        rule_result = self._rule_classify(message)
+        if rule_result is not None:
+            return rule_result
+
+        # 2) LLM intent parser as fallback.
         try:
-            llm_result = self._llm_classify(message, history=history)
-            if llm_result:
-                return llm_result
+            llm_parsed = self._llm_classify(message, history=history)
         except Exception:
-            pass
-        intent = self._rule_classify(message)
-        return {
-            "intent": intent,
-            "intent_confidence": 0.45 if intent != "general" else 0.35,
-            "intent_candidates": [intent, "general"] if intent != "general" else ["general"],
-            "intent_source": "rule",
-            "needs_clarification": intent == "general",
-            "entities": {
-                "metric": "unknown",
-                "period_type": "unknown",
-                "period_key": "",
-                "scope_hint": "current_scope",
-            },
-            "clarification_question": "",
-            "response_mode": "",
-        }
+            llm_parsed = None
+
+        if llm_parsed is None:
+            return self._clarification_result(
+                "Please clarify your request with a metric and time period.",
+                source="llm",
+            )
+
+        # 3) Validation layer after LLM parsing.
+        ok, clarification = self._validate_llm_result(llm_parsed)
+        if not ok:
+            return self._clarification_result(clarification, source="validation")
+
+        # 4) Valid -> execution layer can consume normalized route.
+        normalized = self._normalize_llm_result(llm_parsed)
+        if normalized["needs_clarification"] and not normalized["clarification_question"]:
+            normalized["clarification_question"] = (
+                "Could you clarify the metric and time period you want to analyze?"
+            )
+            normalized["response_mode"] = "clarification"
+        return normalized
