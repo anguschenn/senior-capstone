@@ -47,6 +47,10 @@ class AuthService {
 
   Future<void> signOut() => _auth.signOut();
 
+  Future<void> resetPasswordForEmail(String email) async {
+    await _auth.resetPasswordForEmail(email.trim());
+  }
+
   Future<void> ensurePublicUserRecord() async {
     final user = currentUser;
     if (user == null) return;

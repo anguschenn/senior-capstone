@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/auth_service.dart';
 
@@ -12,16 +13,41 @@ class AuthPage extends StatefulWidget {
 class _AuthPageState extends State<AuthPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  final _passwordFocusNode = FocusNode();
+  final _confirmPasswordFocusNode = FocusNode();
+
   bool _isSignUp = false;
   bool _submitting = false;
+  bool _passwordVisible = false;
   String _error = '';
   String _message = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _emailController.addListener(_clearError);
+    _passwordController.addListener(_clearError);
+    _confirmPasswordController.addListener(_clearError);
+  }
+
+  void _clearError() {
+    if (_error.isNotEmpty) setState(() => _error = '');
+  }
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    _passwordFocusNode.dispose();
+    _confirmPasswordFocusNode.dispose();
     super.dispose();
+  }
+
+  String _friendlyError(Object e) {
+    if (e is AuthException) return e.message;
+    return 'Something went wrong. Please try again.';
   }
 
   Future<void> _submit() async {
@@ -38,6 +64,10 @@ class _AuthPageState extends State<AuthPage> {
     }
     if (password.length < 6) {
       setState(() => _error = 'Password must be at least 6 characters.');
+      return;
+    }
+    if (_isSignUp && _confirmPasswordController.text != password) {
+      setState(() => _error = 'Passwords do not match.');
       return;
     }
     setState(() {
@@ -67,11 +97,37 @@ class _AuthPageState extends State<AuthPage> {
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = '$e');
+      setState(() => _error = _friendlyError(e));
     } finally {
-      if (mounted) {
-        setState(() => _submitting = false);
-      }
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<void> _sendPasswordReset() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      setState(() => _error = 'Enter your email above to reset your password.');
+      return;
+    }
+    final emailRegExp = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+    if (!emailRegExp.hasMatch(email)) {
+      setState(() => _error = 'Please enter a valid email address.');
+      return;
+    }
+    setState(() {
+      _submitting = true;
+      _error = '';
+      _message = '';
+    });
+    try {
+      await AuthService.instance.resetPasswordForEmail(email);
+      if (!mounted) return;
+      setState(() => _message = 'Password reset email sent. Check your inbox.');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = _friendlyError(e));
+    } finally {
+      if (mounted) setState(() => _submitting = false);
     }
   }
 
@@ -114,6 +170,9 @@ class _AuthPageState extends State<AuthPage> {
                       setState(() {
                         _isSignUp = selection.first;
                         _error = '';
+                        _message = '';
+                        _passwordController.clear();
+                        _confirmPasswordController.clear();
                       });
                     },
                   ),
@@ -122,6 +181,8 @@ class _AuthPageState extends State<AuthPage> {
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
                     autofillHints: const [AutofillHints.username],
+                    textInputAction: TextInputAction.next,
+                    onSubmitted: (_) => _passwordFocusNode.requestFocus(),
                     decoration: const InputDecoration(
                       labelText: 'Email',
                       border: OutlineInputBorder(),
@@ -130,13 +191,54 @@ class _AuthPageState extends State<AuthPage> {
                   const SizedBox(height: 12),
                   TextField(
                     controller: _passwordController,
-                    obscureText: true,
+                    focusNode: _passwordFocusNode,
+                    obscureText: !_passwordVisible,
                     autofillHints: const [AutofillHints.password],
-                    decoration: const InputDecoration(
+                    textInputAction:
+                        _isSignUp ? TextInputAction.next : TextInputAction.done,
+                    onSubmitted: (_) {
+                      if (_isSignUp) {
+                        _confirmPasswordFocusNode.requestFocus();
+                      } else {
+                        _submit();
+                      }
+                    },
+                    decoration: InputDecoration(
                       labelText: 'Password',
-                      border: OutlineInputBorder(),
+                      border: const OutlineInputBorder(),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _passwordVisible
+                              ? Icons.visibility
+                              : Icons.visibility_off,
+                        ),
+                        onPressed: () =>
+                            setState(() => _passwordVisible = !_passwordVisible),
+                      ),
                     ),
                   ),
+                  if (!_isSignUp)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: _submitting ? null : _sendPasswordReset,
+                        child: const Text('Forgot password?'),
+                      ),
+                    ),
+                  if (_isSignUp) ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _confirmPasswordController,
+                      focusNode: _confirmPasswordFocusNode,
+                      obscureText: !_passwordVisible,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _submit(),
+                      decoration: const InputDecoration(
+                        labelText: 'Confirm password',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ],
                   if (_error.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     Text(_error, style: const TextStyle(color: Colors.red)),
