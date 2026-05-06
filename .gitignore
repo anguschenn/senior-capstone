@@ -62,5 +62,6 @@ CLAUDE.md
 
 #Python virtual nv
 python/venv/*
+python/.venv/*
 python/__pycache__/
 *.pyc
