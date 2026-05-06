@@ -34,8 +34,17 @@ PLAID_COUNTRY_CODES = os.getenv("PLAID_COUNTRY_CODES", "US").split(",")
 PLAID_REDIRECT_URI = _empty_to_none("PLAID_REDIRECT_URI")
 
 # ── AI model providers ───────────────────────────────────────────────
-OLLAMA_MODEL = _empty_to_none("OLLAMA_MODEL") or "llama3"
-OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
+#OLLAMA_MODEL = _empty_to_none("OLLAMA_MODEL") or "llama3"
+#//OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
+#switch to openrouter provider
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openrouter")
+
+LLM_MODEL = os.getenv(
+    "LLM_MODEL",
+    "meta-llama/llama-3.1-8b-instruct:free"
+)
+
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 # ── Backend API auth ─────────────────────────────────────────────────
 INTERNAL_API_KEY = _empty_to_none("INTERNAL_API_KEY")
