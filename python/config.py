@@ -3,7 +3,12 @@
 import os
 import threading
 
+import certifi
 from dotenv import load_dotenv
+
+os.environ['SSL_CERT_FILE'] = certifi.where()
+os.environ.setdefault('SSL_CERT_FILE', certifi.where())
+os.environ.setdefault('REQUESTS_CA_BUNDLE', certifi.where())
 
 # Ensure project-local python/.env values win over inherited shell variables.
 # This avoids accidental overrides from global env placeholders (e.g. SUPABASE_KEY=placeholder_key).

@@ -71,7 +71,9 @@ def info():
 
     try:
         user_id = require_supabase_user_id()
-        get_stored_item_credentials(user_id, user_id)
+        items = supabase.table("plaid_items").select("id").eq("user_id", user_id).limit(1).execute()
+        if not items.data:
+            raise IdentityStateError(IdentityStateError.STORED_ITEM_NOT_FOUND, "No linked items")
         payload["has_stored_item"] = True
         payload["identity_status"] = "ready"
         return jsonify(payload), 200
@@ -135,7 +137,6 @@ def set_access_token():
         return jsonify({"error": "Missing public_token"}), 400
     try:
         user_id = require_supabase_user_id()
-        plaid_item_id = user_id
         exchange_request = ItemPublicTokenExchangeRequest(public_token=public_token)
         exchange_response = client.item_public_token_exchange(exchange_request)
         exchange_data = exchange_response.to_dict()
@@ -144,20 +145,29 @@ def set_access_token():
 
         supabase.table("plaid_items").upsert(
             {
-                "id": plaid_item_id,
                 "user_id": user_id,
                 "access_token": access_token,
                 "item_id": item_id,
             },
-            on_conflict="id",
+            on_conflict="item_id",
         ).execute()
 
-        accounts_synced = save_accounts_to_supabase(user_id, plaid_item_id, access_token)
+        stored = (
+            supabase.table("plaid_items")
+            .select("id")
+            .eq("item_id", item_id)
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+        stored_id = stored.data[0]["id"] if stored.data else item_id
+
+        accounts_synced = save_accounts_to_supabase(user_id, stored_id, access_token)
 
         return jsonify(
             {
                 "item_id": item_id,
-                "stored_plaid_item_id": plaid_item_id,
+                "stored_plaid_item_id": stored_id,
                 "accounts_synced": accounts_synced,
                 "request_id": exchange_data.get("request_id"),
             }
@@ -170,11 +180,18 @@ def set_access_token():
         return plaid_error_response(error)
 
 
+def _first_access_token(user_id: str) -> str:
+    items = supabase.table("plaid_items").select("id,access_token").eq("user_id", user_id).limit(1).execute()
+    if not items.data or not items.data[0].get("access_token"):
+        raise IdentityStateError(IdentityStateError.STORED_ITEM_NOT_FOUND, "No linked items")
+    return items.data[0]["access_token"]
+
+
 @plaid_bp.route("/api/auth", methods=["GET"])
 def get_auth():
     try:
         user_id = require_supabase_user_id()
-        access_token, _ = get_stored_item_credentials(user_id, user_id)
+        access_token = _first_access_token(user_id)
         response = client.auth_get(AuthGetRequest(access_token=access_token))
         pretty_print_response(response.to_dict())
         return jsonify(response.to_dict())
@@ -191,11 +208,19 @@ def get_transactions():
     started_at = time.time()
     try:
         user_id = require_supabase_user_id()
-        plaid_item_id = user_id
-        access_token, _ = get_stored_item_credentials(user_id, plaid_item_id)
-        stats = sync_transactions_to_supabase(user_id, plaid_item_id, access_token)
+        items = supabase.table("plaid_items").select("id,access_token").eq("user_id", user_id).execute()
+        if not items.data:
+            raise IdentityStateError(IdentityStateError.STORED_ITEM_NOT_FOUND, "No linked items")
+        totals = {"added": 0, "modified": 0, "removed": 0}
+        for item in items.data:
+            access_token = item.get("access_token")
+            if not access_token:
+                continue
+            stats = sync_transactions_to_supabase(user_id, item["id"], access_token)
+            for k in totals:
+                totals[k] += stats[k]
         current_app.config["snapshot_service"].invalidate(user_id)
-        print(f"Sync complete for user {user_id}: {stats}")
+        print(f"Sync complete for user {user_id}: {totals}")
 
         rows = []
         try:
@@ -227,7 +252,7 @@ def get_transactions():
 def get_balance():
     try:
         user_id = require_supabase_user_id()
-        access_token, _ = get_stored_item_credentials(user_id, user_id)
+        access_token = _first_access_token(user_id)
         response = client.accounts_balance_get(AccountsBalanceGetRequest(access_token=access_token))
         pretty_print_response(response.to_dict())
         return jsonify(response.to_dict())
@@ -243,7 +268,7 @@ def get_balance():
 def get_accounts():
     try:
         user_id = require_supabase_user_id()
-        access_token, _ = get_stored_item_credentials(user_id, user_id)
+        access_token = _first_access_token(user_id)
         response = client.accounts_get(AccountsGetRequest(access_token=access_token))
         pretty_print_response(response.to_dict())
         return jsonify(response.to_dict())
@@ -259,7 +284,7 @@ def get_accounts():
 def get_assets():
     try:
         user_id = require_supabase_user_id()
-        access_token, _ = get_stored_item_credentials(user_id, user_id)
+        access_token = _first_access_token(user_id)
         create_request = AssetReportCreateRequest(
             access_tokens=[access_token],
             days_requested=60,
@@ -310,7 +335,7 @@ def get_assets():
 def item():
     try:
         user_id = require_supabase_user_id()
-        access_token, _ = get_stored_item_credentials(user_id, user_id)
+        access_token = _first_access_token(user_id)
         response = client.item_get(ItemGetRequest(access_token=access_token))
         institution_response = client.institutions_get_by_id(
             InstitutionsGetByIdRequest(
