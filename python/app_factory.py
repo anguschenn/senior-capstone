@@ -1,6 +1,7 @@
 """Flask app factory and route registration."""
 
 from flask import Flask
+from flask_cors import CORS
 
 from ai.chat_service import ChatService
 from ai.predict_service import PredictService
@@ -14,6 +15,7 @@ from routes.system_routes import system_bp
 
 def create_app() -> Flask:
     app = Flask(__name__)
+    CORS(app)
     app.before_request(require_api_key)
 
     snapshot_service = SpendingSnapshotService()

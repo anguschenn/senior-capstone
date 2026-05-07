@@ -38,6 +38,8 @@ def is_rate_limited_for_ai() -> bool:
 
 def require_api_key():
     """Flask before_request hook: reject calls without valid x-api-key."""
+    if request.method == "OPTIONS":
+        return None
     if not request.path.startswith("/api/"):
         return None
     if not INTERNAL_API_KEY:

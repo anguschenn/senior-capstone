@@ -3,7 +3,7 @@
 from flask import Blueprint, jsonify
 
 from ai.providers import ping_llm
-from config import APP_VERSION, GIT_SHA, OLLAMA_MODEL
+from config import APP_VERSION, GIT_SHA, LLM_MODEL
 
 system_bp = Blueprint("system", __name__)
 
@@ -16,7 +16,7 @@ def ai_ping():
         return jsonify(
             {
                 "ok": False,
-                "model": OLLAMA_MODEL,
+                "model": LLM_MODEL,
                 "error_type": "server_error",
                 "detail": str(error),
             }
@@ -30,6 +30,6 @@ def health():
             "ok": True,
             "version": APP_VERSION,
             "git_sha": GIT_SHA,
-            "model": OLLAMA_MODEL,
+            "model": LLM_MODEL,
         }
     )
