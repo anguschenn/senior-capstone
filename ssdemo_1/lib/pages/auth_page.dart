@@ -88,7 +88,9 @@ class _AuthPageState extends State<AuthPage> {
             _isSignUp = false;
           });
         } else {
-          setState(() => _message = 'Registration successful. You are signed in.');
+          setState(
+            () => _message = 'Registration successful. You are signed in.',
+          );
         }
       } else {
         await AuthService.instance.signIn(email: email, password: password);
@@ -194,8 +196,9 @@ class _AuthPageState extends State<AuthPage> {
                     focusNode: _passwordFocusNode,
                     obscureText: !_passwordVisible,
                     autofillHints: const [AutofillHints.password],
-                    textInputAction:
-                        _isSignUp ? TextInputAction.next : TextInputAction.done,
+                    textInputAction: _isSignUp
+                        ? TextInputAction.next
+                        : TextInputAction.done,
                     onSubmitted: (_) {
                       if (_isSignUp) {
                         _confirmPasswordFocusNode.requestFocus();
@@ -212,8 +215,9 @@ class _AuthPageState extends State<AuthPage> {
                               ? Icons.visibility
                               : Icons.visibility_off,
                         ),
-                        onPressed: () =>
-                            setState(() => _passwordVisible = !_passwordVisible),
+                        onPressed: () => setState(
+                          () => _passwordVisible = !_passwordVisible,
+                        ),
                       ),
                     ),
                   ),

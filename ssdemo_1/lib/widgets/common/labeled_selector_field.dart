@@ -63,16 +63,23 @@ class LabeledSelectorField<T> extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     tileColor: isSelected
-                        ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.10)
+                        ? Theme.of(
+                            context,
+                          ).colorScheme.primary.withValues(alpha: 0.10)
                         : null,
                     title: Text(
                       option.label,
                       style: TextStyle(
-                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                        fontWeight: isSelected
+                            ? FontWeight.w700
+                            : FontWeight.w500,
                       ),
                     ),
                     trailing: isSelected
-                        ? Icon(Icons.check_rounded, color: Theme.of(context).colorScheme.primary)
+                        ? Icon(
+                            Icons.check_rounded,
+                            color: Theme.of(context).colorScheme.primary,
+                          )
                         : null,
                     onTap: () => Navigator.of(context).pop(option.value),
                   );
@@ -90,7 +97,10 @@ class LabeledSelectorField<T> extends StatelessWidget {
           labelText: label,
           labelStyle: labelStyle,
           floatingLabelBehavior: FloatingLabelBehavior.always,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 6,
+          ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide(color: Colors.black.withValues(alpha: 0.12)),
@@ -101,7 +111,10 @@ class LabeledSelectorField<T> extends StatelessWidget {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.4),
+            borderSide: BorderSide(
+              color: theme.colorScheme.primary,
+              width: 1.4,
+            ),
           ),
         ),
         child: Row(
@@ -113,7 +126,11 @@ class LabeledSelectorField<T> extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Colors.black54),
+            const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              size: 18,
+              color: Colors.black54,
+            ),
           ],
         ),
       ),

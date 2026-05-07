@@ -86,7 +86,10 @@ class HomePage extends StatelessWidget {
                   children: [
                     Text(
                       'Select Month',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ],
                 ),
@@ -108,12 +111,16 @@ class HomePage extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       tileColor: isSelected
-                          ? Theme.of(context).colorScheme.primary.withOpacity(0.10)
+                          ? Theme.of(
+                              context,
+                            ).colorScheme.primary.withOpacity(0.10)
                           : null,
                       title: Text(
                         monthOptionLabel(raw),
                         style: TextStyle(
-                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                          fontWeight: isSelected
+                              ? FontWeight.w700
+                              : FontWeight.w500,
                         ),
                       ),
                       trailing: isSelected
@@ -214,11 +221,13 @@ class HomePage extends StatelessWidget {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.add_link),
-                label: Text(syncing
-                    ? 'Syncing'
-                    : accountOptions.isEmpty
-                        ? 'Connect Bank'
-                        : 'Add Account'),
+                label: Text(
+                  syncing
+                      ? 'Syncing'
+                      : accountOptions.isEmpty
+                      ? 'Connect Bank'
+                      : 'Add Account',
+                ),
               ),
               OutlinedButton(
                 onPressed: syncing ? null : onRefreshLiveData,
@@ -297,7 +306,7 @@ class HomePage extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                   onTap: () => _showMonthPicker(context),
                   child: InputDecorator(
-                  decoration: selectorDecoration,
+                    decoration: selectorDecoration,
                     child: Row(
                       children: [
                         Expanded(

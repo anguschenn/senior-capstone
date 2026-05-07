@@ -11,14 +11,16 @@ class PlaidService {
   static const instance = PlaidService._();
 
   Map<String, String> get _headers => {
-        'Content-Type': 'application/json',
-        'x-api-key': EnvConfig.instance.backendApiKey,
-        if (AuthService.instance.currentAccessToken != null)
-          'Authorization': 'Bearer ${AuthService.instance.currentAccessToken}',
-      };
+    'Content-Type': 'application/json',
+    'x-api-key': EnvConfig.instance.backendApiKey,
+    if (AuthService.instance.currentAccessToken != null)
+      'Authorization': 'Bearer ${AuthService.instance.currentAccessToken}',
+  };
 
   Future<String> createLinkToken() async {
-    final uri = Uri.parse('${EnvConfig.instance.backendUrl}/api/create_link_token');
+    final uri = Uri.parse(
+      '${EnvConfig.instance.backendUrl}/api/create_link_token',
+    );
     final response = await http.post(uri, headers: _headers);
     if (response.statusCode != 200) {
       throw Exception('Failed to create link token: ${response.body}');
@@ -32,7 +34,9 @@ class PlaidService {
   }
 
   Future<void> exchangePublicToken(String publicToken) async {
-    final uri = Uri.parse('${EnvConfig.instance.backendUrl}/api/set_access_token');
+    final uri = Uri.parse(
+      '${EnvConfig.instance.backendUrl}/api/set_access_token',
+    );
     final response = await http.post(
       uri,
       headers: _headers,

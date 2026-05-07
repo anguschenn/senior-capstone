@@ -53,8 +53,7 @@ class AppTransaction {
   bool get isDepositoryAccount =>
       accountType.toLowerCase().trim() == 'depository';
 
-  bool get isExpense =>
-      amount != 0 && amount > 0;
+  bool get isExpense => amount != 0 && amount > 0;
 
   bool get isInflow => amount != 0 && !isExpense;
 

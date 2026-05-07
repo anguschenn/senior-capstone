@@ -26,7 +26,8 @@ class CategoryService {
   }
 
   String _keywordFallbackCategory(String merchantName, String transactionName) {
-    final text = '${merchantName.trim()} ${transactionName.trim()}'.toLowerCase();
+    final text = '${merchantName.trim()} ${transactionName.trim()}'
+        .toLowerCase();
     if (text.contains('openai') ||
         text.contains('chatgpt') ||
         text.contains('spotify') ||
@@ -60,7 +61,8 @@ class CategoryService {
   }) {
     final primary = pfcPrimary.toLowerCase();
     final detailed = pfcDetailed.toLowerCase();
-    final text = '${merchantName.trim()} ${transactionName.trim()}'.toLowerCase();
+    final text = '${merchantName.trim()} ${transactionName.trim()}'
+        .toLowerCase();
 
     // High-confidence payment/transfer classes from provider signals.
     if (detailed.contains('loan_payments_credit_card_payment') ||

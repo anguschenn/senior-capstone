@@ -145,7 +145,8 @@ class _TransactionsPageState extends State<TransactionsPage> {
                     },
                   ),
                 ),
-                if (viewMode == ActivityViewMode.month || viewMode == ActivityViewMode.year) ...[
+                if (viewMode == ActivityViewMode.month ||
+                    viewMode == ActivityViewMode.year) ...[
                   const SizedBox(width: 10),
                   Expanded(
                     child: viewMode == ActivityViewMode.month
@@ -169,7 +170,12 @@ class _TransactionsPageState extends State<TransactionsPage> {
                             label: 'Year',
                             value: selectedMonth.year,
                             options: _yearOptions
-                                .map((y) => SelectorOption<int>(value: y, label: '$y'))
+                                .map(
+                                  (y) => SelectorOption<int>(
+                                    value: y,
+                                    label: '$y',
+                                  ),
+                                )
                                 .toList(),
                             onChanged: (value) {
                               widget.onMonthChanged(DateTime(value, 1, 2));

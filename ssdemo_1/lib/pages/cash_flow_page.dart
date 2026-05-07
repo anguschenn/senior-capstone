@@ -352,4 +352,3 @@ class _CashFlowPageState extends State<CashFlowPage> {
     return '• Spending $direction ${pct.abs().toStringAsFixed(1)}% vs previous month';
   }
 }
-

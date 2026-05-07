@@ -78,11 +78,7 @@ class AiApiClient {
         headers['Authorization'] = 'Bearer $token';
       }
       final response = await http
-          .post(
-            uri,
-            headers: headers,
-            body: jsonEncode(body),
-          )
+          .post(uri, headers: headers, body: jsonEncode(body))
           .timeout(const Duration(seconds: 30));
 
       final rawBody = utf8.decode(response.bodyBytes);

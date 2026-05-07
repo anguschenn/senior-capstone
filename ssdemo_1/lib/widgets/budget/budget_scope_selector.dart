@@ -61,7 +61,8 @@ class BudgetScopeSelector extends StatelessWidget {
                 onChanged: onViewModeChanged,
               ),
             ),
-            if (viewMode == BudgetViewMode.month || viewMode == BudgetViewMode.year) ...[
+            if (viewMode == BudgetViewMode.month ||
+                viewMode == BudgetViewMode.year) ...[
               const SizedBox(width: 10),
               Expanded(
                 child: viewMode == BudgetViewMode.month
@@ -85,7 +86,9 @@ class BudgetScopeSelector extends StatelessWidget {
                         label: 'Year',
                         value: selectedMonth.year,
                         options: yearOptions
-                            .map((y) => SelectorOption<int>(value: y, label: '$y'))
+                            .map(
+                              (y) => SelectorOption<int>(value: y, label: '$y'),
+                            )
                             .toList(),
                         onChanged: (value) {
                           onMonthChanged(DateTime(value, 1, 2));

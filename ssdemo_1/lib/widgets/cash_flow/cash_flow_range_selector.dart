@@ -49,14 +49,8 @@ class CashFlowRangeSelector extends StatelessWidget {
                 label: 'Range',
                 value: viewMode,
                 options: const [
-                  SelectorOption(
-                    value: FlowViewMode.month,
-                    label: 'By Month',
-                  ),
-                  SelectorOption(
-                    value: FlowViewMode.year,
-                    label: 'By Year',
-                  ),
+                  SelectorOption(value: FlowViewMode.month, label: 'By Month'),
+                  SelectorOption(value: FlowViewMode.year, label: 'By Year'),
                   SelectorOption(
                     value: FlowViewMode.all,
                     label: 'All Time / Custom',
@@ -65,7 +59,8 @@ class CashFlowRangeSelector extends StatelessWidget {
                 onChanged: onViewModeChanged,
               ),
             ),
-            if (viewMode == FlowViewMode.month || viewMode == FlowViewMode.year) ...[
+            if (viewMode == FlowViewMode.month ||
+                viewMode == FlowViewMode.year) ...[
               const SizedBox(width: 10),
               Expanded(
                 child: viewMode == FlowViewMode.month
@@ -89,7 +84,9 @@ class CashFlowRangeSelector extends StatelessWidget {
                         label: 'Year',
                         value: focusMonth.year,
                         options: yearOptions
-                            .map((y) => SelectorOption<int>(value: y, label: '$y'))
+                            .map(
+                              (y) => SelectorOption<int>(value: y, label: '$y'),
+                            )
                             .toList(),
                         onChanged: onYearChanged,
                       ),

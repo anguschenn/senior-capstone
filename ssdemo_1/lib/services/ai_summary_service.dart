@@ -122,10 +122,12 @@ class AiSummaryService {
     }
 
     // Peer-transfer app names alone are too broad; require transfer/payment intent.
-    final hasP2pApp = text.contains('zelle') ||
+    final hasP2pApp =
+        text.contains('zelle') ||
         text.contains('venmo') ||
         text.contains('cash app');
-    final hasTransferIntent = text.contains('payment') ||
+    final hasTransferIntent =
+        text.contains('payment') ||
         text.contains('pay to') ||
         text.contains('transfer') ||
         text.contains('cashout') ||
@@ -145,11 +147,7 @@ class AiSummaryService {
   }) {
     final now = DateTime.now();
     final focus = focusMonth ?? now;
-    final anchor = DateTime(
-      focus.year,
-      focus.month,
-      1,
-    );
+    final anchor = DateTime(focus.year, focus.month, 1);
     final cutoff30d = anchor.subtract(const Duration(days: 30));
     final cutoff7d = anchor.subtract(const Duration(days: 7));
     final cutoff90d = anchor.subtract(const Duration(days: 90));
