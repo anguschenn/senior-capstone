@@ -216,6 +216,22 @@ class _BudgetPageState extends State<BudgetPage> {
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          BudgetScopeSelector(
+            viewMode: viewMode,
+            onViewModeChanged: (mode) {
+              setState(() {
+                viewMode = mode;
+                _aiSuggestion = null;
+                _aiError = '';
+                _aiContextSource = '';
+              });
+            },
+            selectedMonth: widget.selectedMonth,
+            monthOptions: _monthOnlyOptions,
+            yearOptions: _yearOptions,
+            onMonthChanged: widget.onMonthChanged,
+          ),
+          const SizedBox(height: 12),
           // Top controls switch time scope and open budget editing flows.
           Row(
             children: [
@@ -240,22 +256,6 @@ class _BudgetPageState extends State<BudgetPage> {
               icon: const Icon(Icons.add_circle_outline),
               label: const Text('Add Custom Category'),
             ),
-          ),
-          const SizedBox(height: 8),
-          BudgetScopeSelector(
-            viewMode: viewMode,
-            onViewModeChanged: (mode) {
-              setState(() {
-                viewMode = mode;
-                _aiSuggestion = null;
-                _aiError = '';
-                _aiContextSource = '';
-              });
-            },
-            selectedMonth: widget.selectedMonth,
-            monthOptions: _monthOnlyOptions,
-            yearOptions: _yearOptions,
-            onMonthChanged: widget.onMonthChanged,
           ),
           const SizedBox(height: 8),
           Text(

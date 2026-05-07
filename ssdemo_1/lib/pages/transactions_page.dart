@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/app_models.dart';
 import '../utils/app_helpers.dart';
+import '../widgets/common/labeled_selector_field.dart';
 import '../widgets/common/transaction_category_tag.dart';
 
 class TransactionsPage extends StatefulWidget {
@@ -118,106 +119,67 @@ class _TransactionsPageState extends State<TransactionsPage> {
         children: [
           // Header filters let the user narrow the full activity list without re-querying.
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
             child: Row(
               children: [
-                const Text('Range', style: TextStyle(color: Colors.black54)),
-                const SizedBox(width: 12),
                 Expanded(
-                  child: DropdownButtonFormField<ActivityViewMode>(
-                    initialValue: viewMode,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    items: const [
-                      DropdownMenuItem(
+                  child: LabeledSelectorField<ActivityViewMode>(
+                    label: 'Range',
+                    value: viewMode,
+                    options: const [
+                      SelectorOption(
                         value: ActivityViewMode.month,
-                        child: Text('By Month'),
+                        label: 'By Month',
                       ),
-                      DropdownMenuItem(
+                      SelectorOption(
                         value: ActivityViewMode.year,
-                        child: Text('By Year'),
+                        label: 'By Year',
                       ),
-                      DropdownMenuItem(
+                      SelectorOption(
                         value: ActivityViewMode.all,
-                        child: Text('All Time / Custom'),
+                        label: 'All Time / Custom',
                       ),
                     ],
                     onChanged: (value) {
-                      if (value == null) return;
                       setState(() => viewMode = value);
                     },
                   ),
                 ),
+                if (viewMode == ActivityViewMode.month || viewMode == ActivityViewMode.year) ...[
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: viewMode == ActivityViewMode.month
+                        ? LabeledSelectorField<DateTime>(
+                            key: ValueKey(
+                              'tx-month-${selectedMonth.year}-${selectedMonth.month}-${selectedMonth.day}',
+                            ),
+                            label: 'Month',
+                            value: monthSelectionValue,
+                            options: _monthOnlyOptions
+                                .map(
+                                  (m) => SelectorOption<DateTime>(
+                                    value: normalizedMonthOption(m),
+                                    label: monthOptionLabel(m),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: widget.onMonthChanged,
+                          )
+                        : LabeledSelectorField<int>(
+                            label: 'Year',
+                            value: selectedMonth.year,
+                            options: _yearOptions
+                                .map((y) => SelectorOption<int>(value: y, label: '$y'))
+                                .toList(),
+                            onChanged: (value) {
+                              widget.onMonthChanged(DateTime(value, 1, 2));
+                            },
+                          ),
+                  ),
+                ],
               ],
             ),
           ),
-          if (viewMode == ActivityViewMode.month)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-              child: Row(
-                children: [
-                  const Text('Month', style: TextStyle(color: Colors.black54)),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: DropdownButtonFormField<DateTime>(
-                      key: ValueKey(
-                        'tx-month-${selectedMonth.year}-${selectedMonth.month}-${selectedMonth.day}',
-                      ),
-                      initialValue: monthSelectionValue,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      items: _monthOnlyOptions
-                          .map(
-                            (m) => DropdownMenuItem<DateTime>(
-                              value: normalizedMonthOption(m),
-                              child: Text(monthOptionLabel(m)),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        if (value == null) return;
-                        widget.onMonthChanged(value);
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          if (viewMode == ActivityViewMode.year)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-              child: Row(
-                children: [
-                  const Text('Year', style: TextStyle(color: Colors.black54)),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: DropdownButtonFormField<int>(
-                      initialValue: selectedMonth.year,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      items: _yearOptions
-                          .map(
-                            (y) => DropdownMenuItem<int>(
-                              value: y,
-                              child: Text('$y'),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        if (value == null) return;
-                        widget.onMonthChanged(DateTime(value, 1, 2));
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
           if (viewMode == ActivityViewMode.all)
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),

@@ -57,8 +57,89 @@ class HomePage extends StatelessWidget {
   onTransactionCategorySelected;
   final Future<void> Function(String txId) onReviewConfirm;
 
+  Future<void> _showMonthPicker(BuildContext context) async {
+    final normalizedSelected = normalizedMonthOption(selectedMonth);
+    final selected = await showModalBottomSheet<DateTime>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 8),
+              Container(
+                width: 44,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.black26,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  children: [
+                    Text(
+                      'Select Month',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+                  itemCount: monthOptions.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 2),
+                  itemBuilder: (context, index) {
+                    final raw = monthOptions[index];
+                    final option = normalizedMonthOption(raw);
+                    final isSelected = option == normalizedSelected;
+                    return ListTile(
+                      dense: true,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      tileColor: isSelected
+                          ? Theme.of(context).colorScheme.primary.withOpacity(0.10)
+                          : null,
+                      title: Text(
+                        monthOptionLabel(raw),
+                        style: TextStyle(
+                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                        ),
+                      ),
+                      trailing: isSelected
+                          ? Icon(
+                              Icons.check_rounded,
+                              color: Theme.of(context).colorScheme.primary,
+                            )
+                          : null,
+                      onTap: () => Navigator.of(context).pop(option),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if (selected != null) {
+      onMonthChanged(selected);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     double displayIncome = 0;
     double displayExpenses = 0;
     for (final tx in transactions) {
@@ -72,6 +153,28 @@ class HomePage extends StatelessWidget {
     final incomeTitle = 'Income ($periodLabel)';
     final expensesTitle = 'Expenses ($periodLabel)';
     final cashFlowLabel = 'Cash Flow ($periodLabel)';
+    final selectorDecoration = InputDecoration(
+      isDense: true,
+      filled: true,
+      fillColor: Colors.grey.shade50,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Colors.black.withOpacity(0.08)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Colors.black.withOpacity(0.08)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.4),
+      ),
+    );
+    final selectorValueStyle = theme.textTheme.titleMedium?.copyWith(
+      fontWeight: FontWeight.w500,
+      color: Colors.black87,
+    );
     final sevenDaysAgo = DateTime.now().subtract(const Duration(days: 7));
     final recentTransactions = transactions
         .where((tx) => tx.date.isAfter(sevenDaysAgo))
@@ -128,82 +231,81 @@ class HomePage extends StatelessWidget {
           const SizedBox(height: 12),
           Row(
             children: [
-              const Text(
-                'Account',
-                style: TextStyle(fontWeight: FontWeight.w600),
+              SizedBox(
+                width: 76,
+                child: Text(
+                  'Account',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.black12),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      isExpanded: true,
-                      value: selectedAccountId,
-                      items: [
-                        const DropdownMenuItem<String>(
-                          value: kAllAccountsId,
-                          child: Text('All Accounts'),
-                        ),
-                        ...accountOptions.map(
-                          (account) => DropdownMenuItem<String>(
-                            value: account.accountId,
-                            child: Text(
-                              '${account.label} (${account.txCount})',
-                            ),
-                          ),
-                        ),
-                      ],
-                      onChanged: syncing
-                          ? null
-                          : (value) {
-                              if (value == null) return;
-                              onAccountChanged(value);
-                            },
+                child: DropdownButtonFormField<String>(
+                  isExpanded: true,
+                  style: selectorValueStyle,
+                  icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                  value: selectedAccountId,
+                  decoration: selectorDecoration,
+                  items: [
+                    DropdownMenuItem<String>(
+                      value: kAllAccountsId,
+                      child: Text('All Accounts', style: selectorValueStyle),
                     ),
-                  ),
+                    ...accountOptions.map(
+                      (account) => DropdownMenuItem<String>(
+                        value: account.accountId,
+                        child: Text(
+                          '${account.label} (${account.txCount})',
+                          style: selectorValueStyle,
+                        ),
+                      ),
+                    ),
+                  ],
+                  onChanged: syncing
+                      ? null
+                      : (value) {
+                          if (value == null) return;
+                          onAccountChanged(value);
+                        },
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           Row(
             children: [
-              const Text(
-                'Month',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.black12),
-                    borderRadius: BorderRadius.circular(12),
+              SizedBox(
+                width: 76,
+                child: Text(
+                  'Month',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
                   ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<DateTime>(
-                      key: ValueKey(
-                        'home-month-${selectedMonth.year}-${selectedMonth.month}-${selectedMonth.day}',
-                      ),
-                      isExpanded: true,
-                      value: normalizedMonthOption(selectedMonth),
-                      items: monthOptions
-                          .map(
-                            (m) => DropdownMenuItem<DateTime>(
-                              value: normalizedMonthOption(m),
-                              child: Text(monthOptionLabel(m)),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        if (value == null) return;
-                        onMonthChanged(value);
-                      },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => _showMonthPicker(context),
+                  child: InputDecorator(
+                  decoration: selectorDecoration,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            monthOptionLabel(selectedMonth),
+                            style: selectorValueStyle,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.keyboard_arrow_down_rounded),
+                      ],
                     ),
                   ),
                 ),

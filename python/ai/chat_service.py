@@ -5,38 +5,20 @@ from .explainers import build_chat_prompt
 from .intent_router import IntentRouter
 from .parsers import extract_json_object
 from .schemas import build_chat_response
+from .time_parsing import (
+    MONTH_NAME_TO_NUM,
+    extract_month_range_keys,
+    extract_specific_date_key,
+    extract_specific_month_key,
+    previous_month_key,
+    previous_year_key,
+)
 from .validators import clamp_str, sanitize_history, sanitize_spending_summary
 
 
 class ChatService:
     """Orchestrates AI chat with validated financial context and safe fallbacks."""
 
-    MONTH_NAME_TO_NUM = {
-        "january": 1,
-        "jan": 1,
-        "february": 2,
-        "feb": 2,
-        "march": 3,
-        "mar": 3,
-        "april": 4,
-        "apr": 4,
-        "may": 5,
-        "june": 6,
-        "jun": 6,
-        "july": 7,
-        "jul": 7,
-        "august": 8,
-        "aug": 8,
-        "september": 9,
-        "sep": 9,
-        "sept": 9,
-        "october": 10,
-        "oct": 10,
-        "november": 11,
-        "nov": 11,
-        "december": 12,
-        "dec": 12,
-    }
     HIGH_CONFIDENCE_THRESHOLD = 0.70
     MID_CONFIDENCE_THRESHOLD = 0.45
 
@@ -483,7 +465,7 @@ class ChatService:
         if re.search(r"\bspend(ing)?\b", text) and (
             re.search(r"\b20\d{2}-\d{2}\b", text)
             or re.search(r"\b(20\d{2})\b", text)
-            or any(name in text for name in self.MONTH_NAME_TO_NUM)
+            or any(name in text for name in MONTH_NAME_TO_NUM)
         ):
             return True
         return False
@@ -717,7 +699,7 @@ class ChatService:
             return "rolling_30d"
         if "this year" in text or "year" in text:
             return "annual_year"
-        if any(name in text for name in self.MONTH_NAME_TO_NUM):
+        if any(name in text for name in MONTH_NAME_TO_NUM):
             return "annual_year"
         if re.search(r"\b20\d{2}-\d{2}\b", text):
             return "annual_year"
@@ -725,111 +707,23 @@ class ChatService:
 
     def _extract_specific_month_key(self, message, default_year):
         """Parse month reference from user message and return YYYY-MM key."""
-        text = clamp_str(message or "", 4000).lower()
-        if not text:
-            return ""
-        if "last month" in text:
-            return self._previous_month_key()
-        month_key_match = re.search(r"\b(20\d{2}-\d{2})\b", text)
-        if month_key_match:
-            return month_key_match.group(1)
-        year_month_match = re.search(r"\b(20\d{2})[-/](\d{1,2})\b", text)
-        if year_month_match:
-            year = int(year_month_match.group(1))
-            month = int(year_month_match.group(2))
-            if 1 <= month <= 12:
-                return f"{year}-{month:02d}"
-        year_match = re.search(r"\b(20\d{2})\b", text)
-        year = int(year_match.group(1)) if year_match else int(default_year or 0)
-        if year <= 0:
-            return ""
-        for month_name, month_num in self.MONTH_NAME_TO_NUM.items():
-            if re.search(rf"\b{re.escape(month_name)}\b", text):
-                return f"{year}-{month_num:02d}"
-        return ""
+        return extract_specific_month_key(clamp_str(message or "", 4000), default_year)
 
     def _previous_month_key(self):
         """Return previous calendar month in YYYY-MM format."""
-        today = date_cls.today()
-        year = today.year
-        month = today.month - 1
-        if month <= 0:
-            month = 12
-            year -= 1
-        return f"{year}-{month:02d}"
+        return previous_month_key()
 
     def _previous_year_key(self):
         """Return previous calendar year as YYYY string."""
-        return str(date_cls.today().year - 1)
+        return previous_year_key()
 
     def _extract_month_range_keys(self, message, default_year):
         """Extract month range keys for phrases like last 3 months."""
-        text = clamp_str(message or "", 4000).lower()
-        if not text:
-            return []
-
-        explicit = re.findall(r"\b20\d{2}-\d{2}\b", text)
-        if len(explicit) >= 2:
-            return explicit[:6]
-
-        last_n = re.search(r"\blast\s+(\d{1,2})\s+months?\b", text)
-        if last_n:
-            count = max(2, min(12, int(last_n.group(1))))
-            keys = []
-            year, month = date_cls.today().year, date_cls.today().month
-            # last N complete months (exclude current month)
-            for _ in range(count):
-                month -= 1
-                if month <= 0:
-                    month = 12
-                    year -= 1
-                keys.append(f"{year}-{month:02d}")
-            keys.reverse()
-            return keys
-
-        first_n = re.search(r"\bfirst\s+(\d{1,2})\s+months?\b", text)
-        if first_n:
-            count = max(2, min(12, int(first_n.group(1))))
-            year_match = re.search(r"\b(20\d{2})\b", text)
-            year = (
-                int(year_match.group(1))
-                if year_match
-                else int(default_year or date_cls.today().year)
-            )
-            return [f"{year}-{m:02d}" for m in range(1, count + 1)]
-
-        return []
+        return extract_month_range_keys(clamp_str(message or "", 4000), default_year)
 
     def _extract_specific_date_key(self, message, default_year):
         """Parse date reference from user message and return YYYY-MM-DD key."""
-        text = clamp_str(message or "", 4000).lower()
-        if not text:
-            return ""
-
-        iso_match = re.search(r"\b(20\d{2}-\d{2}-\d{2})\b", text)
-        if iso_match:
-            return iso_match.group(1)
-
-        if "today" in text:
-            return date_cls.today().isoformat()
-        if "yesterday" in text:
-            return date_cls.fromordinal(date_cls.today().toordinal() - 1).isoformat()
-
-        year_match = re.search(r"\b(20\d{2})\b", text)
-        year = int(year_match.group(1)) if year_match else int(default_year or 0)
-        if year <= 0:
-            return ""
-
-        for month_name, month_num in self.MONTH_NAME_TO_NUM.items():
-            # Supports "march 15", "march 15th", "mar 15"
-            match = re.search(rf"\b{re.escape(month_name)}\s+(\d{{1,2}})(st|nd|rd|th)?\b", text)
-            if not match:
-                continue
-            day = int(match.group(1))
-            if day < 1 or day > 31:
-                continue
-            return f"{year}-{month_num:02d}-{day:02d}"
-        return ""
+        return extract_specific_date_key(clamp_str(message or "", 4000), default_year)
 
     def _has_money_value(self, text):
         """Detect whether assistant reply already contains explicit money value."""
@@ -1578,7 +1472,7 @@ class ChatService:
         if len(years) >= 2:
             return years[0], years[1]
         month_names = []
-        for name, num in self.MONTH_NAME_TO_NUM.items():
+        for name, num in MONTH_NAME_TO_NUM.items():
             if re.search(rf"\b{re.escape(name)}\b", text):
                 month_names.append(num)
         year = re.search(r"\b20\d{2}\b", text)

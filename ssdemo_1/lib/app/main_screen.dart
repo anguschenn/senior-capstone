@@ -27,16 +27,17 @@ class _MainScreenState extends State<MainScreen> {
   final _ctrl = MainScreenController();
 
   List<DateTime> _monthOptions(List<AppTransaction> txs) {
-    final years = <int>{DateTime.now().year, _ctrl.selectedMonth.year};
+    final monthsWithData = <DateTime>{};
     for (final tx in txs) {
-      years.add(tx.date.year);
+      monthsWithData.add(DateTime(tx.date.year, tx.date.month, 1));
     }
-    final sortedYears = years.toList()..sort((a, b) => b.compareTo(a));
+    final sortedMonths = monthsWithData.toList()
+      ..sort((a, b) => b.compareTo(a));
+    final yearsWithData = sortedMonths.map((m) => m.year).toSet().toList()
+      ..sort((a, b) => b.compareTo(a));
     return [
-      for (final year in sortedYears) ...[
-        allYearOptionFor(year),
-        for (int month = 12; month >= 1; month--) DateTime(year, month, 1),
-      ],
+      for (final year in yearsWithData) allYearOptionFor(year),
+      ...sortedMonths,
     ];
   }
 
@@ -138,14 +139,27 @@ class _MainScreenState extends State<MainScreen> {
     return Stack(
       children: [
         Scaffold(
-          body: body,
-          floatingActionButton: FloatingActionButton.small(
-            heroTag: 'sign-out',
-            onPressed: () async {
-              await AuthService.instance.signOut();
-            },
-            child: const Icon(Icons.logout),
+          appBar: AppBar(
+            toolbarHeight: 44,
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            backgroundColor: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
+            automaticallyImplyLeading: false,
+            actions: [
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: IconButton(
+                  tooltip: 'Sign out',
+                  onPressed: () async {
+                    await AuthService.instance.signOut();
+                  },
+                  icon: const Icon(Icons.logout),
+                ),
+              ),
+            ],
           ),
+          body: body,
           bottomNavigationBar: NavigationBar(
             selectedIndex: c.tabIndex,
             onDestinationSelected: c.selectTab,

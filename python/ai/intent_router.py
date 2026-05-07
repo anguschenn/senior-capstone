@@ -2,6 +2,8 @@ import json
 import re
 from datetime import date as date_cls
 
+from .time_parsing import extract_period
+
 
 class IntentRouter:
     """Hybrid intent router: rule-first, LLM fallback, strict post-LLM validation."""
@@ -75,33 +77,6 @@ class IntentRouter:
         "plan",
         "what if",
     )
-    MONTH_NAME_TO_NUM = {
-        "january": 1,
-        "jan": 1,
-        "february": 2,
-        "feb": 2,
-        "march": 3,
-        "mar": 3,
-        "april": 4,
-        "apr": 4,
-        "may": 5,
-        "june": 6,
-        "jun": 6,
-        "july": 7,
-        "jul": 7,
-        "august": 8,
-        "aug": 8,
-        "september": 9,
-        "sep": 9,
-        "sept": 9,
-        "october": 10,
-        "oct": 10,
-        "november": 11,
-        "nov": 11,
-        "december": 12,
-        "dec": 12,
-    }
-
     def __init__(self, classify_with_llm=None):
         self.classify_with_llm = classify_with_llm
 
@@ -170,88 +145,7 @@ class IntentRouter:
         }
 
     def _extract_period(self, text):
-        if not text:
-            return ("unknown", "")
-        day_key = re.search(r"\b(20\d{2}-\d{2}-\d{2})\b", text)
-        if day_key:
-            day_value = day_key.group(1)
-            try:
-                date_cls.fromisoformat(day_value)
-                return ("day", day_value)
-            except Exception:
-                return ("invalid", "")
-        month_key = re.search(r"\b(20\d{2})-(\d{2})\b", text)
-        if month_key:
-            year = int(month_key.group(1))
-            month = int(month_key.group(2))
-            if 1 <= month <= 12:
-                return ("month", f"{year}-{month:02d}")
-            return ("invalid", "")
-        year_month_key = re.search(r"\b(20\d{2})/(\d{1,2})\b", text)
-        if year_month_key:
-            year = int(year_month_key.group(1))
-            month = int(year_month_key.group(2))
-            if 1 <= month <= 12:
-                return ("month", f"{year}-{month:02d}")
-            return ("invalid", "")
-        month_range = re.search(r"\blast\s+(\d{1,2})\s+months?\b", text)
-        if month_range:
-            count = max(2, min(12, int(month_range.group(1))))
-            keys = []
-            year, month = date_cls.today().year, date_cls.today().month
-            for _ in range(count):
-                month -= 1
-                if month <= 0:
-                    month = 12
-                    year -= 1
-                keys.append(f"{year}-{month:02d}")
-            keys.reverse()
-            return ("month_range", ",".join(keys))
-        rolling_days = re.search(r"\blast\s+(\d{1,3})\s+days?\b", text)
-        if rolling_days:
-            days = max(1, min(365, int(rolling_days.group(1))))
-            if days == 30:
-                return ("rolling_30d", "rolling_30d")
-            return ("rolling_days", f"rolling_{days}d")
-        rolling_days_compact = re.search(r"\blast\s*(\d{1,3})d\b", text)
-        if rolling_days_compact:
-            days = max(1, min(365, int(rolling_days_compact.group(1))))
-            if days == 30:
-                return ("rolling_30d", "rolling_30d")
-            return ("rolling_days", f"rolling_{days}d")
-        if re.search(r"\b(this week|current week)\b", text):
-            return ("rolling_days", "rolling_7d")
-        if re.search(r"\blast week\b", text):
-            return ("rolling_days", "rolling_7d")
-        if re.search(r"\b30d\b", text):
-            return ("rolling_30d", "rolling_30d")
-        if re.search(r"\b(this month|current month)\b", text):
-            return ("month", date_cls.today().strftime("%Y-%m"))
-        if re.search(r"\blast month\b", text):
-            today = date_cls.today()
-            year = today.year
-            month = today.month - 1
-            if month <= 0:
-                month = 12
-                year -= 1
-            return ("month", f"{year}-{month:02d}")
-        if re.search(r"\b(this year|current year)\b", text):
-            return ("year", str(date_cls.today().year))
-        if re.search(r"\blast year\b", text):
-            return ("year", str(date_cls.today().year - 1))
-        month_name = re.search(
-            r"\b(jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\b",
-            text,
-        )
-        if month_name:
-            year_key = re.search(r"\b(20\d{2})\b", text)
-            year = int(year_key.group(1)) if year_key else date_cls.today().year
-            month = self.MONTH_NAME_TO_NUM[month_name.group(1)]
-            return ("month", f"{year}-{month:02d}")
-        year_key = re.search(r"\b(20\d{2})\b", text)
-        if year_key:
-            return ("year", year_key.group(1))
-        return ("unknown", "")
+        return extract_period(text)
 
     def _extract_metric(self, text):
         if not text:

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/app_models.dart';
 import '../../utils/app_helpers.dart';
+import '../common/labeled_selector_field.dart';
 
 class CashFlowRangeSelector extends StatelessWidget {
   const CashFlowRangeSelector({
@@ -43,98 +44,59 @@ class CashFlowRangeSelector extends StatelessWidget {
       children: [
         Row(
           children: [
-            const Text('Range', style: TextStyle(color: Colors.black54)),
-            const SizedBox(width: 12),
             Expanded(
-              child: DropdownButtonFormField<FlowViewMode>(
-                initialValue: viewMode,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-                items: const [
-                  DropdownMenuItem(
+              child: LabeledSelectorField<FlowViewMode>(
+                label: 'Range',
+                value: viewMode,
+                options: const [
+                  SelectorOption(
                     value: FlowViewMode.month,
-                    child: Text('By Month'),
+                    label: 'By Month',
                   ),
-                  DropdownMenuItem(
+                  SelectorOption(
                     value: FlowViewMode.year,
-                    child: Text('By Year'),
+                    label: 'By Year',
                   ),
-                  DropdownMenuItem(
+                  SelectorOption(
                     value: FlowViewMode.all,
-                    child: Text('All Time / Custom'),
+                    label: 'All Time / Custom',
                   ),
                 ],
-                onChanged: (value) {
-                  if (value == null) return;
-                  onViewModeChanged(value);
-                },
+                onChanged: onViewModeChanged,
               ),
             ),
+            if (viewMode == FlowViewMode.month || viewMode == FlowViewMode.year) ...[
+              const SizedBox(width: 10),
+              Expanded(
+                child: viewMode == FlowViewMode.month
+                    ? LabeledSelectorField<DateTime>(
+                        key: ValueKey(
+                          'flow-month-${focusMonth.year}-${focusMonth.month}-${focusMonth.day}',
+                        ),
+                        label: 'Month',
+                        value: monthSelectionValue,
+                        options: monthOptions
+                            .map(
+                              (m) => SelectorOption<DateTime>(
+                                value: normalizedMonthOption(m),
+                                label: monthOptionLabel(m),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: onMonthChanged,
+                      )
+                    : LabeledSelectorField<int>(
+                        label: 'Year',
+                        value: focusMonth.year,
+                        options: yearOptions
+                            .map((y) => SelectorOption<int>(value: y, label: '$y'))
+                            .toList(),
+                        onChanged: onYearChanged,
+                      ),
+              ),
+            ],
           ],
         ),
-        if (viewMode == FlowViewMode.month) ...[
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              const Text('Month', style: TextStyle(color: Colors.black54)),
-              const SizedBox(width: 12),
-              Expanded(
-                child: DropdownButtonFormField<DateTime>(
-                  key: ValueKey(
-                    'flow-month-${focusMonth.year}-${focusMonth.month}-${focusMonth.day}',
-                  ),
-                  initialValue: monthSelectionValue,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                  items: monthOptions
-                      .map(
-                        (m) => DropdownMenuItem<DateTime>(
-                          value: normalizedMonthOption(m),
-                          child: Text(monthOptionLabel(m)),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) {
-                    if (value == null) return;
-                    onMonthChanged(value);
-                  },
-                ),
-              ),
-            ],
-          ),
-        ],
-        if (viewMode == FlowViewMode.year) ...[
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              const Text('Year', style: TextStyle(color: Colors.black54)),
-              const SizedBox(width: 12),
-              Expanded(
-                child: DropdownButtonFormField<int>(
-                  initialValue: focusMonth.year,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                  items: yearOptions
-                      .map(
-                        (y) =>
-                            DropdownMenuItem<int>(value: y, child: Text('$y')),
-                      )
-                      .toList(),
-                  onChanged: (value) {
-                    if (value == null) return;
-                    onYearChanged(value);
-                  },
-                ),
-              ),
-            ],
-          ),
-        ],
         if (viewMode == FlowViewMode.all) ...[
           const SizedBox(height: 10),
           Row(

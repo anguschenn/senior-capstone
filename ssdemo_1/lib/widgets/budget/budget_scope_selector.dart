@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/budget/budget_view_mode.dart';
 import '../../utils/app_helpers.dart';
+import '../common/labeled_selector_field.dart';
 
 class BudgetScopeSelector extends StatelessWidget {
   const BudgetScopeSelector({
@@ -37,88 +38,63 @@ class BudgetScopeSelector extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SegmentedButton<BudgetViewMode>(
-          segments: const [
-            ButtonSegment<BudgetViewMode>(
-              value: BudgetViewMode.month,
-              label: Text('By Month'),
+        Row(
+          children: [
+            Expanded(
+              child: LabeledSelectorField<BudgetViewMode>(
+                label: 'Range',
+                value: viewMode,
+                options: const [
+                  SelectorOption<BudgetViewMode>(
+                    value: BudgetViewMode.month,
+                    label: 'By Month',
+                  ),
+                  SelectorOption<BudgetViewMode>(
+                    value: BudgetViewMode.year,
+                    label: 'By Year',
+                  ),
+                  SelectorOption<BudgetViewMode>(
+                    value: BudgetViewMode.all,
+                    label: 'All Time',
+                  ),
+                ],
+                onChanged: onViewModeChanged,
+              ),
             ),
-            ButtonSegment<BudgetViewMode>(
-              value: BudgetViewMode.year,
-              label: Text('By Year'),
-            ),
-            ButtonSegment<BudgetViewMode>(
-              value: BudgetViewMode.all,
-              label: Text('All Time'),
-            ),
-          ],
-          selected: {viewMode},
-          onSelectionChanged: (selection) {
-            if (selection.isEmpty) return;
-            onViewModeChanged(selection.first);
-          },
-        ),
-        if (viewMode == BudgetViewMode.month) ...[
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              const Text('Month', style: TextStyle(color: Colors.black54)),
-              const SizedBox(width: 12),
+            if (viewMode == BudgetViewMode.month || viewMode == BudgetViewMode.year) ...[
+              const SizedBox(width: 10),
               Expanded(
-                child: DropdownButtonFormField<DateTime>(
-                  key: ValueKey(
-                    'budget-month-${selectedMonth.year}-${selectedMonth.month}-${selectedMonth.day}',
-                  ),
-                  initialValue: monthSelectionValue,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                  items: monthOptions
-                      .map(
-                        (m) => DropdownMenuItem<DateTime>(
-                          value: normalizedMonthOption(m),
-                          child: Text(monthOptionLabel(m)),
+                child: viewMode == BudgetViewMode.month
+                    ? LabeledSelectorField<DateTime>(
+                        key: ValueKey(
+                          'budget-month-${selectedMonth.year}-${selectedMonth.month}-${selectedMonth.day}',
                         ),
+                        label: 'Month',
+                        value: monthSelectionValue,
+                        options: monthOptions
+                            .map(
+                              (m) => SelectorOption<DateTime>(
+                                value: normalizedMonthOption(m),
+                                label: monthOptionLabel(m),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: onMonthChanged,
                       )
-                      .toList(),
-                  onChanged: (value) {
-                    if (value == null) return;
-                    onMonthChanged(value);
-                  },
-                ),
+                    : LabeledSelectorField<int>(
+                        label: 'Year',
+                        value: selectedMonth.year,
+                        options: yearOptions
+                            .map((y) => SelectorOption<int>(value: y, label: '$y'))
+                            .toList(),
+                        onChanged: (value) {
+                          onMonthChanged(DateTime(value, 1, 2));
+                        },
+                      ),
               ),
             ],
-          ),
-        ],
-        if (viewMode == BudgetViewMode.year) ...[
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              const Text('Year', style: TextStyle(color: Colors.black54)),
-              const SizedBox(width: 12),
-              Expanded(
-                child: DropdownButtonFormField<int>(
-                  initialValue: selectedMonth.year,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                  items: yearOptions
-                      .map(
-                        (y) =>
-                            DropdownMenuItem<int>(value: y, child: Text('$y')),
-                      )
-                      .toList(),
-                  onChanged: (value) {
-                    if (value == null) return;
-                    onMonthChanged(DateTime(value, 1, 2));
-                  },
-                ),
-              ),
-            ],
-          ),
-        ],
+          ],
+        ),
       ],
     );
   }

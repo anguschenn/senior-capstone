@@ -39,17 +39,14 @@ PLAID_COUNTRY_CODES = os.getenv("PLAID_COUNTRY_CODES", "US").split(",")
 PLAID_REDIRECT_URI = _empty_to_none("PLAID_REDIRECT_URI")
 
 # ── AI model providers ───────────────────────────────────────────────
-#OLLAMA_MODEL = _empty_to_none("OLLAMA_MODEL") or "llama3"
-#//OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
-#switch to openrouter provider
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openrouter")
-
-LLM_MODEL = os.getenv(
-    "LLM_MODEL",
-    "meta-llama/llama-3.1-8b-instruct:free"
-)
-
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+AI_PROVIDER = (_empty_to_none("AI_PROVIDER") or "ollama").strip().lower()
+OLLAMA_MODEL = _empty_to_none("OLLAMA_MODEL") or "llama3"
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
+OPENROUTER_API_KEY = _empty_to_none("OPENROUTER_API_KEY")
+OPENROUTER_MODEL = _empty_to_none("OPENROUTER_MODEL") or "openai/gpt-4o-mini"
+OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+OPENROUTER_HTTP_REFERER = _empty_to_none("OPENROUTER_HTTP_REFERER")
+OPENROUTER_APP_TITLE = _empty_to_none("OPENROUTER_APP_TITLE")
 
 # ── Backend API auth ─────────────────────────────────────────────────
 INTERNAL_API_KEY = _empty_to_none("INTERNAL_API_KEY")

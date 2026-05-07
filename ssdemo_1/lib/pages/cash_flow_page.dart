@@ -227,13 +227,6 @@ class _CashFlowPageState extends State<CashFlowPage> {
         padding: const EdgeInsets.all(20),
         children: [
           // Time-range controls and summary cards share the same filtered transaction set.
-          const Text(
-            'Cash Flow',
-            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          const Text('Track money in and out'),
-          const SizedBox(height: 12),
           CashFlowRangeSelector(
             viewMode: viewMode,
             selectedMonth: widget.selectedMonth,
@@ -257,6 +250,13 @@ class _CashFlowPageState extends State<CashFlowPage> {
             },
             onClearCustomRange: () => setState(() => customRange = null),
           ),
+          const SizedBox(height: 14),
+          const Text(
+            'Cash Flow',
+            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 6),
+          const Text('Track money in and out'),
           const SizedBox(height: 20),
           CashFlowTotalsCard(
             income: _periodIncome,
@@ -352,5 +352,4 @@ class _CashFlowPageState extends State<CashFlowPage> {
     return '• Spending $direction ${pct.abs().toStringAsFixed(1)}% vs previous month';
   }
 }
-
 
