@@ -160,7 +160,7 @@ class AppTransaction {
     final type = accountType.toLowerCase().trim();
     final subtype = accountSubtype.toLowerCase().trim();
     if (type == 'depository') return true;
-    if (type == 'credit' || type == 'loan') return false;
+    if (type == 'credit' || type == 'loan') return true;
     if (subtype == 'checking' || subtype == 'savings') return true;
     if (subtype.contains('credit')) return false;
     final key = accountName.toLowerCase();

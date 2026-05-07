@@ -213,8 +213,12 @@ class HomePage extends StatelessWidget {
                         height: 14,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.link),
-                label: Text(syncing ? 'Syncing' : 'Connect'),
+                    : const Icon(Icons.add_link),
+                label: Text(syncing
+                    ? 'Syncing'
+                    : accountOptions.isEmpty
+                        ? 'Connect Bank'
+                        : 'Add Account'),
               ),
               OutlinedButton(
                 onPressed: syncing ? null : onRefreshLiveData,

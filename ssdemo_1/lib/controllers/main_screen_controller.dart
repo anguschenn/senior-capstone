@@ -68,17 +68,18 @@ class MainScreenController extends ChangeNotifier {
   Future<void> refreshLiveDataOnly() async {
     if (syncing) return;
     syncing = true;
-    syncStatus = 'Refreshing from DB...';
+    syncStatus = 'Syncing with bank...';
     _notifyListenersSafe();
     try {
+      await SyncService.instance.triggerBankSync();
+      syncStatus = 'Loading...';
+      _notifyListenersSafe();
       final result = await SyncService.instance.refreshFromSupabase(
         reviewedCategoryByTxId,
         selectedMonth,
       );
       _applySyncResult(result);
-      syncStatus = result.hasData
-          ? 'Connected: using database data'
-          : 'No DB data yet';
+      syncStatus = result.hasData ? 'Updated' : 'No data found';
     } catch (e) {
       syncStatus = 'Refresh failed: $e';
     } finally {
