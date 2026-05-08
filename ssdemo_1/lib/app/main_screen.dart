@@ -133,7 +133,13 @@ class _MainScreenState extends State<MainScreen> {
         monthOptions: monthOptions,
         onMonthChanged: c.selectMonth,
       ),
-      _ => SubscriptionsPage(subscriptions: visibleSubscriptions),
+      _ => SubscriptionsPage(
+        subscriptions: visibleSubscriptions,
+        monthlyTotal: visibleSubscriptions.fold<double>(
+          0,
+          (sum, item) => sum + item.amount,
+        ),
+      ),
     };
 
     return Stack(

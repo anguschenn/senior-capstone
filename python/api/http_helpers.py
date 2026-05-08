@@ -35,7 +35,9 @@ def plaid_error_response(error: plaid.ApiException):
     status_code = (
         error.status if isinstance(error.status, int) and 400 <= error.status <= 599 else 502
     )
-    return jsonify(format_error(error)), status_code
+    formatted = format_error(error)
+    print(f"Plaid API error ({status_code}): {formatted}")
+    return jsonify(formatted), status_code
 
 
 def log_route_error(route_name: str, error: Exception) -> None:
