@@ -142,13 +142,14 @@ class FinancialSnapshotService {
       );
     }
     if (allTime) {
-      return BudgetService.instance.presetBudgetProgressAllTime(
-        txs,
-        focusMonth,
-        reviewedCategoryByTxId,
-      );
+      return BudgetService.instance
+          .buildZeroLimitProgressFromPresetCategoriesAllTime(
+            txs,
+            focusMonth,
+            reviewedCategoryByTxId,
+          );
     }
-    return BudgetService.instance.presetBudgetProgress(
+    return BudgetService.instance.buildZeroLimitProgressFromPresetCategories(
       txs,
       focusMonth,
       yearly,

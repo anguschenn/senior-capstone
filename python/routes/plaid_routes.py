@@ -23,10 +23,12 @@ from plaid.model.link_token_create_request_user import LinkTokenCreateRequestUse
 from api.http_helpers import identity_error_response, log_route_error, plaid_error_response
 from auth import UserAuthError, require_supabase_user_id
 from config import (
+    PLAID_CLIENT_ID,
     PLAID_COUNTRY_CODES,
     PLAID_ENV,
     PLAID_PRODUCTS,
     PLAID_REDIRECT_URI,
+    PLAID_SECRET,
 )
 from plaid_sync import (
     IdentityStateError,
@@ -113,7 +115,14 @@ def info():
 @plaid_bp.route("/api/create_link_token", methods=["POST"])
 def create_link_token():
     try:
-        link_request = LinkTokenCreateRequest(
+        if not PLAID_CLIENT_ID or not PLAID_SECRET:
+            return jsonify({"error": "Missing Plaid credentials: PLAID_CLIENT_ID/PLAID_SECRET"}), 500
+        if not PLAID_PRODUCTS:
+            return jsonify({"error": "Missing Plaid configuration: PLAID_PRODUCTS"}), 500
+        if not PLAID_COUNTRY_CODES:
+            return jsonify({"error": "Missing Plaid configuration: PLAID_COUNTRY_CODES"}), 500
+
+        link_request_payload = dict(
             products=products,
             client_name="SmartSpend",
             country_codes=[CountryCode(code) for code in PLAID_COUNTRY_CODES],
@@ -121,12 +130,17 @@ def create_link_token():
             user=LinkTokenCreateRequestUser(client_user_id=str(time.time())),
         )
         if PLAID_REDIRECT_URI:
-            link_request["redirect_uri"] = PLAID_REDIRECT_URI
+            link_request_payload["redirect_uri"] = PLAID_REDIRECT_URI
+
+        link_request = LinkTokenCreateRequest(**link_request_payload)
 
         response = client.link_token_create(link_request)
         return jsonify(response.to_dict())
     except plaid.ApiException as error:
         return plaid_error_response(error)
+    except Exception as error:
+        log_route_error("/api/create_link_token unexpected", error)
+        return jsonify({"error": f"Failed to create link token: {error}"}), 500
 
 
 @plaid_bp.route("/api/set_access_token", methods=["POST"])

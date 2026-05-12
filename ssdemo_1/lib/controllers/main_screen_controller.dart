@@ -333,23 +333,26 @@ class MainScreenController extends ChangeNotifier {
 
   void _rebuildBudgetProgress() {
     final now = DateTime.now();
-    liveBudgetProgress = BudgetService.instance.presetBudgetProgress(
+    liveBudgetProgress = BudgetService.instance
+        .buildZeroLimitProgressFromPresetCategories(
       liveTransactions,
       now,
       false,
       reviewedCategoryByTxId,
     );
-    liveBudgetProgressYear = BudgetService.instance.presetBudgetProgress(
+    liveBudgetProgressYear = BudgetService.instance
+        .buildZeroLimitProgressFromPresetCategories(
       liveTransactions,
       now,
       true,
       reviewedCategoryByTxId,
     );
-    liveBudgetProgressAll = BudgetService.instance.presetBudgetProgressAllTime(
-      liveTransactions,
-      now,
-      reviewedCategoryByTxId,
-    );
+    liveBudgetProgressAll = BudgetService.instance
+        .buildZeroLimitProgressFromPresetCategoriesAllTime(
+          liveTransactions,
+          now,
+          reviewedCategoryByTxId,
+        );
   }
 
   void _notifyListenersSafe() {

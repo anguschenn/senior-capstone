@@ -1,4 +1,4 @@
 class PlaidLinkLauncher {
-  /// Web: Plaid Link is not supported. Return null so the caller shows a message.
+  /// Non-native fallback: return null so the caller can skip Link and use its fallback flow.
   static Future<String?> open(String linkToken) async => null;
 }

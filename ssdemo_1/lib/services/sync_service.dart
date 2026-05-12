@@ -92,7 +92,7 @@ class SyncService {
     final userCategories = await CategoryService.instance.ensureBaseCategories(
       userId,
     );
-    await BudgetService.instance.initializeBudgetsTo500(
+    await BudgetService.instance.ensureMonthlyBudgetRows(
       userCategories,
       monthYear,
       userId,
@@ -256,7 +256,7 @@ class SyncService {
     );
     final effectiveBudgetProgress = budgetProgress.isNotEmpty
         ? budgetProgress
-        : BudgetService.instance.presetBudgetProgress(
+        : BudgetService.instance.buildZeroLimitProgressFromPresetCategories(
             deduped,
             now,
             false,
@@ -264,14 +264,14 @@ class SyncService {
           );
     final effectiveBudgetProgressYear = budgetProgressYear.isNotEmpty
         ? budgetProgressYear
-        : BudgetService.instance.presetBudgetProgress(
+        : BudgetService.instance.buildZeroLimitProgressFromPresetCategories(
             deduped,
             now,
             true,
             effectiveReviewedCategoryByTxId,
           );
     final effectiveBudgetProgressAll = BudgetService.instance
-        .presetBudgetProgressAllTime(
+        .buildZeroLimitProgressFromPresetCategoriesAllTime(
           deduped,
           now,
           effectiveReviewedCategoryByTxId,

@@ -59,13 +59,6 @@ class AiSummaryService {
     return merged;
   }
 
-  bool _isTransferLikeCategory(String category) {
-    final text = category.toLowerCase();
-    return text.contains('transfer') ||
-        text.contains('internal') ||
-        text.contains('payment');
-  }
-
   Map<String, dynamic> _emptyMonthBucket() => {
     'income': 0.0,
     'expenses': 0.0,

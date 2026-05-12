@@ -12,7 +12,7 @@ class BudgetService {
   final _categoryService = CategoryService.instance;
   static const _budgetMonthColumn = 'month_year';
 
-  Future<void> initializeBudgetsTo500(
+  Future<void> ensureMonthlyBudgetRows(
     List<CategoryOption> categories,
     String monthYear,
     String userId,
@@ -225,7 +225,7 @@ class BudgetService {
     return progress;
   }
 
-  List<BudgetCategoryProgress> presetBudgetProgress(
+  List<BudgetCategoryProgress> buildZeroLimitProgressFromPresetCategories(
     List<AppTransaction> txs,
     DateTime now,
     bool yearly,
@@ -259,7 +259,7 @@ class BudgetService {
         .toList();
   }
 
-  List<BudgetCategoryProgress> presetBudgetProgressAllTime(
+  List<BudgetCategoryProgress> buildZeroLimitProgressFromPresetCategoriesAllTime(
     List<AppTransaction> txs,
     DateTime now,
     Map<String, String> reviewedCategoryByTxId,

@@ -63,5 +63,16 @@ CLAUDE.md
 #Python virtual nv
 python/venv/*
 python/.venv/*
+.venv/
+ssdemo_1/.venv/
 python/__pycache__/
 *.pyc
+
+# Python tool caches
+.pytest_cache/
+.ruff_cache/
+python/.pytest_cache/
+python/.ruff_cache/
+
+# Local backup/failed virtual environments
+.venv_py*_broken*/

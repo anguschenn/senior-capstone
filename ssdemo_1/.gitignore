@@ -33,6 +33,7 @@ migrate_working_dir/
 .pub/
 /build/
 /coverage/
+.venv/
 
 # Symbolication related
 app.*.symbols
@@ -50,3 +51,4 @@ app.*.map.json
 /ios/Podfile.lock
 /macos/Podfile
 /macos/Podfile.lock
+/ios/Flutter/*.podspec

@@ -100,7 +100,8 @@ class HomePage extends StatelessWidget {
                   shrinkWrap: true,
                   padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
                   itemCount: monthOptions.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 2),
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(height: 2),
                   itemBuilder: (context, index) {
                     final raw = monthOptions[index];
                     final option = normalizedMonthOption(raw);
@@ -113,8 +114,8 @@ class HomePage extends StatelessWidget {
                       tileColor: isSelected
                           ? Theme.of(
                               context,
-                            ).colorScheme.primary.withOpacity(0.10)
-                          : null,
+                            ).colorScheme.primary.withValues(alpha: 0.10)
+                            : null,
                       title: Text(
                         monthOptionLabel(raw),
                         style: TextStyle(
@@ -167,11 +168,11 @@ class HomePage extends StatelessWidget {
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.black.withOpacity(0.08)),
+        borderSide: BorderSide(color: Colors.black.withValues(alpha: 0.08)),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.black.withOpacity(0.08)),
+        borderSide: BorderSide(color: Colors.black.withValues(alpha: 0.08)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -260,7 +261,7 @@ class HomePage extends StatelessWidget {
                   isExpanded: true,
                   style: selectorValueStyle,
                   icon: const Icon(Icons.keyboard_arrow_down_rounded),
-                  value: selectedAccountId,
+                  initialValue: selectedAccountId,
                   decoration: selectorDecoration,
                   items: [
                     DropdownMenuItem<String>(
