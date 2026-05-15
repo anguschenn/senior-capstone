@@ -157,9 +157,7 @@ class AccountService {
       );
     }
 
-    final optionsWithTx = accountOptions.where((a) => a.txCount > 0).toList();
-    final effective = optionsWithTx.isNotEmpty ? optionsWithTx : accountOptions;
-    effective.sort((a, b) => a.label.compareTo(b.label));
-    return effective;
+    accountOptions.sort((a, b) => a.label.compareTo(b.label));
+    return accountOptions;
   }
 }

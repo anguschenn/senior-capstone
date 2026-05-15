@@ -2,9 +2,10 @@
 
 import re
 from datetime import date as date_cls
+from typing import Optional
 
 
-def selected_month_key(summary: dict | None) -> str:
+def selected_month_key(summary: Optional[dict]) -> str:
     """Resolve selected month from summary.time_anchor with safe fallback."""
     if isinstance(summary, dict):
         time_anchor = summary.get("time_anchor")
@@ -27,7 +28,7 @@ def previous_month_from_anchor(anchor_month_key: str) -> str:
     return f"{year}-{month - 1:02d}"
 
 
-def previous_month_key(summary: dict | None) -> str:
+def previous_month_key(summary: Optional[dict]) -> str:
     """Resolve previous month relative to selected month when available."""
     selected = selected_month_key(summary)
     return previous_month_from_anchor(selected)
