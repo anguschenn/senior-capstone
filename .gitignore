@@ -73,6 +73,7 @@ python/__pycache__/
 .ruff_cache/
 python/.pytest_cache/
 python/.ruff_cache/
+python/.artifacts/
 
 # Local backup/failed virtual environments
 .venv_py*_broken*/

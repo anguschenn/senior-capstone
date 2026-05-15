@@ -40,6 +40,8 @@ PLAID_REDIRECT_URI = _empty_to_none("PLAID_REDIRECT_URI")
 
 # ── AI model providers ───────────────────────────────────────────────
 AI_PROVIDER = (_empty_to_none("AI_PROVIDER") or "ollama").strip().lower()
+# Default to V2 router; keep env override for rollback.
+AI_ROUTER_V2_ENABLED = os.getenv("AI_ROUTER_V2_ENABLED", "1").strip() in {"1", "true", "TRUE"}
 OLLAMA_MODEL = _empty_to_none("OLLAMA_MODEL") or "llama3"
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
 OPENROUTER_API_KEY = _empty_to_none("OPENROUTER_API_KEY")

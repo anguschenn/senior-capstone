@@ -48,7 +48,7 @@ def extract_specific_month_key(message, default_year):
     text = (message or "").lower().strip()
     if not text:
         return ""
-    if "last month" in text:
+    if re.search(r"\b(last|previous|prior|past)\s+mo(?:nth)?\b", text):
         return previous_month_key()
     month_key_match = re.search(r"\b(20\d{2}-\d{2})\b", text)
     if month_key_match:
@@ -188,13 +188,13 @@ def extract_period(text):
         return ("rolling_days", "rolling_7d")
     if re.search(r"\b30d\b", text):
         return ("rolling_30d", "rolling_30d")
-    if re.search(r"\b(this month|current month)\b", text):
+    if re.search(r"\b(this month|current month|this mo)\b", text):
         return ("month", date_cls.today().strftime("%Y-%m"))
-    if re.search(r"\blast month\b", text):
+    if re.search(r"\b(last|previous|prior|past)\s+mo(?:nth)?\b", text):
         return ("month", previous_month_key())
-    if re.search(r"\b(this year|current year)\b", text):
+    if re.search(r"\b(this year|current year|this yr)\b", text):
         return ("year", str(date_cls.today().year))
-    if re.search(r"\blast year\b", text):
+    if re.search(r"\b(last|previous|prior)\s+year\b", text):
         return ("year", previous_year_key())
     month_name = re.search(
         r"\b(jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\b",

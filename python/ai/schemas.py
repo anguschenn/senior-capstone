@@ -15,6 +15,8 @@ def build_chat_response(
     answer_source="llm",
     resolved_query=None,
     missing_fields=None,
+    facts_used=None,
+    period_resolved="",
 ):
     """Normalize chat payload shape returned to Flutter clients."""
     return {
@@ -32,6 +34,8 @@ def build_chat_response(
         "answer_source": answer_source,
         "resolved_query": resolved_query or {},
         "missing_fields": (missing_fields or [])[:8],
+        "facts_used": (facts_used or [])[:12],
+        "period_resolved": period_resolved or "",
         "summary_meta": {
             "tx_count_30d": int(tx_count_30d),
             "summary_empty": bool(summary_empty),

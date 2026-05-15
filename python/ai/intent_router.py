@@ -58,8 +58,23 @@ class IntentRouter:
     WHAT_IF_KEYWORDS = ("what if", "if i", "scenario", "simulate")
     PLANNING_KEYWORDS = ("should", "save", "plan", "goal", "roadmap", "improve")
     GENERAL_ADVISORY_KEYWORDS = ("advice", "how am i doing", "help me")
-    TOP_CATEGORY_KEYWORDS = ("top category", "highest category", "most category")
-    RECENT_TX_KEYWORDS = ("recent transactions", "latest transactions", "recent activity")
+    TOP_CATEGORY_KEYWORDS = (
+        "top category",
+        "highest category",
+        "most category",
+        "top spend category",
+        "spent most on",
+        "spend most on",
+        "#1 spend category",
+    )
+    RECENT_TX_KEYWORDS = (
+        "recent transactions",
+        "latest transactions",
+        "recent activity",
+        "latest activity",
+        "recent purchases",
+        "last few transactions",
+    )
     AMOUNT_QUERY_HINTS = ("how much", "amount", "total", "spend", "spent", "spending")
     ADVICE_OR_REASON_KEYWORDS = (
         "why",
@@ -89,23 +104,38 @@ class IntentRouter:
             (r"\bspeend\b", "spend"),
             (r"\bspnd\b", "spend"),
             (r"\bspenging\b", "spending"),
+            (r"\bspeding\b", "spending"),
+            (r"\bspendng\b", "spending"),
             (r"\bexpnses?\b", "expenses"),
             (r"\btranactions\b", "transactions"),
             (r"\btransctions\b", "transactions"),
+            (r"\btransections\b", "transactions"),
+            (r"\btransacations\b", "transactions"),
             (r"\bcategroy\b", "category"),
+            (r"\bcategry\b", "category"),
+            (r"\bcatgeory\b", "category"),
+            (r"\blst\b", "last"),
             (r"\banalyst\b", "analyze"),
             (r"\banlyze\b", "analyze"),
             (r"\banalyis\b", "analysis"),
             (r"\byr\b", "year"),
             (r"\bwk\b", "week"),
             (r"\bmo\b", "month"),
+            (r"\b(last|previous|prior|past)\s+mo\b", r"\1 month"),
+            (r"\b(previous|prior|past)\s+month\b", "last month"),
             (r"\btx\b", "transactions"),
             (r"\btxns\b", "transactions"),
             (r"\bpls\b", "please"),
             (r"\bthx\b", "thanks"),
+            (r"\bwanna\b", "want to"),
+            (r"\bgonna\b", "going to"),
+            (r"\bur\b", "your"),
+            (r"\bu\b", "you"),
         ]
         for pattern, repl in replacements:
             normalized = re.sub(pattern, repl, normalized)
+        # Remove noisy punctuation/emojis while preserving date separators.
+        normalized = re.sub(r"[^a-z0-9\s\-/#]", " ", normalized)
         normalized = re.sub(r"\s+", " ", normalized).strip()
         return normalized
 
@@ -275,6 +305,31 @@ class IntentRouter:
         )
 
         if (
+            (
+                self._contains_any(text, self.COMPARE_KEYWORDS)
+                or "month over month" in text
+                or "month-over-month" in text
+                or bool(re.search(r"\bmom\b", text))
+                or bool(re.search(r"\bbetween\s+20\d{2}-\d{2}\s+and\s+20\d{2}-\d{2}\b", text))
+                or bool(re.search(r"\bfrom\s+20\d{2}-\d{2}\s+to\s+20\d{2}-\d{2}\b", text))
+            )
+            and self._has_subject_signal(text, metric, period_type)
+            and not has_multiple_clauses
+        ):
+            if period_type == "month_range" and period_key:
+                return self._build_rule_result(
+                    intent="compare_periods",
+                    confidence=1.0,
+                    response_mode="hybrid",
+                    entities=self._base_entities(
+                        metric="expenses",
+                        period_type=period_type,
+                        period_key=period_key,
+                    ),
+                    candidates=["compare_periods", "general"],
+                )
+
+        if (
             self._contains_any(text, self.WHAT_IF_KEYWORDS)
             and self._has_subject_signal(text, metric, period_type)
             and not has_multiple_clauses
@@ -323,7 +378,7 @@ class IntentRouter:
             )
 
         if (
-            any(k in text for k in self.RECENT_TX_KEYWORDS)
+            (any(k in text for k in self.RECENT_TX_KEYWORDS) or "what did i spend on recently" in text)
             and not has_advice_or_reason
             and not has_multiple_clauses
         ):
@@ -344,6 +399,8 @@ class IntentRouter:
         if (
             (
                 any(k in text for k in self.TOP_CATEGORY_KEYWORDS)
+                or re.search(r"\b(highest|top|biggest|largest|most)\b.*\bcategory\b", text)
+                or re.search(r"\bcategory\b.*\b(highest|top|biggest|largest|most)\b", text)
                 or (("top" in text or "most" in text or "highest" in text) and "category" in text)
             )
             and not has_advice_or_reason

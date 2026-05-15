@@ -15,6 +15,9 @@ class AiChatResponse {
     this.citations = const [],
     this.contextSource = '',
     this.intent = '',
+    this.answerSource = '',
+    this.factsUsed = const [],
+    this.periodResolved = const <String, dynamic>{},
   });
 
   final String copy;
@@ -23,12 +26,16 @@ class AiChatResponse {
   final List<String> citations;
   final String contextSource;
   final String intent;
+  final String answerSource;
+  final List<String> factsUsed;
+  final Map<String, dynamic> periodResolved;
 
   factory AiChatResponse.fromJson(Map<String, dynamic> json) {
     final mainText = (json['reply'] ?? json['copy'] ?? '').toString();
     final insights = _parseStringList(json['insights'] ?? json['why']);
     final actions = _parseStringList(json['actions'] ?? json['next_actions']);
     final citations = _parseStringList(json['citations']);
+    final factsUsed = _parseFlexibleStringList(json['facts_used']);
     return AiChatResponse(
       copy: _normalizeMainText(mainText),
       insights: insights,
@@ -36,6 +43,9 @@ class AiChatResponse {
       citations: citations,
       contextSource: json['context_source']?.toString() ?? '',
       intent: json['intent']?.toString() ?? '',
+      answerSource: json['answer_source']?.toString() ?? '',
+      factsUsed: factsUsed,
+      periodResolved: _parseStringKeyedMap(json['period_resolved']),
     );
   }
 }
@@ -165,6 +175,38 @@ List<String> _parseStringList(dynamic raw) {
       .take(6)
       .map((s) => s.trim())
       .toList();
+}
+
+List<String> _parseFlexibleStringList(dynamic raw) {
+  if (raw is! List) return const [];
+  final result = <String>[];
+  for (final item in raw) {
+    if (item is String) {
+      final text = item.trim();
+      if (text.isNotEmpty) result.add(text);
+      continue;
+    }
+    if (item is Map) {
+      final pairs = item.entries
+          .where((entry) => entry.key.toString().trim().isNotEmpty)
+          .map((entry) => '${entry.key}: ${entry.value}')
+          .join(', ')
+          .trim();
+      if (pairs.isNotEmpty) result.add(pairs);
+    }
+  }
+  return result.take(12).toList();
+}
+
+Map<String, dynamic> _parseStringKeyedMap(dynamic raw) {
+  if (raw is! Map) return const <String, dynamic>{};
+  final parsed = <String, dynamic>{};
+  for (final entry in raw.entries) {
+    final key = entry.key.toString().trim();
+    if (key.isEmpty) continue;
+    parsed[key] = entry.value;
+  }
+  return parsed;
 }
 
 double _toDouble(dynamic value) {

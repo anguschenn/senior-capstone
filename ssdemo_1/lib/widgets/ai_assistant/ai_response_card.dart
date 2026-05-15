@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../models/ai/ai_models.dart';
 
@@ -9,6 +10,10 @@ class AiResponseCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasDebugData =
+        response.answerSource.trim().isNotEmpty ||
+        response.factsUsed.isNotEmpty ||
+        response.periodResolved.isNotEmpty;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -83,6 +88,55 @@ class AiResponseCard extends StatelessWidget {
                 ),
               ),
             ),
+          ],
+          if (kDebugMode && hasDebugData) ...[
+            const SizedBox(height: 10),
+            const Divider(height: 1),
+            const SizedBox(height: 8),
+            Text(
+              'Debug',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: Colors.black.withValues(alpha: 0.5),
+              ),
+            ),
+            if (response.answerSource.trim().isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  'source: ${response.answerSource}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.black.withValues(alpha: 0.65),
+                    height: 1.25,
+                  ),
+                ),
+              ),
+            if (response.periodResolved.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  'period: ${response.periodResolved}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.black.withValues(alpha: 0.65),
+                    height: 1.25,
+                  ),
+                ),
+              ),
+            if (response.factsUsed.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  'facts: ${response.factsUsed.join(' | ')}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.black.withValues(alpha: 0.65),
+                    height: 1.25,
+                  ),
+                ),
+              ),
           ],
         ],
       ),

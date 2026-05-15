@@ -1,0 +1,17 @@
+[
+  {"prompt": "why did my spending increase last month", "intent": "explain", "source": "deterministic"},
+  {"prompt": "what caused my spending to go up previous month", "intent": "explain", "source": "deterministic"},
+  {"prompt": "top category last month", "intent": "top_category_lookup", "source": "deterministic"},
+  {"prompt": "show my #1 spend category last month", "intent": "top_category_lookup", "source": "deterministic"},
+  {"prompt": "show latest transactions", "intent": "recent_transactions", "source": "deterministic"},
+  {"prompt": "what did i spend on recently", "intent": "recent_transactions", "source": "deterministic"},
+  {"prompt": "compare 2026-03 vs 2026-04", "intent": "compare_periods", "source": "deterministic"},
+  {"prompt": "month over month from 2026-03 to 2026-04", "intent": "compare_periods", "source": "deterministic"},
+  {"prompt": "how much did i spend this month", "intent": "amount_lookup", "source": "deterministic"},
+  {"prompt": "how much did i spend prior year", "intent": "amount_lookup", "source": "deterministic"},
+  {"prompt": "why did my speding increase lst month", "intent": "explain", "source": "deterministic"},
+  {"prompt": "show latest transections", "intent": "recent_transactions", "source": "deterministic"},
+  {"prompt": "wanna know why ur spending increased last month", "intent": "explain", "source": "deterministic"},
+  {"prompt": "compare 2026-03 vs 2026-04... pls", "intent": "compare_periods", "source": "deterministic"},
+  {"prompt": "How much last month?", "intent": "general", "source": "clarification"}
+]
