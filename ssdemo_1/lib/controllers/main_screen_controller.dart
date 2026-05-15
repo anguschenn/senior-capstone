@@ -335,18 +335,18 @@ class MainScreenController extends ChangeNotifier {
     final now = DateTime.now();
     liveBudgetProgress = BudgetService.instance
         .buildZeroLimitProgressFromPresetCategories(
-      liveTransactions,
-      now,
-      false,
-      reviewedCategoryByTxId,
-    );
+          liveTransactions,
+          now,
+          false,
+          reviewedCategoryByTxId,
+        );
     liveBudgetProgressYear = BudgetService.instance
         .buildZeroLimitProgressFromPresetCategories(
-      liveTransactions,
-      now,
-      true,
-      reviewedCategoryByTxId,
-    );
+          liveTransactions,
+          now,
+          true,
+          reviewedCategoryByTxId,
+        );
     liveBudgetProgressAll = BudgetService.instance
         .buildZeroLimitProgressFromPresetCategoriesAllTime(
           liveTransactions,

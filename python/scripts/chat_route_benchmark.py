@@ -63,6 +63,7 @@ def _ask(svc: ChatService, prompt: str) -> dict[str, Any]:
         user_id="benchmark-user",
     )
 
+
 def _load_dataset(path: str) -> list[dict[str, str]]:
     dataset_path = Path(path)
     rows = json.loads(dataset_path.read_text(encoding="utf-8"))
@@ -82,7 +83,9 @@ def _load_dataset(path: str) -> list[dict[str, str]]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run English chat-route benchmark and print summary metrics.")
+    parser = argparse.ArgumentParser(
+        description="Run English chat-route benchmark and print summary metrics."
+    )
     parser.add_argument("--router-v2", choices=["0", "1"], default="1")
     parser.add_argument("--min-intent-accuracy", type=float, default=0.95)
     parser.add_argument("--min-answer-source-accuracy", type=float, default=0.95)
@@ -121,11 +124,25 @@ def main() -> None:
         if actual_intent == row["intent"]:
             intent_ok += 1
         else:
-            misses.append({"prompt": row["prompt"], "field": "intent", "expected": row["intent"], "actual": actual_intent})
+            misses.append(
+                {
+                    "prompt": row["prompt"],
+                    "field": "intent",
+                    "expected": row["intent"],
+                    "actual": actual_intent,
+                }
+            )
         if actual_source == row["source"]:
             source_ok += 1
         else:
-            misses.append({"prompt": row["prompt"], "field": "answer_source", "expected": row["source"], "actual": actual_source})
+            misses.append(
+                {
+                    "prompt": row["prompt"],
+                    "field": "answer_source",
+                    "expected": row["source"],
+                    "actual": actual_source,
+                }
+            )
         if actual_source.startswith("deterministic"):
             deterministic += 1
         if actual_source == "clarification":

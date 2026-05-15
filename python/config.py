@@ -6,9 +6,9 @@ import threading
 import certifi
 from dotenv import load_dotenv
 
-os.environ['SSL_CERT_FILE'] = certifi.where()
-os.environ.setdefault('SSL_CERT_FILE', certifi.where())
-os.environ.setdefault('REQUESTS_CA_BUNDLE', certifi.where())
+os.environ["SSL_CERT_FILE"] = certifi.where()
+os.environ.setdefault("SSL_CERT_FILE", certifi.where())
+os.environ.setdefault("REQUESTS_CA_BUNDLE", certifi.where())
 
 # Ensure project-local python/.env values win over inherited shell variables.
 # This avoids accidental overrides from global env placeholders (e.g. SUPABASE_KEY=placeholder_key).
@@ -34,8 +34,12 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 PLAID_CLIENT_ID = os.getenv("PLAID_CLIENT_ID")
 PLAID_SECRET = os.getenv("PLAID_SECRET")
 PLAID_ENV = os.getenv("PLAID_ENV", "sandbox")
-PLAID_PRODUCTS = [p.strip() for p in os.getenv("PLAID_PRODUCTS", "transactions").split(",") if p.strip()]
-PLAID_COUNTRY_CODES = [c.strip() for c in os.getenv("PLAID_COUNTRY_CODES", "US").split(",") if c.strip()]
+PLAID_PRODUCTS = [
+    p.strip() for p in os.getenv("PLAID_PRODUCTS", "transactions").split(",") if p.strip()
+]
+PLAID_COUNTRY_CODES = [
+    c.strip() for c in os.getenv("PLAID_COUNTRY_CODES", "US").split(",") if c.strip()
+]
 PLAID_REDIRECT_URI = _empty_to_none("PLAID_REDIRECT_URI")
 
 # ── AI model providers ───────────────────────────────────────────────

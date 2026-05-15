@@ -115,7 +115,7 @@ class HomePage extends StatelessWidget {
                           ? Theme.of(
                               context,
                             ).colorScheme.primary.withValues(alpha: 0.10)
-                            : null,
+                          : null,
                       title: Text(
                         monthOptionLabel(raw),
                         style: TextStyle(

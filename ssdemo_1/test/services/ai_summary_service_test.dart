@@ -97,9 +97,27 @@ void main() {
     test('warnings include sparse and transfer-like noise when applicable', () {
       final now = DateTime.now();
       final transactions = [
-        _tx(id: 't1', date: now.subtract(const Duration(days: 1)), amount: 20, category: 'Transfer'),
-        _tx(id: 't2', date: now.subtract(const Duration(days: 1)), amount: 25, category: 'Transfer'),
-        _tx(id: 't3', date: now.subtract(const Duration(days: 2)), amount: 30, category: 'Transfer'),
+        _tx(
+          id: 't1',
+          date: now.subtract(const Duration(days: 1)),
+          amount: 20,
+          category: 'Transfer',
+          name: 'Transfer to savings',
+        ),
+        _tx(
+          id: 't2',
+          date: now.subtract(const Duration(days: 1)),
+          amount: 25,
+          category: 'Transfer',
+          name: 'Transfer to savings',
+        ),
+        _tx(
+          id: 't3',
+          date: now.subtract(const Duration(days: 2)),
+          amount: 30,
+          category: 'Transfer',
+          name: 'Transfer to savings',
+        ),
         _tx(id: 't4', date: now.subtract(const Duration(days: 2)), amount: 10, category: 'Food'),
       ];
       final result = AiSummaryService.instance.build(

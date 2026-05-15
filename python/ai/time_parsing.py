@@ -96,7 +96,9 @@ def extract_month_range_keys(message, default_year):
     if first_n:
         count = max(2, min(12, int(first_n.group(1))))
         year_match = re.search(r"\b(20\d{2})\b", text)
-        year = int(year_match.group(1)) if year_match else int(default_year or date_cls.today().year)
+        year = (
+            int(year_match.group(1)) if year_match else int(default_year or date_cls.today().year)
+        )
         return [f"{year}-{m:02d}" for m in range(1, count + 1)]
 
     return []

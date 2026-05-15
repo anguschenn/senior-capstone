@@ -20,7 +20,9 @@ def _load_jsonl(path: Path):
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Print trend summary from chat-route benchmark history JSONL.")
+    parser = argparse.ArgumentParser(
+        description="Print trend summary from chat-route benchmark history JSONL."
+    )
     parser.add_argument(
         "--history-jsonl",
         default=".artifacts/chat_route_benchmark_history.jsonl",
@@ -43,13 +45,14 @@ def main() -> None:
     print(f"entries={len(rows)} showing_last={len(tail_rows)}")
     print(
         "latest "
-        f"ts={latest.get('timestamp_utc','')} "
+        f"ts={latest.get('timestamp_utc', '')} "
         f"intent_accuracy={latest.get('intent_accuracy')} "
         f"answer_source_accuracy={latest.get('answer_source_accuracy')} "
         f"deterministic_rate={latest.get('deterministic_rate')} "
         f"clarification_rate={latest.get('clarification_rate')}"
     )
     if prev:
+
         def delta(key):
             a = float(latest.get(key, 0) or 0)
             b = float(prev.get(key, 0) or 0)

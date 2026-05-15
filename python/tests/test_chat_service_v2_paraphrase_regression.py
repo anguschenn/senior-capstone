@@ -173,7 +173,11 @@ class TestChatServiceV2ParaphraseRegression(unittest.TestCase):
         cases = [
             ("pls show latest transactions", "recent_transactions", "deterministic"),
             ("wanna know why ur spending increased last month", "explain", "deterministic"),
-            ("what category did u spend most on last month", "top_category_lookup", "deterministic"),
+            (
+                "what category did u spend most on last month",
+                "top_category_lookup",
+                "deterministic",
+            ),
             ("gonna compare 2026-03 vs 2026-04", "compare_periods", "deterministic"),
         ]
         for prompt, expected_intent, expected_source in cases:

@@ -39,9 +39,7 @@ def parse_query_v2(message, summary):
         scope = clamp_str(summary.get("scope", ""), 32) or "unknown"
 
     has_spending = (
-        ("spending" in text)
-        or ("expenses" in text)
-        or bool(re.search(r"\bspend(ing)?\b", text))
+        ("spending" in text) or ("expenses" in text) or bool(re.search(r"\bspend(ing)?\b", text))
     )
     has_change = any(
         token in text
@@ -160,9 +158,9 @@ def parse_query_v2(message, summary):
             "last few transactions",
         )
     )
-    has_recent_spend_pattern = bool(
-        re.search(r"\bwhat did i spend on recently\b", text)
-    ) or bool(re.search(r"\bshow my last few transactions\b", text))
+    has_recent_spend_pattern = bool(re.search(r"\bwhat did i spend on recently\b", text)) or bool(
+        re.search(r"\bshow my last few transactions\b", text)
+    )
     if has_recent_tx_phrase or has_recent_spend_pattern:
         return QuerySpec(
             task_type="recent_transactions",
@@ -172,7 +170,9 @@ def parse_query_v2(message, summary):
             scope=scope,
         )
 
-    if ("this month" in text or "current month" in text) and ("spending" in text or "expenses" in text):
+    if ("this month" in text or "current month" in text) and (
+        "spending" in text or "expenses" in text
+    ):
         return QuerySpec(
             task_type="amount_lookup",
             metric="expenses",
@@ -185,7 +185,9 @@ def parse_query_v2(message, summary):
             task_type="amount_lookup",
             metric="expenses",
             period_type="year",
-            period_key=str(int((summary or {}).get("time_anchor", {}).get("selected_year", 0) or 0) - 1)
+            period_key=str(
+                int((summary or {}).get("time_anchor", {}).get("selected_year", 0) or 0) - 1
+            )
             if isinstance(summary, dict)
             else "",
             scope=scope,

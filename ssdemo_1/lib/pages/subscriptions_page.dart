@@ -26,7 +26,9 @@ class SubscriptionsPage extends StatelessWidget {
             style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
-          Text('${subscriptions.length} recurring charge${subscriptions.length == 1 ? '' : 's'} detected'),
+          Text(
+            '${subscriptions.length} recurring charge${subscriptions.length == 1 ? '' : 's'} detected',
+          ),
           const SizedBox(height: 16),
 
           // Monthly total summary card

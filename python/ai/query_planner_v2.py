@@ -46,4 +46,6 @@ def build_execution_plan_v2(query_spec, summary):
             required_fields=(),
             notes=(),
         )
-    return ExecutionPlan(mode="llm", operation="free_form", required_datasets=(), required_fields=())
+    return ExecutionPlan(
+        mode="llm", operation="free_form", required_datasets=(), required_fields=()
+    )

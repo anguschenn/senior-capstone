@@ -299,10 +299,13 @@ class AiSummaryService {
         );
         expenseTxCountAll += 1;
 
+        if (isTransferLikeForAnalysis) {
+          transferLikeExpenseTxCount += 1;
+        }
+
         // Exclude transfer/payment-like outflows from spending math so
         // "expenses" aligns with user-facing discretionary spend.
         if (isTransferLikeForTotals) {
-          transferLikeExpenseTxCount += 1;
           continue;
         }
 

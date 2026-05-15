@@ -1,16 +1,17 @@
-import re
 import os
+import re
 from datetime import date as date_cls
 
 from config import AI_ROUTER_V2_ENABLED
+
 from .explainers import build_chat_prompt
 from .intent_router import IntentRouter
 from .parsers import extract_json_object
+from .query_executors_v2 import execute_plan_v2
 from .query_parser_v2 import parse_query_v2
 from .query_planner_v2 import build_execution_plan_v2
-from .query_executors_v2 import execute_plan_v2
-from .schemas import build_chat_response
 from .response_validator_v2 import validate_v2_response
+from .schemas import build_chat_response
 from .time_parsing import (
     MONTH_NAME_TO_NUM,
     extract_month_range_keys,
@@ -21,6 +22,8 @@ from .time_parsing import (
 )
 from .time_scope_resolver import (
     previous_month_key as resolve_previous_month_key,
+)
+from .time_scope_resolver import (
     selected_month_key as resolve_selected_month_key,
 )
 from .validators import clamp_str, sanitize_history, sanitize_spending_summary
@@ -776,8 +779,7 @@ class ChatService:
         if not text:
             return False
         has_income = any(
-            token in text
-            for token in ("income", "earn", "earned", "salary", "paycheck", "revenue")
+            token in text for token in ("income", "earn", "earned", "salary", "paycheck", "revenue")
         )
         has_spend = bool(re.search(r"\bspend(ing)?\b", text)) or ("expense" in text)
         return has_income and has_spend
@@ -791,7 +793,12 @@ class ChatService:
         if self._has_amount_metric_conflict(message):
             return False
         # Require explicit, valid period phrase to avoid over-promoting vague/invalid prompts.
-        if "last month" in text or "this month" in text or "last year" in text or "this year" in text:
+        if (
+            "last month" in text
+            or "this month" in text
+            or "last year" in text
+            or "this year" in text
+        ):
             return True
         if re.search(r"\b20\d{2}-\d{2}\b", text):
             return True
@@ -1536,8 +1543,6 @@ class ChatService:
             "category_spending",
         }
         query_complete = self._is_query_complete(query_spec, intent)
-        metric = clamp_str((query_spec or {}).get("metric", ""), 24)
-        metric_ready = metric in {"expenses", "income", "net"}
         if mode == "deterministic" and not query_complete:
             return "clarification"
         if mode == "llm" and intent in factual_intents and query_complete:
@@ -1587,7 +1592,11 @@ class ChatService:
         if period_type == "month_range" and intent in {"amount_lookup", "top_category_lookup"}:
             keys = [x.strip() for x in period_key.split(",") if x.strip()]
             return len(keys) >= 2
-        if period_type == "month_range" and intent == "compare_periods" and self._router_v2_enabled():
+        if (
+            period_type == "month_range"
+            and intent == "compare_periods"
+            and self._router_v2_enabled()
+        ):
             keys = [x.strip() for x in period_key.split(",") if x.strip()]
             return len(keys) >= 2
         if intent == "compare_periods":
@@ -1716,8 +1725,10 @@ class ChatService:
         text = clamp_str(message or "", 4000).lower()
         if not text:
             return None
-        has_spending = ("spending" in text) or ("expenses" in text) or bool(
-            re.search(r"\bspend(ing)?\b", text)
+        has_spending = (
+            ("spending" in text)
+            or ("expenses" in text)
+            or bool(re.search(r"\bspend(ing)?\b", text))
         )
         if not has_spending:
             return None
@@ -1742,7 +1753,15 @@ class ChatService:
         )
         has_causal_signal = any(
             token in text
-            for token in ("why", "caused", "cause", "what changed", "what drove", "how come", "reason")
+            for token in (
+                "why",
+                "caused",
+                "cause",
+                "what changed",
+                "what drove",
+                "how come",
+                "reason",
+            )
         )
         if not (has_change_signal or has_causal_signal):
             return None
@@ -1773,7 +1792,9 @@ class ChatService:
     def _spending_change_anchor(self, summary, query_spec):
         if not isinstance(summary, dict):
             return ""
-        month_index = summary.get("month_index") if isinstance(summary.get("month_index"), dict) else {}
+        month_index = (
+            summary.get("month_index") if isinstance(summary.get("month_index"), dict) else {}
+        )
         if not month_index:
             return ""
         spec = query_spec if isinstance(query_spec, dict) else {}
@@ -1806,8 +1827,12 @@ class ChatService:
             f"for {self._scope_label(summary)} by about ${abs(delta):.0f} "
             f"(${last_exp:.0f} vs ${prev_exp:.0f})."
         )
-        last_top = last_row.get("top_category") if isinstance(last_row.get("top_category"), dict) else {}
-        prev_top = prev_row.get("top_category") if isinstance(prev_row.get("top_category"), dict) else {}
+        last_top = (
+            last_row.get("top_category") if isinstance(last_row.get("top_category"), dict) else {}
+        )
+        prev_top = (
+            prev_row.get("top_category") if isinstance(prev_row.get("top_category"), dict) else {}
+        )
         last_top_name = clamp_str(last_top.get("name", ""), 64)
         prev_top_name = clamp_str(prev_top.get("name", ""), 64)
         last_top_amt = float(last_top.get("amount", 0) or 0)
@@ -1864,7 +1889,9 @@ class ChatService:
         rm_model = clamp_str(model_response_mode or "", 24) or "none"
         rm_intent = clamp_str(fallback_mode or "", 24) or "none"
         rm_final = clamp_str(mode or "", 24) or "none"
-        mode_effective = "deterministic" if str(answer_source).startswith("deterministic") else rm_final
+        mode_effective = (
+            "deterministic" if str(answer_source).startswith("deterministic") else rm_final
+        )
         mode_overridden = mode_effective != rm_final
         print(
             "[ai.chat.route] "
@@ -1946,9 +1973,7 @@ class ChatService:
         if should_promote_amount:
             fallback_spec = self._extract_query_spec(message, summary, "amount_lookup")
             merged_fallback = self._merge_query_spec(fallback_spec, entities)
-            if (
-                self._is_query_complete(merged_fallback, "amount_lookup")
-            ):
+            if self._is_query_complete(merged_fallback, "amount_lookup"):
                 query_spec = merged_fallback
                 intent = "amount_lookup"
                 intent_source = "rule"
@@ -2021,8 +2046,10 @@ class ChatService:
         )
         if mode == "clarification" and not normalized_spending_change:
             should_clarify = True
-        if (not normalized_spending_change) and should_clarify and (
-            intent_source == "llm" or clarification_question or mode != "llm"
+        if (
+            (not normalized_spending_change)
+            and should_clarify
+            and (intent_source == "llm" or clarification_question or mode != "llm")
         ):
             if not clarification_question:
                 clarification_question = self._build_clarification_question(intent, query_spec)

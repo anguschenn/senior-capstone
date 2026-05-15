@@ -92,6 +92,7 @@ class IntentRouter:
         "plan",
         "what if",
     )
+
     def __init__(self, classify_with_llm=None):
         self.classify_with_llm = classify_with_llm
 
@@ -378,7 +379,10 @@ class IntentRouter:
             )
 
         if (
-            (any(k in text for k in self.RECENT_TX_KEYWORDS) or "what did i spend on recently" in text)
+            (
+                any(k in text for k in self.RECENT_TX_KEYWORDS)
+                or "what did i spend on recently" in text
+            )
             and not has_advice_or_reason
             and not has_multiple_clauses
         ):

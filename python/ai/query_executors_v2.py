@@ -69,7 +69,9 @@ def _exec_spending_change(query_spec, summary, scope_label):
         )
     return {
         "reply": reply,
-        "insights": ["This compares the target month versus the prior month using validated month indexes."],
+        "insights": [
+            "This compares the target month versus the prior month using validated month indexes."
+        ],
         "actions": ["Ask for a category-by-category delta if you want a deeper breakdown."],
         "missing_fields": [],
         "facts_used": ["month_index.expenses", "month_index.top_category"],
@@ -123,7 +125,9 @@ def _lookup_period_expense(period, summary):
         row = year_index.get(period)
         if isinstance(row, dict):
             return float(row.get("expenses", 0) or 0), "year"
-        annual = summary.get("annual_summary") if isinstance(summary.get("annual_summary"), dict) else {}
+        annual = (
+            summary.get("annual_summary") if isinstance(summary.get("annual_summary"), dict) else {}
+        )
         annual_year = str(int(annual.get("year", 0) or 0))
         if annual_year == period:
             totals = annual.get("totals") if isinstance(annual.get("totals"), dict) else {}
@@ -173,13 +177,19 @@ def _exec_top_category(query_spec, summary, scope_label):
                         f"For {period_key}, the top category for {scope_label} "
                         f"is {name} at about ${amount:.0f}."
                     ),
-                    "insights": ["Top-category answer is read directly from validated summary indexes."],
-                    "actions": ["Ask a follow-up for day-level transactions in that category if needed."],
+                    "insights": [
+                        "Top-category answer is read directly from validated summary indexes."
+                    ],
+                    "actions": [
+                        "Ask a follow-up for day-level transactions in that category if needed."
+                    ],
                     "missing_fields": [],
                     "facts_used": ["month_index.top_category"],
                     "period_resolved": period_key,
                 }
-    annual = summary.get("annual_summary") if isinstance(summary.get("annual_summary"), dict) else {}
+    annual = (
+        summary.get("annual_summary") if isinstance(summary.get("annual_summary"), dict) else {}
+    )
     annual_cats = (
         annual.get("top_expense_categories_year")
         if isinstance(annual.get("top_expense_categories_year"), list)
@@ -192,8 +202,12 @@ def _exec_top_category(query_spec, summary, scope_label):
         if name and amount > 0:
             return {
                 "reply": f"In the yearly summary for {scope_label}, the top category is {name} at about ${amount:.0f}.",
-                "insights": ["Top-category answer is read directly from validated summary indexes."],
-                "actions": ["Ask a follow-up for day-level transactions in that category if needed."],
+                "insights": [
+                    "Top-category answer is read directly from validated summary indexes."
+                ],
+                "actions": [
+                    "Ask a follow-up for day-level transactions in that category if needed."
+                ],
                 "missing_fields": [],
                 "facts_used": ["annual_summary.top_expense_categories_year"],
                 "period_resolved": "year",
@@ -210,8 +224,12 @@ def _exec_top_category(query_spec, summary, scope_label):
         if name and amount > 0:
             return {
                 "reply": f"In the last 30 days for {scope_label}, the top category is {name} at about ${amount:.0f}.",
-                "insights": ["Top-category answer is read directly from validated summary indexes."],
-                "actions": ["Ask a follow-up for day-level transactions in that category if needed."],
+                "insights": [
+                    "Top-category answer is read directly from validated summary indexes."
+                ],
+                "actions": [
+                    "Ask a follow-up for day-level transactions in that category if needed."
+                ],
                 "missing_fields": [],
                 "facts_used": ["top_expense_categories"],
                 "period_resolved": "rolling_30d",
@@ -220,7 +238,11 @@ def _exec_top_category(query_spec, summary, scope_label):
 
 
 def _exec_recent_transactions(summary, scope_label):
-    recent = summary.get("recent_transactions") if isinstance(summary.get("recent_transactions"), list) else []
+    recent = (
+        summary.get("recent_transactions")
+        if isinstance(summary.get("recent_transactions"), list)
+        else []
+    )
     if not recent:
         return None
     rows = []

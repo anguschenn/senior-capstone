@@ -33,7 +33,6 @@ from config import (
 from plaid_sync import (
     IdentityStateError,
     client,
-    get_stored_item_credentials,
     poll_with_retries,
     pretty_print_response,
     products,
@@ -116,7 +115,9 @@ def info():
 def create_link_token():
     try:
         if not PLAID_CLIENT_ID or not PLAID_SECRET:
-            return jsonify({"error": "Missing Plaid credentials: PLAID_CLIENT_ID/PLAID_SECRET"}), 500
+            return jsonify(
+                {"error": "Missing Plaid credentials: PLAID_CLIENT_ID/PLAID_SECRET"}
+            ), 500
         if not PLAID_PRODUCTS:
             return jsonify({"error": "Missing Plaid configuration: PLAID_PRODUCTS"}), 500
         if not PLAID_COUNTRY_CODES:
@@ -195,7 +196,13 @@ def set_access_token():
 
 
 def _first_access_token(user_id: str) -> str:
-    items = supabase.table("plaid_items").select("id,access_token").eq("user_id", user_id).limit(1).execute()
+    items = (
+        supabase.table("plaid_items")
+        .select("id,access_token")
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+    )
     if not items.data or not items.data[0].get("access_token"):
         raise IdentityStateError(IdentityStateError.STORED_ITEM_NOT_FOUND, "No linked items")
     return items.data[0]["access_token"]
@@ -222,17 +229,21 @@ def get_transactions():
     started_at = time.time()
     try:
         user_id = require_supabase_user_id()
-        items = supabase.table("plaid_items").select("id,access_token").eq("user_id", user_id).execute()
+        items = (
+            supabase.table("plaid_items").select("id,access_token").eq("user_id", user_id).execute()
+        )
         if not items.data:
             raise IdentityStateError(IdentityStateError.STORED_ITEM_NOT_FOUND, "No linked items")
         totals = {"added": 0, "modified": 0, "removed": 0}
+        sync_stats = {"added": 0, "modified": 0, "removed": 0}
         for item in items.data:
             access_token = item.get("access_token")
             if not access_token:
                 continue
-            stats = sync_transactions_to_supabase(user_id, item["id"], access_token)
+            item_stats = sync_transactions_to_supabase(user_id, item["id"], access_token)
+            sync_stats = item_stats
             for k in totals:
-                totals[k] += stats[k]
+                totals[k] += item_stats[k]
         current_app.config["snapshot_service"].invalidate(user_id)
         print(f"Sync complete for user {user_id}: {totals}")
 
@@ -248,7 +259,7 @@ def get_transactions():
             {
                 "latest_transactions": rows,
                 "transactions": rows,
-                "sync": {**stats, "duration_ms": elapsed_ms},
+                "sync": {**sync_stats, "duration_ms": elapsed_ms},
             }
         )
     except UserAuthError as error:

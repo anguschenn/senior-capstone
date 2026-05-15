@@ -259,7 +259,8 @@ class BudgetService {
         .toList();
   }
 
-  List<BudgetCategoryProgress> buildZeroLimitProgressFromPresetCategoriesAllTime(
+  List<BudgetCategoryProgress>
+  buildZeroLimitProgressFromPresetCategoriesAllTime(
     List<AppTransaction> txs,
     DateTime now,
     Map<String, String> reviewedCategoryByTxId,

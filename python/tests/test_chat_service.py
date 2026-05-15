@@ -1,5 +1,5 @@
-import unittest
 import os
+import unittest
 from datetime import date as date_cls
 
 os.environ["AI_ROUTER_V2_ENABLED"] = "0"
@@ -320,9 +320,14 @@ class TestChatServiceContract(unittest.TestCase):
                     {"prompt": prompt, "history": [], "spending_summary": summary},
                     user_id="demo-user",
                 )
-                self.assertIn(response["answer_source"], {expected_answer_source, "deterministic", "hybrid", "clarification", "llm"})
+                self.assertIn(
+                    response["answer_source"],
+                    {expected_answer_source, "deterministic", "hybrid", "clarification", "llm"},
+                )
                 self.assertTrue(str(response.get("intent", "")).strip())
-                self.assertTrue(str(response.get("resolved_query", {}).get("period_type", "")).strip())
+                self.assertTrue(
+                    str(response.get("resolved_query", {}).get("period_type", "")).strip()
+                )
 
     def test_edge_cases_end_to_end_routing_contract_batch_2(self):
         service = self._service_with_reply(
@@ -370,9 +375,14 @@ class TestChatServiceContract(unittest.TestCase):
                     {"prompt": prompt, "history": [], "spending_summary": summary},
                     user_id="demo-user",
                 )
-                self.assertIn(response["answer_source"], {expected_answer_source, "deterministic", "hybrid", "clarification", "llm"})
+                self.assertIn(
+                    response["answer_source"],
+                    {expected_answer_source, "deterministic", "hybrid", "clarification", "llm"},
+                )
                 self.assertTrue(str(response.get("intent", "")).strip())
-                self.assertTrue(str(response.get("resolved_query", {}).get("period_type", "")).strip())
+                self.assertTrue(
+                    str(response.get("resolved_query", {}).get("period_type", "")).strip()
+                )
 
     def test_edge_cases_end_to_end_routing_contract_batch_3(self):
         service = self._service_with_reply(
@@ -399,9 +409,14 @@ class TestChatServiceContract(unittest.TestCase):
                     {"prompt": prompt, "history": [], "spending_summary": summary},
                     user_id="demo-user",
                 )
-                self.assertIn(response["answer_source"], {expected_answer_source, "deterministic", "hybrid", "clarification", "llm"})
+                self.assertIn(
+                    response["answer_source"],
+                    {expected_answer_source, "deterministic", "hybrid", "clarification", "llm"},
+                )
                 self.assertTrue(str(response.get("intent", "")).strip())
-                self.assertTrue(str(response.get("resolved_query", {}).get("period_type", "")).strip())
+                self.assertTrue(
+                    str(response.get("resolved_query", {}).get("period_type", "")).strip()
+                )
 
     def test_real_user_prompt_regression_baseline(self):
         service = self._service_with_reply(
@@ -441,9 +456,14 @@ class TestChatServiceContract(unittest.TestCase):
                     {"prompt": prompt, "history": [], "spending_summary": summary},
                     user_id="demo-user",
                 )
-                self.assertIn(response["answer_source"], {expected_answer_source, "deterministic", "hybrid", "clarification", "llm"})
+                self.assertIn(
+                    response["answer_source"],
+                    {expected_answer_source, "deterministic", "hybrid", "clarification", "llm"},
+                )
                 self.assertTrue(str(response.get("intent", "")).strip())
-                self.assertTrue(str(response.get("resolved_query", {}).get("period_type", "")).strip())
+                self.assertTrue(
+                    str(response.get("resolved_query", {}).get("period_type", "")).strip()
+                )
                 self.assertTrue(str(response.get("reply", "")).strip())
 
     def test_real_user_prompt_regression_baseline_batch_2(self):
@@ -478,9 +498,14 @@ class TestChatServiceContract(unittest.TestCase):
                     {"prompt": prompt, "history": [], "spending_summary": summary},
                     user_id="demo-user",
                 )
-                self.assertIn(response["answer_source"], {expected_answer_source, "deterministic", "hybrid", "clarification", "llm"})
+                self.assertIn(
+                    response["answer_source"],
+                    {expected_answer_source, "deterministic", "hybrid", "clarification", "llm"},
+                )
                 self.assertTrue(str(response.get("intent", "")).strip())
-                self.assertTrue(str(response.get("resolved_query", {}).get("period_type", "")).strip())
+                self.assertTrue(
+                    str(response.get("resolved_query", {}).get("period_type", "")).strip()
+                )
                 self.assertTrue(str(response.get("reply", "")).strip())
 
     def test_chat_returns_structured_contract_on_json_reply(self):
@@ -1006,7 +1031,9 @@ class TestChatServiceContract(unittest.TestCase):
             "spending_summary": self._summary_fixture(),
         }
         response = service.handle_chat(payload, user_id="demo-user")
-        self.assertIn(response["answer_source"], {"hybrid", "clarification", "deterministic", "llm"})
+        self.assertIn(
+            response["answer_source"], {"hybrid", "clarification", "deterministic", "llm"}
+        )
 
     def test_clarification_threshold_behavior(self):
         summary = self._summary_fixture()
@@ -1276,12 +1303,22 @@ class TestChatServiceContract(unittest.TestCase):
                 {"clarification", "deterministic"},
                 {"unknown", "rolling_days"},
             ),
-            ("last 30 days spending", {"amount_lookup"}, {"deterministic", "hybrid"}, {"rolling_30d"}),
+            (
+                "last 30 days spending",
+                {"amount_lookup"},
+                {"deterministic", "hybrid"},
+                {"rolling_30d"},
+            ),
             ("last 30 day spend", {"amount_lookup"}, {"hybrid", "deterministic"}, {"rolling_30d"}),
             ("last30d spending", {"amount_lookup"}, {"deterministic", "hybrid"}, {"rolling_30d"}),
             ("How much did I spend last monthne", {"general"}, {"clarification"}, {"unknown"}),
             ("how much i spend this month? income", {"general"}, {"clarification"}, {"unknown"}),
-            ("which month did I spend the most this year?", {"month_overview"}, {"llm", "deterministic"}, {"year"}),
+            (
+                "which month did I spend the most this year?",
+                {"month_overview"},
+                {"llm", "deterministic"},
+                {"year"},
+            ),
         ]
         for prompt, expected_intents, expected_answer_sources, expected_period_types in cases:
             with self.subTest(prompt=prompt):

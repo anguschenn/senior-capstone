@@ -83,7 +83,9 @@ def get_stored_item_credentials(user_id: str, plaid_item_id: str) -> tuple[str, 
 def save_accounts_to_supabase(user_id: str, plaid_item_id: str, plaid_access_token: str) -> int:
     response = client.accounts_get(AccountsGetRequest(access_token=plaid_access_token)).to_dict()
     accounts = response.get("accounts", [])
-    print(f"[plaid] accounts_get returned {len(accounts)} account(s): {[(a.get('name'), str(a.get('type')), str(a.get('subtype'))) for a in accounts]}")
+    print(
+        f"[plaid] accounts_get returned {len(accounts)} account(s): {[(a.get('name'), str(a.get('type')), str(a.get('subtype'))) for a in accounts]}"
+    )
 
     rows = []
     for account in accounts:
