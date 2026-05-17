@@ -139,6 +139,8 @@ class _MainScreenState extends State<MainScreen> {
           0,
           (sum, item) => sum + item.amount,
         ),
+        onConfirm: c.confirmSubscription,
+        onDismiss: c.dismissSubscription,
       ),
     };
 

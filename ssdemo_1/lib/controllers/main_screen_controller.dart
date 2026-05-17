@@ -6,6 +6,7 @@ import '../services/auth_service.dart';
 import '../services/budget_service.dart';
 import '../services/category_service.dart';
 import '../services/plaid_service.dart';
+import '../services/subscription_service.dart';
 import '../services/sync_service.dart';
 import '../utils/app_helpers.dart';
 
@@ -57,6 +58,29 @@ class MainScreenController extends ChangeNotifier {
 
   void selectAccount(String accountId) {
     selectedAccountId = accountId;
+    _notifyListenersSafe();
+  }
+
+  Future<void> confirmSubscription(String id) async {
+    await SubscriptionService.instance.confirm(id);
+    liveSubscriptions = liveSubscriptions
+        .map((s) => s.id == id
+            ? DetectedSubscription(
+                id: s.id,
+                merchant: s.merchant,
+                amount: s.amount,
+                nextChargeDate: s.nextChargeDate,
+                frequency: s.frequency,
+                needsConfirmation: false,
+              )
+            : s)
+        .toList();
+    _notifyListenersSafe();
+  }
+
+  Future<void> dismissSubscription(String id) async {
+    await SubscriptionService.instance.dismiss(id);
+    liveSubscriptions = liveSubscriptions.where((s) => s.id != id).toList();
     _notifyListenersSafe();
   }
 

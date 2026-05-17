@@ -106,8 +106,9 @@ class SyncService {
 
     final subscriptionRows = await AppSupabase.client
         .from('subscriptions')
-        .select('id,merchant_name,amount,next_charge_date,frequency')
+        .select('id,merchant_name,amount,next_charge_date,frequency,needs_confirmation')
         .eq('user_id', userId)
+        .eq('is_active', true)
         .order('next_charge_date', ascending: true)
         .limit(500);
 
@@ -200,10 +201,12 @@ class SyncService {
       if (!subSeen.add(dedupeKey)) continue;
       dbSubscriptions.add(
         DetectedSubscription(
+          id: (row['id'] as String?) ?? '',
           merchant: merchant,
           amount: amount.abs(),
           nextChargeDate: nextDate,
           frequency: frequency,
+          needsConfirmation: row['needs_confirmation'] == true,
         ),
       );
     }

@@ -39,6 +39,7 @@ from plaid_sync import (
     save_accounts_to_supabase,
     sync_transactions_to_supabase,
 )
+from subscription_detector import detect_and_upsert_subscriptions
 from supabase_repo import supabase
 
 plaid_bp = Blueprint("plaid", __name__)
@@ -246,6 +247,12 @@ def get_transactions():
                 totals[k] += item_stats[k]
         current_app.config["snapshot_service"].invalidate(user_id)
         print(f"Sync complete for user {user_id}: {totals}")
+
+        try:
+            sub_stats = detect_and_upsert_subscriptions(user_id)
+            print(f"Subscription detection for user {user_id}: {sub_stats}")
+        except Exception as sub_error:
+            print(f"Subscription detection warning for user {user_id}: {sub_error}")
 
         rows = []
         try:

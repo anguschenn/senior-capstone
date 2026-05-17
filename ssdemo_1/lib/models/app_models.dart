@@ -232,16 +232,20 @@ enum _TxDirection { income, expense, unknown }
 // Lightweight subscription model shown in dashboard and subscription views.
 class DetectedSubscription {
   const DetectedSubscription({
+    required this.id,
     required this.merchant,
     required this.amount,
     required this.nextChargeDate,
     required this.frequency,
+    this.needsConfirmation = false,
   });
 
+  final String id;
   final String merchant;
   final double amount;
   final DateTime nextChargeDate;
   final String frequency;
+  final bool needsConfirmation;
 }
 
 // Aggregated summary metrics shown across multiple pages.
