@@ -84,7 +84,7 @@ class _MainScreenState extends State<MainScreen> {
         subscriptions: visibleSubscriptions.take(3).toList(),
         monthlySubscriptionTotal: visibleSubscriptions.fold<double>(
           0,
-          (sum, item) => sum + item.amount,
+          (sum, item) => sum + item.monthlyEquivalent,
         ),
         stats: visibleStats,
         syncing: c.syncing,
@@ -143,7 +143,7 @@ class _MainScreenState extends State<MainScreen> {
         subscriptions: visibleSubscriptions,
         monthlyTotal: visibleSubscriptions.fold<double>(
           0,
-          (sum, item) => sum + item.amount,
+          (sum, item) => sum + item.monthlyEquivalent,
         ),
         onConfirm: c.confirmSubscription,
         onDismiss: c.dismissSubscription,
