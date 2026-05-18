@@ -246,6 +246,17 @@ class DetectedSubscription {
   final DateTime nextChargeDate;
   final String frequency;
   final bool needsConfirmation;
+
+  double get monthlyEquivalent {
+    switch (frequency) {
+      case 'weekly':
+        return amount * 52 / 12;
+      case 'annual':
+        return amount / 12;
+      default:
+        return amount;
+    }
+  }
 }
 
 // Aggregated summary metrics shown across multiple pages.
