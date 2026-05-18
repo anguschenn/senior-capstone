@@ -138,31 +138,31 @@ def ai_suggest_category():
         transaction_name = clamp_str(body.get("transaction_name", ""), 256) or ""
         pfc_primary = clamp_str(body.get("pfc_primary", ""), 128) or ""
         pfc_detailed = clamp_str(body.get("pfc_detailed", ""), 128) or ""
-        
+
         if not merchant_name and not transaction_name:
             return jsonify({"error": "merchant_name or transaction_name required"}), 400
-        
+
         # Build prompt for category suggestion
         context = f"Merchant: {merchant_name}\nDescription: {transaction_name}"
         if pfc_primary:
             context += f"\nPFC Primary: {pfc_primary}"
         if pfc_detailed:
             context += f"\nPFC Detailed: {pfc_detailed}"
-        
+
         prompt = (
             f"Based on this transaction, suggest a single best category name (2-3 words). "
             f"Return ONLY the category name, nothing else.\n\n{context}"
         )
-        
+
         # Get suggestion from LLM
         reply = current_app.config["chat_service"].generate_reply(
             prompt=prompt,
             history=[],
             spending_summary={},
         )
-        
+
         suggested_category = reply.strip() if reply else ""
-        
+
         return jsonify({
             "suggested_category": suggested_category,
             "merchant_name": merchant_name,
