@@ -142,6 +142,29 @@ class AiBudgetSuggestionResponse {
   }
 }
 
+class AiCategorySuggestionResponse {
+  const AiCategorySuggestionResponse({
+    required this.suggestedCategory,
+    required this.merchantName,
+    required this.transactionName,
+    required this.contextSource,
+  });
+
+  final String suggestedCategory;
+  final String merchantName;
+  final String transactionName;
+  final String contextSource;
+
+  factory AiCategorySuggestionResponse.fromJson(Map<String, dynamic> json) {
+    return AiCategorySuggestionResponse(
+      suggestedCategory: (json['suggested_category'] ?? '').toString().trim(),
+      merchantName: (json['merchant_name'] ?? '').toString().trim(),
+      transactionName: (json['transaction_name'] ?? '').toString().trim(),
+      contextSource: (json['context_source'] ?? 'ai_suggestion').toString(),
+    );
+  }
+}
+
 String _normalizeMainText(String value) {
   var text = value.replaceAll('\r\n', '\n').replaceAll('\r', '\n').trim();
   text = text.replaceFirst(RegExp("^[`\"']+"), '');

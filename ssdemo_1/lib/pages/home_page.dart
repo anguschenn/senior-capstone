@@ -31,6 +31,9 @@ class HomePage extends StatelessWidget {
     required this.onAccountChanged,
     required this.onTransactionCategorySelected,
     required this.onReviewConfirm,
+    this.aiCategorySuggestUri,
+    this.apiKey,
+    this.accessToken,
   });
 
   final List<AppTransaction> transactions;
@@ -56,6 +59,9 @@ class HomePage extends StatelessWidget {
   final void Function(AppTransaction tx, String category)
   onTransactionCategorySelected;
   final Future<void> Function(String txId) onReviewConfirm;
+  final Uri? aiCategorySuggestUri;
+  final String? apiKey;
+  final String? accessToken;
 
   Future<void> _showMonthPicker(BuildContext context) async {
     final normalizedSelected = normalizedMonthOption(selectedMonth);
@@ -403,6 +409,9 @@ class HomePage extends StatelessWidget {
                               selectedCategory: effectiveCategory,
                               onSelected: (category) =>
                                   onTransactionCategorySelected(tx, category),
+                              aiBackendUri: aiCategorySuggestUri,
+                              apiKey: apiKey,
+                              accessToken: accessToken,
                             );
                           },
                     child: TransactionCategoryTag(
@@ -487,6 +496,9 @@ class HomePage extends StatelessWidget {
                                         tx,
                                         category,
                                       ),
+                                  aiBackendUri: aiCategorySuggestUri,
+                                  apiKey: apiKey,
+                                  accessToken: accessToken,
                                 );
                               },
                               child: TransactionCategoryTag(

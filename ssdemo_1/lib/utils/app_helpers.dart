@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../constants/app_constants.dart';
 import '../models/app_models.dart';
+import '../services/ai_api_client.dart';
 
 // Re-export formatters so existing imports keep working.
 export 'formatters.dart';
@@ -229,6 +230,9 @@ Future<void> showTransactionCategoryPicker({
   required AppTransaction tx,
   required String selectedCategory,
   required void Function(String category) onSelected,
+  Uri? aiBackendUri,
+  String? apiKey,
+  String? accessToken,
 }) async {
   await showModalBottomSheet<void>(
     context: context,
@@ -248,14 +252,93 @@ Future<void> showTransactionCategoryPicker({
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
-                children: kReviewCategories.map((category) {
-                  final isSelected = selectedCategory == category;
-                  final tone = colorForDetailedCategory(category);
-                  return InkWell(
+                children: [
+                  ...kReviewCategories.map((category) {
+                    final isSelected = selectedCategory == category;
+                    final tone = colorForDetailedCategory(category);
+                    return InkWell(
+                      borderRadius: BorderRadius.circular(999),
+                      onTap: () {
+                        onSelected(category);
+                        Navigator.of(sheetContext).pop();
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? tone.withValues(alpha: 0.16)
+                              : Colors.white,
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: isSelected ? tone : Colors.black12,
+                          ),
+                        ),
+                        child: Text(
+                          category,
+                          style: TextStyle(
+                            color: isSelected ? tone : Colors.black87,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                  if (aiBackendUri != null && apiKey != null)
+                    InkWell(
+                      borderRadius: BorderRadius.circular(999),
+                      onTap: () async {
+                        Navigator.of(sheetContext).pop();
+                        await _askAiForCategory(
+                          context: context,
+                          tx: tx,
+                          aiBackendUri: aiBackendUri,
+                          apiKey: apiKey,
+                          accessToken: accessToken,
+                          onSelected: onSelected,
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: Colors.purple,
+                            width: 1.5,
+                          ),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.auto_awesome, size: 14, color: Colors.purple),
+                            SizedBox(width: 4),
+                            Text(
+                              'Ask AI',
+                              style: TextStyle(
+                                color: Colors.purple,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  InkWell(
                     borderRadius: BorderRadius.circular(999),
                     onTap: () {
-                      onSelected(category);
                       Navigator.of(sheetContext).pop();
+                      _showCustomCategoryDialog(
+                        context: context,
+                        onCustomCategoryEntered: onSelected,
+                      );
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(
@@ -263,25 +346,31 @@ Future<void> showTransactionCategoryPicker({
                         vertical: 5,
                       ),
                       decoration: BoxDecoration(
-                        color: isSelected
-                            ? tone.withValues(alpha: 0.16)
-                            : Colors.white,
+                        color: Colors.white,
                         borderRadius: BorderRadius.circular(999),
                         border: Border.all(
-                          color: isSelected ? tone : Colors.black12,
+                          color: Colors.green,
+                          width: 1.5,
                         ),
                       ),
-                      child: Text(
-                        category,
-                        style: TextStyle(
-                          color: isSelected ? tone : Colors.black87,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 12,
-                        ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.add, size: 14, color: Colors.green),
+                          SizedBox(width: 4),
+                          Text(
+                            'Custom',
+                            style: TextStyle(
+                              color: Colors.green,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  );
-                }).toList(),
+                  ),
+                ],
               ),
             ],
           ),
@@ -290,3 +379,228 @@ Future<void> showTransactionCategoryPicker({
     },
   );
 }
+
+Future<void> _askAiForCategory({
+  required BuildContext context,
+  required AppTransaction tx,
+  required Uri aiBackendUri,
+  required String apiKey,
+  String? accessToken,
+  required void Function(String category) onSelected,
+}) async {
+  try {
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => const AlertDialog(
+        content: SizedBox(
+          width: 200,
+          height: 80,
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Asking AI...'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    // Fetch suggestion
+    final suggestion = await AiApiClient().suggestCategory(
+      uri: aiBackendUri,
+      apiKey: apiKey,
+      accessToken: accessToken,
+      merchantName: tx.rawMerchantName.isNotEmpty
+          ? tx.rawMerchantName
+          : tx.name,
+      transactionName: tx.name,
+      pfcPrimary: tx.rawPfcPrimary,
+      pfcDetailed: tx.category,
+    );
+
+    // Close loading dialog
+    Navigator.of(context).pop();
+
+    if (suggestion.suggestedCategory.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not generate category suggestion'),
+        ),
+      );
+      return;
+    }
+
+    // Show approval dialog
+    String? selectedCategory;
+    await showAiCategorySuggestionDialog(
+      context: context,
+      suggestedCategory: suggestion.suggestedCategory,
+      transactionName: tx.name,
+      onAccept: (category) {
+        selectedCategory = category;
+      },
+    );
+
+    if (selectedCategory != null && selectedCategory!.isNotEmpty) {
+      onSelected(selectedCategory!);
+    }
+  } catch (e) {
+    Navigator.of(context).pop(); // Close loading dialog if still open
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('AI error: ${e.toString()}'),
+      ),
+    );
+  }
+}
+
+Future<void> _showCustomCategoryDialog({
+  required BuildContext context,
+  required void Function(String category) onCustomCategoryEntered,
+}) async {
+  final controller = TextEditingController();
+  
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) {
+      return AlertDialog(
+        title: const Text('Create Custom Category'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            hintText: 'Enter category name',
+            border: OutlineInputBorder(),
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              final categoryName = controller.text.trim();
+              if (categoryName.isNotEmpty) {
+                Navigator.of(dialogContext).pop();
+                onCustomCategoryEntered(categoryName);
+              }
+            },
+            child: const Text('Create'),
+          ),
+        ],
+      );
+    },
+  );
+  controller.dispose();
+}
+
+Future<void> showAiCategorySuggestionDialog({
+  required BuildContext context,
+  required String suggestedCategory,
+  required String transactionName,
+  required void Function(String category) onAccept,
+}) async {
+  final editController = TextEditingController(text: suggestedCategory);
+  bool isEditingCategory = false;
+
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: const Text('AI Suggested Category'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'For: $transactionName',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if (!isEditingCategory)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Suggested:',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.blue),
+                        ),
+                        child: Text(
+                          suggestedCategory,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.blue,
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  TextField(
+                    controller: editController,
+                    decoration: const InputDecoration(
+                      hintText: 'Edit category name',
+                      border: OutlineInputBorder(),
+                    ),
+                    autofocus: true,
+                  ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => setState(() => isEditingCategory = !isEditingCategory),
+                child: Text(isEditingCategory ? 'Cancel Edit' : 'Edit'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Reject'),
+              ),
+              TextButton(
+                onPressed: () {
+                  final categoryToUse = isEditingCategory
+                      ? editController.text.trim()
+                      : suggestedCategory;
+                  if (categoryToUse.isNotEmpty) {
+                    Navigator.of(dialogContext).pop();
+                    onAccept(categoryToUse);
+                  }
+                },
+                child: const Text('Accept'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+  editController.dispose();
+}
+

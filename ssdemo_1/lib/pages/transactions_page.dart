@@ -15,6 +15,9 @@ class TransactionsPage extends StatefulWidget {
     required this.onMonthChanged,
     required this.reviewedCategoryByTxId,
     required this.onTransactionCategorySelected,
+    this.aiCategorySuggestUri,
+    this.apiKey,
+    this.accessToken,
   });
 
   final List<AppTransaction> transactions;
@@ -25,6 +28,9 @@ class TransactionsPage extends StatefulWidget {
   final Map<String, String> reviewedCategoryByTxId;
   final void Function(AppTransaction tx, String category)
   onTransactionCategorySelected;
+  final Uri? aiCategorySuggestUri;
+  final String? apiKey;
+  final String? accessToken;
 
   @override
   State<TransactionsPage> createState() => _TransactionsPageState();
@@ -291,6 +297,9 @@ class _TransactionsPageState extends State<TransactionsPage> {
                                               tx,
                                               category,
                                             ),
+                                        aiBackendUri: widget.aiCategorySuggestUri,
+                                        apiKey: widget.apiKey,
+                                        accessToken: widget.accessToken,
                                       );
                                     },
                               child: TransactionCategoryTag(

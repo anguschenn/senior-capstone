@@ -104,6 +104,9 @@ class _MainScreenState extends State<MainScreen> {
         onMonthChanged: c.selectMonth,
         onTransactionCategorySelected: c.onTransactionCategorySelected,
         onReviewConfirm: c.confirmReviewedCategory,
+        aiCategorySuggestUri: ApiConfig.instance.aiCategorySuggestUri,
+        apiKey: EnvConfig.instance.backendApiKey,
+        accessToken: AuthService.instance.currentAccessToken,
       ),
       1 => CashFlowPage(
         transactions: visibleTransactions,
@@ -119,6 +122,9 @@ class _MainScreenState extends State<MainScreen> {
         onMonthChanged: c.selectMonth,
         reviewedCategoryByTxId: c.reviewedCategoryByTxId,
         onTransactionCategorySelected: c.onTransactionCategorySelected,
+        aiCategorySuggestUri: ApiConfig.instance.aiCategorySuggestUri,
+        apiKey: EnvConfig.instance.backendApiKey,
+        accessToken: AuthService.instance.currentAccessToken,
       ),
       3 => BudgetPage(
         stats: visibleStats,

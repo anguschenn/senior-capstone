@@ -62,6 +62,29 @@ class AiApiClient {
     return AiBudgetSuggestionResponse.fromJson(parsed);
   }
 
+  Future<AiCategorySuggestionResponse> suggestCategory({
+    required Uri uri,
+    required String apiKey,
+    String? accessToken,
+    required String merchantName,
+    required String transactionName,
+    String pfcPrimary = '',
+    String pfcDetailed = '',
+  }) async {
+    final parsed = await _postJson(
+      uri: uri,
+      apiKey: apiKey,
+      accessToken: accessToken,
+      body: {
+        'merchant_name': merchantName,
+        'transaction_name': transactionName,
+        'pfc_primary': pfcPrimary,
+        'pfc_detailed': pfcDetailed,
+      },
+    );
+    return AiCategorySuggestionResponse.fromJson(parsed);
+  }
+
   Future<Map<String, dynamic>> _postJson({
     required Uri uri,
     required String apiKey,
