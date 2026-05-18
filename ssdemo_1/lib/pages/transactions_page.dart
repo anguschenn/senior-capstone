@@ -297,7 +297,8 @@ class _TransactionsPageState extends State<TransactionsPage> {
                                               tx,
                                               category,
                                             ),
-                                        aiBackendUri: widget.aiCategorySuggestUri,
+                                        aiBackendUri:
+                                            widget.aiCategorySuggestUri,
                                         apiKey: widget.apiKey,
                                         accessToken: widget.accessToken,
                                       );

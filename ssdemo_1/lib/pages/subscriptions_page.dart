@@ -74,11 +74,13 @@ class SubscriptionsPage extends StatelessWidget {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
-            ...pending.map((sub) => _PendingSubscriptionCard(
-                  sub: sub,
-                  onConfirm: () => onConfirm(sub.id),
-                  onDismiss: () => onDismiss(sub.id),
-                )),
+            ...pending.map(
+              (sub) => _PendingSubscriptionCard(
+                sub: sub,
+                onConfirm: () => onConfirm(sub.id),
+                onDismiss: () => onDismiss(sub.id),
+              ),
+            ),
             const SizedBox(height: 16),
           ],
 
@@ -132,8 +134,11 @@ class _PendingSubscriptionCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.help_outline,
-                    size: 18, color: colorScheme.onSecondaryContainer),
+                Icon(
+                  Icons.help_outline,
+                  size: 18,
+                  color: colorScheme.onSecondaryContainer,
+                ),
                 const SizedBox(width: 6),
                 Text(
                   'Is this a subscription?',
@@ -151,7 +156,9 @@ class _PendingSubscriptionCard extends StatelessWidget {
                 Text(
                   sub.merchant,
                   style: const TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w600),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 Text(formatMoney(sub.amount, signed: false)),
               ],
@@ -159,7 +166,9 @@ class _PendingSubscriptionCard extends StatelessWidget {
             Text(
               'Renews ${shortDate(sub.nextChargeDate)} • ${sub.frequency}',
               style: TextStyle(
-                  fontSize: 13, color: colorScheme.onSecondaryContainer),
+                fontSize: 13,
+                color: colorScheme.onSecondaryContainer,
+              ),
             ),
             const SizedBox(height: 8),
             Row(

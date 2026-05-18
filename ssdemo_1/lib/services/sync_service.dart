@@ -106,7 +106,9 @@ class SyncService {
 
     final subscriptionRows = await AppSupabase.client
         .from('subscriptions')
-        .select('id,merchant_name,amount,next_charge_date,frequency,needs_confirmation')
+        .select(
+          'id,merchant_name,amount,next_charge_date,frequency,needs_confirmation',
+        )
         .eq('user_id', userId)
         .eq('is_active', true)
         .order('next_charge_date', ascending: true)

@@ -64,16 +64,18 @@ class MainScreenController extends ChangeNotifier {
   Future<void> confirmSubscription(String id) async {
     await SubscriptionService.instance.confirm(id);
     liveSubscriptions = liveSubscriptions
-        .map((s) => s.id == id
-            ? DetectedSubscription(
-                id: s.id,
-                merchant: s.merchant,
-                amount: s.amount,
-                nextChargeDate: s.nextChargeDate,
-                frequency: s.frequency,
-                needsConfirmation: false,
-              )
-            : s)
+        .map(
+          (s) => s.id == id
+              ? DetectedSubscription(
+                  id: s.id,
+                  merchant: s.merchant,
+                  amount: s.amount,
+                  nextChargeDate: s.nextChargeDate,
+                  frequency: s.frequency,
+                  needsConfirmation: false,
+                )
+              : s,
+        )
         .toList();
     _notifyListenersSafe();
   }

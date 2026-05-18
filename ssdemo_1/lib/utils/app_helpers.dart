@@ -309,15 +309,16 @@ Future<void> showTransactionCategoryPicker({
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(999),
-                          border: Border.all(
-                            color: Colors.purple,
-                            width: 1.5,
-                          ),
+                          border: Border.all(color: Colors.purple, width: 1.5),
                         ),
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.auto_awesome, size: 14, color: Colors.purple),
+                            Icon(
+                              Icons.auto_awesome,
+                              size: 14,
+                              color: Colors.purple,
+                            ),
                             SizedBox(width: 4),
                             Text(
                               'Ask AI',
@@ -348,10 +349,7 @@ Future<void> showTransactionCategoryPicker({
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(999),
-                        border: Border.all(
-                          color: Colors.green,
-                          width: 1.5,
-                        ),
+                        border: Border.all(color: Colors.green, width: 1.5),
                       ),
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
@@ -429,9 +427,7 @@ Future<void> _askAiForCategory({
 
     if (suggestion.suggestedCategory.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not generate category suggestion'),
-        ),
+        const SnackBar(content: Text('Could not generate category suggestion')),
       );
       return;
     }
@@ -452,11 +448,9 @@ Future<void> _askAiForCategory({
     }
   } catch (e) {
     Navigator.of(context).pop(); // Close loading dialog if still open
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('AI error: ${e.toString()}'),
-      ),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('AI error: ${e.toString()}')));
   }
 }
 
@@ -465,7 +459,7 @@ Future<void> _showCustomCategoryDialog({
   required void Function(String category) onCustomCategoryEntered,
 }) async {
   final controller = TextEditingController();
-  
+
   await showDialog<void>(
     context: context,
     builder: (dialogContext) {
@@ -523,10 +517,7 @@ Future<void> showAiCategorySuggestionDialog({
               children: [
                 Text(
                   'For: $transactionName',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey,
-                  ),
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
                 ),
                 const SizedBox(height: 16),
                 if (!isEditingCategory)
@@ -576,7 +567,8 @@ Future<void> showAiCategorySuggestionDialog({
             ),
             actions: [
               TextButton(
-                onPressed: () => setState(() => isEditingCategory = !isEditingCategory),
+                onPressed: () =>
+                    setState(() => isEditingCategory = !isEditingCategory),
                 child: Text(isEditingCategory ? 'Cancel Edit' : 'Edit'),
               ),
               TextButton(
@@ -603,4 +595,3 @@ Future<void> showAiCategorySuggestionDialog({
   );
   editController.dispose();
 }
-
