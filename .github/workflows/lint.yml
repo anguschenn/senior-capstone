@@ -31,6 +31,10 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+      # pubspec.yaml declares .env as an asset, but .env is gitignored because it
+      # holds secrets. Without a placeholder, `flutter analyze` reports
+      # asset_does_not_exist as a warning and fails the job on every commit.
+      - run: touch .env
       - run: flutter pub get
       - run: dart format --set-exit-if-changed lib/
       - run: flutter analyze --no-fatal-infos

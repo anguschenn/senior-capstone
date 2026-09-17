@@ -24,25 +24,74 @@ _GRACE_DAYS = {"weekly": 3, "monthly": 7, "annual": 14}
 # Everything NOT in this set will be flagged for user confirmation.
 _KNOWN_SUBSCRIPTION_MERCHANTS = {
     # Music & podcasts
-    "spotify", "apple music", "tidal", "deezer", "youtube music", "amazon music",
+    "spotify",
+    "apple music",
+    "tidal",
+    "deezer",
+    "youtube music",
+    "amazon music",
     # Video streaming
-    "netflix", "hulu", "disney", "hbo max", "apple tv", "peacock", "paramount",
-    "youtube premium", "amazon prime", "crunchyroll", "mubi",
+    "netflix",
+    "hulu",
+    "disney",
+    "hbo max",
+    "apple tv",
+    "peacock",
+    "paramount",
+    "youtube premium",
+    "amazon prime",
+    "crunchyroll",
+    "mubi",
     # AI & software
-    "openai", "claude ai", "anthropic", "github", "github copilot",
-    "adobe", "microsoft", "google one", "google workspace",
-    "dropbox", "notion", "figma", "canva", "slack", "zoom", "loom",
-    "1password", "lastpass", "dashlane", "nordvpn", "expressvpn",
+    "openai",
+    "claude ai",
+    "anthropic",
+    "github",
+    "github copilot",
+    "adobe",
+    "microsoft",
+    "google one",
+    "google workspace",
+    "dropbox",
+    "notion",
+    "figma",
+    "canva",
+    "slack",
+    "zoom",
+    "loom",
+    "1password",
+    "lastpass",
+    "dashlane",
+    "nordvpn",
+    "expressvpn",
     # Fitness & health
-    "puregym", "planet fitness", "peloton", "strava", "myfitnesspal",
-    "calm", "headspace", "noom",
+    "puregym",
+    "planet fitness",
+    "peloton",
+    "strava",
+    "myfitnesspal",
+    "calm",
+    "headspace",
+    "noom",
     # Gaming
-    "xbox", "playstation", "nintendo", "ea play", "ubisoft",
+    "xbox",
+    "playstation",
+    "nintendo",
+    "ea play",
+    "ubisoft",
     # News & reading
-    "new york times", "washington post", "the guardian", "medium",
-    "kindle unlimited", "audible",
+    "new york times",
+    "washington post",
+    "the guardian",
+    "medium",
+    "kindle unlimited",
+    "audible",
     # Utilities & finance
-    "icloud", "google drive", "onedrive", "amazon web services", "aws",
+    "icloud",
+    "google drive",
+    "onedrive",
+    "amazon web services",
+    "aws",
 }
 
 
@@ -108,13 +157,15 @@ def _detect_from_rows(tx_rows):
             continue
         if amount <= 0:
             continue
-        groups[(account_id, norm)].append((
-            charge_date,
-            amount,
-            raw_merchant.strip(),
-            (tx.get("pfc_primary") or "").strip(),
-            (tx.get("pfc_detailed") or "").strip(),
-        ))
+        groups[(account_id, norm)].append(
+            (
+                charge_date,
+                amount,
+                raw_merchant.strip(),
+                (tx.get("pfc_primary") or "").strip(),
+                (tx.get("pfc_detailed") or "").strip(),
+            )
+        )
 
     candidates = []
     for (account_id, norm_merchant), charges in groups.items():
@@ -144,15 +195,17 @@ def _detect_from_rows(tx_rows):
 
         pfc_detaileds = [c[4] for c in charges]
 
-        candidates.append({
-            "account_id": account_id or None,
-            "norm_merchant": norm_merchant,
-            "merchant_name": charges[-1][2] or norm_merchant,
-            "amount": round(avg_amount, 2),
-            "frequency": frequency,
-            "next_charge_date": _next_charge_date(dates[-1], frequency).isoformat(),
-            "needs_confirmation": _needs_confirmation(norm_merchant, pfc_detaileds),
-        })
+        candidates.append(
+            {
+                "account_id": account_id or None,
+                "norm_merchant": norm_merchant,
+                "merchant_name": charges[-1][2] or norm_merchant,
+                "amount": round(avg_amount, 2),
+                "frequency": frequency,
+                "next_charge_date": _next_charge_date(dates[-1], frequency).isoformat(),
+                "needs_confirmation": _needs_confirmation(norm_merchant, pfc_detaileds),
+            }
+        )
     return candidates
 
 
@@ -184,7 +237,7 @@ def _mark_stale_subscriptions(user_id, tx_rows):
             pass
 
     deactivated = 0
-    for sub in (active_resp.data or []):
+    for sub in active_resp.data or []:
         try:
             expected = dt.date.fromisoformat(sub.get("next_charge_date") or "")
         except ValueError:
@@ -203,16 +256,14 @@ def _mark_stale_subscriptions(user_id, tx_rows):
         window_end = expected + dt.timedelta(days=grace)
 
         found = any(
-            acc == acc_key
-            and nm == norm_merchant
-            and window_start <= d <= window_end
+            acc == acc_key and nm == norm_merchant and window_start <= d <= window_end
             for (acc, nm, d) in tx_lookup
         )
 
         if not found:
-            supabase.table("subscriptions").update(
-                {"is_active": False}
-            ).eq("id", sub["id"]).execute()
+            supabase.table("subscriptions").update({"is_active": False}).eq(
+                "id", sub["id"]
+            ).execute()
             deactivated += 1
 
     return deactivated
@@ -255,7 +306,7 @@ def detect_and_upsert_subscriptions(user_id):
     )
     existing_by_key = {}
     user_confirmed_keys = set()
-    for row in (existing_resp.data or []):
+    for row in existing_resp.data or []:
         acc = (row.get("plaid_account_id") or "").strip()
         norm = _normalize_merchant(row.get("merchant_name") or "")
         key = (acc, norm)

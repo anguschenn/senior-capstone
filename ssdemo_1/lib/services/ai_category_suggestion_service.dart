@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../core/config/supabase_client.dart';
-import '../models/ai/ai_models.dart';
 import '../models/app_models.dart';
 import '../utils/app_helpers.dart';
 import 'ai_api_client.dart';
