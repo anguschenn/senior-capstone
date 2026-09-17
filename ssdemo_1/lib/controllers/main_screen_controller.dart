@@ -10,6 +10,8 @@ import '../services/subscription_service.dart';
 import '../services/sync_service.dart';
 import '../utils/app_helpers.dart';
 
+export '../services/sync_service.dart' show ItemLoginRequiredException;
+
 /// Owns all mutable state for the main screen and exposes actions for the UI.
 class MainScreenController extends ChangeNotifier {
   bool _isDisposed = false;
@@ -18,6 +20,7 @@ class MainScreenController extends ChangeNotifier {
 
   // Sync
   bool syncing = false;
+  bool loginRequired = false;
   String syncStatus = 'No data loaded yet';
 
   // Live data
@@ -98,6 +101,7 @@ class MainScreenController extends ChangeNotifier {
     _notifyListenersSafe();
     try {
       await SyncService.instance.triggerBankSync();
+      loginRequired = false;
       syncStatus = 'Loading...';
       _notifyListenersSafe();
       final result = await SyncService.instance.refreshFromSupabase(
@@ -106,8 +110,41 @@ class MainScreenController extends ChangeNotifier {
       );
       _applySyncResult(result);
       syncStatus = result.hasData ? 'Updated' : 'No data found';
+    } on ItemLoginRequiredException {
+      loginRequired = true;
+      syncStatus = 'Bank login expired — tap to re-authenticate';
     } catch (e) {
       syncStatus = 'Refresh failed: $e';
+    } finally {
+      syncing = false;
+      _notifyListenersSafe();
+    }
+  }
+
+  Future<void> reauthenticateBank() async {
+    if (syncing) return;
+    syncing = true;
+    syncStatus = 'Opening bank login...';
+    _notifyListenersSafe();
+    try {
+      final publicToken = await PlaidService.instance.openLinkUpdateMode();
+      if (publicToken != null) {
+        await PlaidService.instance.exchangePublicToken(publicToken);
+        loginRequired = false;
+        syncStatus = 'Syncing transactions...';
+        _notifyListenersSafe();
+        await SyncService.instance.triggerBankSync();
+        final result = await SyncService.instance.refreshFromSupabase(
+          reviewedCategoryByTxId,
+          selectedMonth,
+        );
+        _applySyncResult(result);
+        syncStatus = result.hasData ? 'Updated' : 'No data found';
+      } else {
+        syncStatus = 'Re-authentication cancelled';
+      }
+    } catch (e) {
+      syncStatus = 'Re-authentication failed: $e';
     } finally {
       syncing = false;
       _notifyListenersSafe();

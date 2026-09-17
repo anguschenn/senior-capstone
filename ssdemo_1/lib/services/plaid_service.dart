@@ -52,4 +52,31 @@ class PlaidService {
     final linkToken = await createLinkToken();
     return PlaidLinkLauncher.open(linkToken);
   }
+
+  /// Creates a Link token for update mode (re-authentication of an existing Item).
+  Future<String> createLinkTokenUpdate({String? itemId}) async {
+    final uri = Uri.parse(
+      '${EnvConfig.instance.backendUrl}/api/create_link_token_update',
+    );
+    final response = await http.post(
+      uri,
+      headers: _headers,
+      body: jsonEncode(itemId != null ? {'item_id': itemId} : {}),
+    );
+    if (response.statusCode != 200) {
+      throw Exception('Failed to create update link token: ${response.body}');
+    }
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final token = body['link_token'] as String?;
+    if (token == null || token.isEmpty) {
+      throw Exception('No link_token in update response: ${response.body}');
+    }
+    return token;
+  }
+
+  /// Opens Plaid Link in update mode and returns the public_token, or null if cancelled.
+  Future<String?> openLinkUpdateMode({String? itemId}) async {
+    final linkToken = await createLinkTokenUpdate(itemId: itemId);
+    return PlaidLinkLauncher.open(linkToken);
+  }
 }
