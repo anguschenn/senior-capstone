@@ -106,16 +106,6 @@ create table subscriptions (
   is_active boolean default true
 );
 
--- Currently unused by application code — kept only because it exists in the
--- live project. Candidate for removal; see migration 009.
-create table merchant_category_rules (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references users(id),
-  merchant_name text not null,
-  category_id uuid references categories(id),
-  unique (user_id, merchant_name)
-);
-
 create table category_match_rules (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references users(id) on delete cascade,
