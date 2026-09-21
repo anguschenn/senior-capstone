@@ -1,6 +1,8 @@
 -- Users Table, no access-token
 create table users (
-  id uuid primary key default gen_random_uuid(),
+  -- Mirrors auth.users. Rows are created by the handle_new_user() trigger
+  -- (migration 009), never by the client.
+  id uuid primary key references auth.users(id) on delete cascade,
   email text unique not null,
   name text,
   created_at timestamp default now()
@@ -67,7 +69,8 @@ create table transactions (
   pfc_confidence text,                  -- VERY_HIGH, HIGH, MEDIUM, LOW
   
   -- Your custom override (user can recategorize)
-  custom_category_id uuid references categories(id),
+  custom_category_id uuid references categories(id),   -- user override
+  ai_category_id uuid references categories(id),       -- AI suggestion
   
   -- Location data Plaid sometimes returns
   location_city text,
@@ -87,7 +90,8 @@ create table budgets (
   category_id uuid references categories(id),
   monthly_limit decimal not null,
   rollover_amount decimal default 0,
-  month_year text not null
+  month_year text not null,
+  unique (user_id, category_id, month_year)
 );
 
 -- Subscriptions
@@ -102,17 +106,6 @@ create table subscriptions (
   is_active boolean default true
 );
 
-create table category_rules (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references users(id) on delete cascade,
-  rule_key text not null,
-  category_id uuid not null references categories(id) on delete cascade,
-  confidence text not null default 'medium',
-  created_at timestamp default now(),
-  updated_at timestamp default now(),
-  unique (user_id, rule_key)
-);
-
 create table category_match_rules (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references users(id) on delete cascade,
@@ -123,3 +116,10 @@ create table category_match_rules (
   updated_at timestamp default now(),
   unique (user_id, rule_key)
 );
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Row-level security, the auth.users -> public.users trigger, NOT NULL
+-- constraints and indexes all live in db/migrations/009_security_model.sql.
+-- Run every migration in order after applying this file; this schema alone is
+-- NOT safe to expose to the Flutter client.
+-- ─────────────────────────────────────────────────────────────────────────────

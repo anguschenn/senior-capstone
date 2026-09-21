@@ -24,25 +24,74 @@ _GRACE_DAYS = {"weekly": 3, "monthly": 7, "annual": 14}
 # Everything NOT in this set will be flagged for user confirmation.
 _KNOWN_SUBSCRIPTION_MERCHANTS = {
     # Music & podcasts
-    "spotify", "apple music", "tidal", "deezer", "youtube music", "amazon music",
+    "spotify",
+    "apple music",
+    "tidal",
+    "deezer",
+    "youtube music",
+    "amazon music",
     # Video streaming
-    "netflix", "hulu", "disney", "hbo max", "apple tv", "peacock", "paramount",
-    "youtube premium", "amazon prime", "crunchyroll", "mubi",
+    "netflix",
+    "hulu",
+    "disney",
+    "hbo max",
+    "apple tv",
+    "peacock",
+    "paramount",
+    "youtube premium",
+    "amazon prime",
+    "crunchyroll",
+    "mubi",
     # AI & software
-    "openai", "claude ai", "anthropic", "github", "github copilot",
-    "adobe", "microsoft", "google one", "google workspace",
-    "dropbox", "notion", "figma", "canva", "slack", "zoom", "loom",
-    "1password", "lastpass", "dashlane", "nordvpn", "expressvpn",
+    "openai",
+    "claude ai",
+    "anthropic",
+    "github",
+    "github copilot",
+    "adobe",
+    "microsoft",
+    "google one",
+    "google workspace",
+    "dropbox",
+    "notion",
+    "figma",
+    "canva",
+    "slack",
+    "zoom",
+    "loom",
+    "1password",
+    "lastpass",
+    "dashlane",
+    "nordvpn",
+    "expressvpn",
     # Fitness & health
-    "puregym", "planet fitness", "peloton", "strava", "myfitnesspal",
-    "calm", "headspace", "noom",
+    "puregym",
+    "planet fitness",
+    "peloton",
+    "strava",
+    "myfitnesspal",
+    "calm",
+    "headspace",
+    "noom",
     # Gaming
-    "xbox", "playstation", "nintendo", "ea play", "ubisoft",
+    "xbox",
+    "playstation",
+    "nintendo",
+    "ea play",
+    "ubisoft",
     # News & reading
-    "new york times", "washington post", "the guardian", "medium",
-    "kindle unlimited", "audible",
+    "new york times",
+    "washington post",
+    "the guardian",
+    "medium",
+    "kindle unlimited",
+    "audible",
     # Utilities & finance
-    "icloud", "google drive", "onedrive", "amazon web services", "aws",
+    "icloud",
+    "google drive",
+    "onedrive",
+    "amazon web services",
+    "aws",
 }
 
 
@@ -87,26 +136,6 @@ def _needs_confirmation(norm_merchant, pfc_detailed_list):
         if detailed and "subscription" in detailed.lower():
             return False
     return True
-
-
-def _account_segments(charges):
-    """
-    Collapse a chronologically-sorted charge list into contiguous
-    (account_id, first_date, last_date) runs — one entry per unbroken
-    stretch of charges on the same billing account.
-    """
-    segments = []
-    for charge_date, _amount, _raw, _pfc_p, _pfc_d, account_id in charges:
-        account_id = account_id or None
-        if segments and segments[-1]["account_id"] == account_id:
-            segments[-1]["last_date"] = charge_date
-        else:
-            segments.append({
-                "account_id": account_id,
-                "first_date": charge_date,
-                "last_date": charge_date,
-            })
-    return segments
 
 
 def _detect_from_rows(tx_rows, today=None):
@@ -186,7 +215,6 @@ def _detect_from_rows(tx_rows, today=None):
             "frequency": frequency,
             "next_charge_date": next_charge_date.isoformat(),
             "needs_confirmation": _needs_confirmation(norm_merchant, pfc_detaileds),
-            "account_segments": _account_segments(charges),
         })
     return candidates
 
@@ -221,7 +249,7 @@ def _mark_stale_subscriptions(user_id, tx_rows):
             pass
 
     deactivated = 0
-    for sub in (active_resp.data or []):
+    for sub in active_resp.data or []:
         try:
             expected = dt.date.fromisoformat(sub.get("next_charge_date") or "")
         except ValueError:
@@ -239,44 +267,17 @@ def _mark_stale_subscriptions(user_id, tx_rows):
         window_end = expected + dt.timedelta(days=grace)
 
         found = any(
-            nm == norm_merchant
-            and window_start <= d <= window_end
+            nm == norm_merchant and window_start <= d <= window_end
             for (nm, d) in tx_lookup
         )
 
         if not found:
-            supabase.table("subscriptions").update(
-                {"is_active": False}
-            ).eq("id", sub["id"]).execute()
+            supabase.table("subscriptions").update({"is_active": False}).eq(
+                "id", sub["id"]
+            ).execute()
             deactivated += 1
 
     return deactivated
-
-
-def _sync_account_history(subscription_id, segments):
-    """
-    Record which billing account(s) a subscription has used over time.
-    The most recent segment is left open (to_date=None) to mean "still
-    billing here"; earlier segments are closed off with their last known
-    charge date. Idempotent via the (subscription_id, plaid_account_id,
-    from_date) unique constraint, so re-running a sync just no-ops on
-    unchanged segments.
-    """
-    if not segments:
-        return
-    last_index = len(segments) - 1
-    rows = [
-        {
-            "subscription_id": subscription_id,
-            "plaid_account_id": seg["account_id"],
-            "from_date": seg["first_date"].isoformat(),
-            "to_date": None if i == last_index else seg["last_date"].isoformat(),
-        }
-        for i, seg in enumerate(segments)
-    ]
-    supabase.table("subscription_account_history").upsert(
-        rows, on_conflict="subscription_id,plaid_account_id,from_date"
-    ).execute()
 
 
 def detect_and_upsert_subscriptions(user_id):
@@ -316,7 +317,7 @@ def detect_and_upsert_subscriptions(user_id):
     )
     existing_by_key = {}
     user_confirmed_keys = set()
-    for row in (existing_resp.data or []):
+    for row in existing_resp.data or []:
         key = _normalize_merchant(row.get("merchant_name") or "")
         existing_by_key[key] = row["id"]
         # user_confirmed=True means the user explicitly clicked "Yes, subscription"
@@ -337,32 +338,23 @@ def detect_and_upsert_subscriptions(user_id):
             }
             if lookup_key not in user_confirmed_keys:
                 update_data["needs_confirmation"] = sub["needs_confirmation"]
-            subscription_id = existing_by_key[lookup_key]
             supabase.table("subscriptions").update(update_data).eq(
-                "id", subscription_id
+                "id", existing_by_key[lookup_key]
             ).execute()
-            _sync_account_history(subscription_id, sub["account_segments"])
             updated += 1
         else:
-            insert_resp = (
-                supabase.table("subscriptions")
-                .insert(
-                    {
-                        "user_id": user_id,
-                        "plaid_account_id": sub["account_id"],
-                        "merchant_name": sub["merchant_name"],
-                        "amount": sub["amount"],
-                        "frequency": sub["frequency"],
-                        "next_charge_date": sub["next_charge_date"],
-                        "is_active": True,
-                        "needs_confirmation": sub["needs_confirmation"],
-                    }
-                )
-                .execute()
-            )
-            new_id = (insert_resp.data or [{}])[0].get("id")
-            if new_id:
-                _sync_account_history(new_id, sub["account_segments"])
+            supabase.table("subscriptions").insert(
+                {
+                    "user_id": user_id,
+                    "plaid_account_id": sub["account_id"],
+                    "merchant_name": sub["merchant_name"],
+                    "amount": sub["amount"],
+                    "frequency": sub["frequency"],
+                    "next_charge_date": sub["next_charge_date"],
+                    "is_active": True,
+                    "needs_confirmation": sub["needs_confirmation"],
+                }
+            ).execute()
             inserted += 1
 
     deactivated = _mark_stale_subscriptions(user_id, tx_rows)

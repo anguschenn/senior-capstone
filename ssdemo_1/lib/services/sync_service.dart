@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:http/http.dart' as http;
 
 import '../core/config/api_config.dart';
@@ -9,6 +11,13 @@ import 'account_service.dart';
 import 'auth_service.dart';
 import 'budget_service.dart';
 import 'category_service.dart';
+
+/// Thrown when Plaid reports ITEM_LOGIN_REQUIRED for a linked bank.
+class ItemLoginRequiredException implements Exception {
+  const ItemLoginRequiredException();
+  @override
+  String toString() => 'Bank re-authentication required';
+}
 
 /// Result payload returned by a full sync or refresh.
 class SyncResult {
@@ -58,13 +67,32 @@ class SyncService {
     return headers;
   }
 
-  /// Triggers the backend bank sync endpoint (best-effort).
+  /// Triggers the backend bank sync endpoint.
+  /// Throws [ItemLoginRequiredException] if re-authentication is needed.
   Future<void> triggerBankSync() async {
     try {
-      await http
+      final response = await http
           .get(ApiConfig.instance.transactionsUri, headers: _backendHeaders())
           .timeout(const Duration(seconds: 30));
-    } catch (_) {}
+      if (response.statusCode == 400 && _isLoginRequired(response.body)) {
+        throw const ItemLoginRequiredException();
+      }
+    } on ItemLoginRequiredException {
+      rethrow;
+    } catch (_) {
+      // Other network/server errors are best-effort — don't block the UI.
+    }
+  }
+
+  /// True only when the backend explicitly reports ITEM_LOGIN_REQUIRED.
+  /// Plaid API errors also surface as 400, so the status alone is not enough.
+  bool _isLoginRequired(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      return decoded is Map && decoded['error_code'] == 'ITEM_LOGIN_REQUIRED';
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Central load path: accounts, transactions, subscriptions, budgets.

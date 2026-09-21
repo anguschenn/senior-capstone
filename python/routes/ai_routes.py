@@ -133,7 +133,9 @@ def ai_suggest_category():
         return jsonify({"error": "Rate limit exceeded"}), 429
     body = request.get_json(silent=True) or {}
     try:
-        user_id = require_supabase_user_id()
+        # Raises UserAuthError -> 401 for unauthenticated callers. The id itself is
+        # unused here; the suggestion is derived only from the posted transaction.
+        require_supabase_user_id()
         merchant_name = clamp_str(body.get("merchant_name", ""), 256) or ""
         transaction_name = clamp_str(body.get("transaction_name", ""), 256) or ""
         pfc_primary = clamp_str(body.get("pfc_primary", ""), 128) or ""
@@ -163,12 +165,14 @@ def ai_suggest_category():
 
         suggested_category = reply.strip() if reply else ""
 
-        return jsonify({
-            "suggested_category": suggested_category,
-            "merchant_name": merchant_name,
-            "transaction_name": transaction_name,
-            "context_source": "ai_suggestion",
-        })
+        return jsonify(
+            {
+                "suggested_category": suggested_category,
+                "merchant_name": merchant_name,
+                "transaction_name": transaction_name,
+                "context_source": "ai_suggestion",
+            }
+        )
     except UserAuthError as error:
         return jsonify({"error": str(error)}), 401
     except ValueError as error:

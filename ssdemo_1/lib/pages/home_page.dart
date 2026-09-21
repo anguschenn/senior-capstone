@@ -17,6 +17,7 @@ class HomePage extends StatelessWidget {
     required this.syncing,
     required this.syncStatus,
     required this.onConnectBank,
+    required this.onAddBank,
     required this.onRefreshLiveData,
     required this.onClearLiveData,
     required this.accountOptions,
@@ -44,6 +45,7 @@ class HomePage extends StatelessWidget {
   final bool syncing;
   final String syncStatus;
   final VoidCallback onConnectBank;
+  final VoidCallback onAddBank;
   final VoidCallback onRefreshLiveData;
   final VoidCallback onClearLiveData;
   final List<AccountOption> accountOptions;
@@ -220,7 +222,7 @@ class HomePage extends StatelessWidget {
             runSpacing: 8,
             children: [
               FilledButton.icon(
-                onPressed: syncing ? null : onConnectBank,
+                onPressed: syncing ? null : onAddBank,
                 icon: syncing
                     ? const SizedBox(
                         width: 14,
@@ -228,14 +230,14 @@ class HomePage extends StatelessWidget {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.add_link),
-                label: Text(
-                  syncing
-                      ? 'Syncing'
-                      : accountOptions.isEmpty
-                      ? 'Connect Bank'
-                      : 'Add Account',
-                ),
+                label: Text(syncing ? 'Syncing' : 'Add Bank'),
               ),
+              if (accountOptions.isNotEmpty)
+                OutlinedButton.icon(
+                  onPressed: syncing ? null : onConnectBank,
+                  icon: const Icon(Icons.refresh, size: 18),
+                  label: const Text('Reconnect'),
+                ),
               OutlinedButton(
                 onPressed: syncing ? null : onRefreshLiveData,
                 child: const Text('Refresh'),

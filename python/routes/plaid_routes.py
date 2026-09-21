@@ -145,6 +145,42 @@ def create_link_token():
         return jsonify({"error": f"Failed to create link token: {error}"}), 500
 
 
+@plaid_bp.route("/api/create_link_token_update", methods=["POST"])
+def create_link_token_update():
+    """Create a Link token for update mode to re-authenticate an existing Item."""
+    try:
+        user_id = require_supabase_user_id()
+        body = request.get_json(silent=True) or {}
+        item_id = body.get("item_id")
+
+        query = supabase.table("plaid_items").select("access_token").eq("user_id", user_id)
+        if item_id:
+            query = query.eq("id", item_id)
+        result = query.limit(1).execute()
+        if not result.data or not result.data[0].get("access_token"):
+            raise IdentityStateError(IdentityStateError.STORED_ITEM_NOT_FOUND, "No linked items")
+
+        access_token = result.data[0]["access_token"]
+        link_request = LinkTokenCreateRequest(
+            access_token=access_token,
+            client_name="SmartSpend",
+            country_codes=[CountryCode(code) for code in PLAID_COUNTRY_CODES],
+            language="en",
+            user=LinkTokenCreateRequestUser(client_user_id=str(time.time())),
+        )
+        if PLAID_REDIRECT_URI:
+            link_request["redirect_uri"] = PLAID_REDIRECT_URI
+
+        response = client.link_token_create(link_request)
+        return jsonify(response.to_dict())
+    except UserAuthError as error:
+        return jsonify({"error": str(error)}), 401
+    except IdentityStateError as error:
+        return identity_error_response(error, "/api/create_link_token_update")
+    except plaid.ApiException as error:
+        return plaid_error_response(error)
+
+
 @plaid_bp.route("/api/set_access_token", methods=["POST"])
 def set_access_token():
     body = request.get_json(silent=True) or {}
@@ -164,6 +200,7 @@ def set_access_token():
                 "user_id": user_id,
                 "access_token": access_token,
                 "item_id": item_id,
+                "cursor": None,
             },
             on_conflict="item_id",
         ).execute()
@@ -236,15 +273,36 @@ def get_transactions():
         if not items.data:
             raise IdentityStateError(IdentityStateError.STORED_ITEM_NOT_FOUND, "No linked items")
         totals = {"added": 0, "modified": 0, "removed": 0}
-        sync_stats = {"added": 0, "modified": 0, "removed": 0}
+        login_required_items = []
         for item in items.data:
             access_token = item.get("access_token")
             if not access_token:
                 continue
-            item_stats = sync_transactions_to_supabase(user_id, item["id"], access_token)
-            sync_stats = item_stats
-            for k in totals:
-                totals[k] += item_stats[k]
+            try:
+                item_stats = sync_transactions_to_supabase(user_id, item["id"], access_token)
+                for k in totals:
+                    totals[k] += item_stats[k]
+            except plaid.ApiException as item_error:
+                error_body = {}
+                try:
+                    import json as _json
+
+                    error_body = _json.loads(getattr(item_error, "body", "{}") or "{}")
+                except Exception:
+                    pass
+                if error_body.get("error_code") == "ITEM_LOGIN_REQUIRED":
+                    login_required_items.append(item["id"])
+                    print(f"[plaid] item {item['id']} needs re-auth, skipping")
+                else:
+                    raise
+        if login_required_items and totals == {"added": 0, "modified": 0, "removed": 0}:
+            return jsonify(
+                {
+                    "error": "Bank re-authentication required",
+                    "error_code": "ITEM_LOGIN_REQUIRED",
+                    "items": login_required_items,
+                }
+            ), 400
         current_app.config["snapshot_service"].invalidate(user_id)
         print(f"Sync complete for user {user_id}: {totals}")
 
@@ -266,7 +324,7 @@ def get_transactions():
             {
                 "latest_transactions": rows,
                 "transactions": rows,
-                "sync": {**sync_stats, "duration_ms": elapsed_ms},
+                "sync": {**totals, "duration_ms": elapsed_ms},
             }
         )
     except UserAuthError as error:

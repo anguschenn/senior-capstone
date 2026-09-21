@@ -22,15 +22,16 @@ class AuthService {
 
   String get currentUserId {
     final id = currentUser?.id;
+
     if (id == null || id.isEmpty) {
       throw StateError('No authenticated Supabase user.');
     }
+
     return id;
   }
 
   Future<void> signIn({required String email, required String password}) async {
     await _auth.signInWithPassword(email: email.trim(), password: password);
-    await ensurePublicUserRecord();
   }
 
   Future<SignUpResult> signUp({
@@ -41,7 +42,7 @@ class AuthService {
       email: email.trim(),
       password: password,
     );
-    await ensurePublicUserRecord();
+
     return SignUpResult(requiresEmailConfirmation: response.session == null);
   }
 
@@ -49,18 +50,5 @@ class AuthService {
 
   Future<void> resetPasswordForEmail(String email) async {
     await _auth.resetPasswordForEmail(email.trim());
-  }
-
-  Future<void> ensurePublicUserRecord() async {
-    final user = currentUser;
-    if (user == null) return;
-    final email = user.email?.trim();
-    try {
-      await AppSupabase.client.from('users').upsert({
-        'id': user.id,
-        'email': email,
-        'name': email,
-      }, onConflict: 'id');
-    } catch (_) {}
   }
 }

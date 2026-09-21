@@ -95,7 +95,8 @@ class _MainScreenState extends State<MainScreen> {
         stats: visibleStats,
         syncing: c.syncing,
         syncStatus: c.syncStatus,
-        onConnectBank: c.connectBankAndPullData,
+        onConnectBank: c.reauthenticateBank,
+        onAddBank: c.connectBankAndPullData,
         onRefreshLiveData: c.refreshLiveDataOnly,
         onClearLiveData: c.clearLiveData,
         accountOptions: c.liveAccountOptions,
@@ -179,7 +180,48 @@ class _MainScreenState extends State<MainScreen> {
               ),
             ],
           ),
-          body: body,
+          body: Column(
+            children: [
+              if (c.loginRequired)
+                Material(
+                  color: const Color(0xFFFFF3CD),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.warning_amber_rounded,
+                          color: Color(0xFF856404),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Text(
+                            'Bank connection expired — tap to re-authenticate',
+                            style: TextStyle(color: Color(0xFF856404)),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: c.syncing
+                              ? null
+                              : _ctrl.reauthenticateBank,
+                          child: const Text(
+                            'Fix',
+                            style: TextStyle(
+                              color: Color(0xFF856404),
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              Expanded(child: body),
+            ],
+          ),
           bottomNavigationBar: NavigationBar(
             selectedIndex: c.tabIndex,
             onDestinationSelected: c.selectTab,
