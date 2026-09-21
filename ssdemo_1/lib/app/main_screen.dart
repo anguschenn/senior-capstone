@@ -70,6 +70,12 @@ class _MainScreenState extends State<MainScreen> {
     );
     final visibleTransactions = snapshot.transactions;
     final visibleSubscriptions = snapshot.subscriptions;
+    // Unconfirmed ("needs review") subscriptions belong in the Subscriptions
+    // tab's review queue, not in the dashboard preview or the monthly total —
+    // they haven't been confirmed as real subscriptions yet.
+    final confirmedSubscriptions = visibleSubscriptions
+        .where((s) => !s.needsConfirmation)
+        .toList();
     final visibleBudgetProgress = snapshot.budgetProgress;
     final visibleBudgetProgressYear = snapshot.budgetProgressYear;
     final visibleBudgetProgressAll = snapshot.budgetProgressAll;
@@ -81,8 +87,8 @@ class _MainScreenState extends State<MainScreen> {
       0 => HomePage(
         transactions: visibleTransactions,
         lowConfidenceTransactions: visibleTransactions,
-        subscriptions: visibleSubscriptions.take(3).toList(),
-        monthlySubscriptionTotal: visibleSubscriptions.fold<double>(
+        subscriptions: confirmedSubscriptions.take(3).toList(),
+        monthlySubscriptionTotal: confirmedSubscriptions.fold<double>(
           0,
           (sum, item) => sum + item.monthlyEquivalent,
         ),
@@ -141,7 +147,7 @@ class _MainScreenState extends State<MainScreen> {
       ),
       _ => SubscriptionsPage(
         subscriptions: visibleSubscriptions,
-        monthlyTotal: visibleSubscriptions.fold<double>(
+        monthlyTotal: confirmedSubscriptions.fold<double>(
           0,
           (sum, item) => sum + item.monthlyEquivalent,
         ),

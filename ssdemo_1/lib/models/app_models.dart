@@ -257,6 +257,20 @@ class DetectedSubscription {
         return amount;
     }
   }
+
+  DateTime get effectiveNextChargeDate {
+    final interval = switch (frequency) {
+      'weekly' => const Duration(days: 7),
+      'annual' => const Duration(days: 365),
+      _ => const Duration(days: 30),
+    };
+    var date = nextChargeDate;
+    final today = DateTime.now();
+    while (date.isBefore(today)) {
+      date = date.add(interval);
+    }
+    return date;
+  }
 }
 
 // Aggregated summary metrics shown across multiple pages.

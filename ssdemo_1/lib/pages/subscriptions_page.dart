@@ -98,7 +98,7 @@ class SubscriptionsPage extends StatelessWidget {
                 leading: const Icon(Icons.subscriptions_outlined),
                 title: Text(sub.merchant),
                 subtitle: Text(
-                  'Renews ${shortDate(sub.nextChargeDate)} • ${sub.frequency}',
+                  'Renews ${shortDate(sub.effectiveNextChargeDate)} • ${sub.frequency}',
                 ),
                 trailing: Text(formatMoney(sub.amount, signed: false)),
               ),
@@ -164,7 +164,7 @@ class _PendingSubscriptionCard extends StatelessWidget {
               ],
             ),
             Text(
-              'Renews ${shortDate(sub.nextChargeDate)} • ${sub.frequency}',
+              'Renews ${shortDate(sub.effectiveNextChargeDate)} • ${sub.frequency}',
               style: TextStyle(
                 fontSize: 13,
                 color: colorScheme.onSecondaryContainer,

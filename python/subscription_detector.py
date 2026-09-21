@@ -89,8 +89,29 @@ def _needs_confirmation(norm_merchant, pfc_detailed_list):
     return True
 
 
-def _detect_from_rows(tx_rows):
+def _account_segments(charges):
+    """
+    Collapse a chronologically-sorted charge list into contiguous
+    (account_id, first_date, last_date) runs — one entry per unbroken
+    stretch of charges on the same billing account.
+    """
+    segments = []
+    for charge_date, _amount, _raw, _pfc_p, _pfc_d, account_id in charges:
+        account_id = account_id or None
+        if segments and segments[-1]["account_id"] == account_id:
+            segments[-1]["last_date"] = charge_date
+        else:
+            segments.append({
+                "account_id": account_id,
+                "first_date": charge_date,
+                "last_date": charge_date,
+            })
+    return segments
+
+
+def _detect_from_rows(tx_rows, today=None):
     """Return subscription candidates detected from raw transaction rows."""
+    today = today or dt.date.today()
     groups = defaultdict(list)
     for tx in tx_rows:
         raw_merchant = tx.get("merchant_name") or tx.get("name") or ""
@@ -108,16 +129,17 @@ def _detect_from_rows(tx_rows):
             continue
         if amount <= 0:
             continue
-        groups[(account_id, norm)].append((
+        groups[norm].append((
             charge_date,
             amount,
             raw_merchant.strip(),
             (tx.get("pfc_primary") or "").strip(),
             (tx.get("pfc_detailed") or "").strip(),
+            account_id,
         ))
 
     candidates = []
-    for (account_id, norm_merchant), charges in groups.items():
+    for norm_merchant, charges in groups.items():
         if len(charges) < _MIN_OCCURRENCES:
             continue
         charges.sort(key=lambda c: c[0])
@@ -142,16 +164,29 @@ def _detect_from_rows(tx_rows):
         if any(abs(a - avg_amount) > avg_amount * _AMOUNT_TOLERANCE for a in amounts):
             continue
 
+        next_charge_date = _next_charge_date(dates[-1], frequency)
+        grace = _GRACE_DAYS.get(frequency, 7)
+        if today > next_charge_date + dt.timedelta(days=grace):
+            # The most recent charge is already past its renewal + grace
+            # window — this pattern is historically clean but no longer
+            # current. Don't resurrect it as "active"; let
+            # _mark_stale_subscriptions retire the existing row instead.
+            continue
+
         pfc_detaileds = [c[4] for c in charges]
 
         candidates.append({
-            "account_id": account_id or None,
+            # Most recent charge's account — the merchant/user identity is
+            # what defines a subscription, not which account currently bills it
+            # (a card-on-file switch shouldn't split one subscription in two).
+            "account_id": charges[-1][5] or None,
             "norm_merchant": norm_merchant,
             "merchant_name": charges[-1][2] or norm_merchant,
             "amount": round(avg_amount, 2),
             "frequency": frequency,
-            "next_charge_date": _next_charge_date(dates[-1], frequency).isoformat(),
+            "next_charge_date": next_charge_date.isoformat(),
             "needs_confirmation": _needs_confirmation(norm_merchant, pfc_detaileds),
+            "account_segments": _account_segments(charges),
         })
     return candidates
 
@@ -166,20 +201,22 @@ def _mark_stale_subscriptions(user_id, tx_rows):
 
     active_resp = (
         supabase.table("subscriptions")
-        .select("id,plaid_account_id,merchant_name,frequency,next_charge_date")
+        .select("id,merchant_name,frequency,next_charge_date")
         .eq("user_id", user_id)
         .eq("is_active", True)
         .execute()
     )
 
-    # Build a quick lookup: (account_id, norm_merchant, date)
+    # Build a quick lookup: (norm_merchant, date). Deliberately not scoped to
+    # account_id — a subscription that switches accounts (e.g. card on file
+    # changes) is still the same subscription, and shouldn't look stale on
+    # its old account.
     tx_lookup = set()
     for tx in tx_rows:
-        acc = (tx.get("plaid_account_id") or "").strip()
         norm = _normalize_merchant(tx.get("merchant_name") or tx.get("name") or "")
         try:
             tx_date = dt.date.fromisoformat(tx.get("date") or "")
-            tx_lookup.add((acc, norm, tx_date))
+            tx_lookup.add((norm, tx_date))
         except ValueError:
             pass
 
@@ -197,16 +234,14 @@ def _mark_stale_subscriptions(user_id, tx_rows):
         if today <= expected + dt.timedelta(days=grace):
             continue
 
-        acc_key = (sub.get("plaid_account_id") or "").strip()
         norm_merchant = _normalize_merchant(sub.get("merchant_name") or "")
         window_start = expected - dt.timedelta(days=grace)
         window_end = expected + dt.timedelta(days=grace)
 
         found = any(
-            acc == acc_key
-            and nm == norm_merchant
+            nm == norm_merchant
             and window_start <= d <= window_end
-            for (acc, nm, d) in tx_lookup
+            for (nm, d) in tx_lookup
         )
 
         if not found:
@@ -218,12 +253,38 @@ def _mark_stale_subscriptions(user_id, tx_rows):
     return deactivated
 
 
+def _sync_account_history(subscription_id, segments):
+    """
+    Record which billing account(s) a subscription has used over time.
+    The most recent segment is left open (to_date=None) to mean "still
+    billing here"; earlier segments are closed off with their last known
+    charge date. Idempotent via the (subscription_id, plaid_account_id,
+    from_date) unique constraint, so re-running a sync just no-ops on
+    unchanged segments.
+    """
+    if not segments:
+        return
+    last_index = len(segments) - 1
+    rows = [
+        {
+            "subscription_id": subscription_id,
+            "plaid_account_id": seg["account_id"],
+            "from_date": seg["first_date"].isoformat(),
+            "to_date": None if i == last_index else seg["last_date"].isoformat(),
+        }
+        for i, seg in enumerate(segments)
+    ]
+    supabase.table("subscription_account_history").upsert(
+        rows, on_conflict="subscription_id,plaid_account_id,from_date"
+    ).execute()
+
+
 def detect_and_upsert_subscriptions(user_id):
     """
     Main entry: detect recurring charges, mark stale ones inactive, and
     sync results to the subscriptions table.
 
-    Existing rows matched by (plaid_account_id, merchant_name) are updated
+    Existing rows matched by normalized merchant name (per user) are updated
     in-place. User-confirmed rows (needs_confirmation=False) keep their
     confirmation status even if re-detected as ambiguous.
 
@@ -235,30 +296,28 @@ def detect_and_upsert_subscriptions(user_id):
         .eq("user_id", user_id)
         .eq("pending", False)
         .gt("amount", 0)
-        .order("date", desc=False)
+        .order("date", desc=True)
         .limit(_TX_FETCH_LIMIT)
         .execute()
     )
     tx_rows = rows_resp.data or []
 
-    deactivated = _mark_stale_subscriptions(user_id, tx_rows)
     candidates = _detect_from_rows(tx_rows)
 
     if not candidates:
+        deactivated = _mark_stale_subscriptions(user_id, tx_rows)
         return {"detected": 0, "inserted": 0, "updated": 0, "deactivated": deactivated}
 
     existing_resp = (
         supabase.table("subscriptions")
-        .select("id,plaid_account_id,merchant_name,user_confirmed")
+        .select("id,merchant_name,user_confirmed")
         .eq("user_id", user_id)
         .execute()
     )
     existing_by_key = {}
     user_confirmed_keys = set()
     for row in (existing_resp.data or []):
-        acc = (row.get("plaid_account_id") or "").strip()
-        norm = _normalize_merchant(row.get("merchant_name") or "")
-        key = (acc, norm)
+        key = _normalize_merchant(row.get("merchant_name") or "")
         existing_by_key[key] = row["id"]
         # user_confirmed=True means the user explicitly clicked "Yes, subscription"
         if row.get("user_confirmed") is True:
@@ -267,8 +326,7 @@ def detect_and_upsert_subscriptions(user_id):
     inserted = 0
     updated = 0
     for sub in candidates:
-        acc_key = (sub["account_id"] or "").strip()
-        lookup_key = (acc_key, sub["norm_merchant"])
+        lookup_key = sub["norm_merchant"]
 
         if lookup_key in existing_by_key:
             update_data = {
@@ -279,24 +337,35 @@ def detect_and_upsert_subscriptions(user_id):
             }
             if lookup_key not in user_confirmed_keys:
                 update_data["needs_confirmation"] = sub["needs_confirmation"]
+            subscription_id = existing_by_key[lookup_key]
             supabase.table("subscriptions").update(update_data).eq(
-                "id", existing_by_key[lookup_key]
+                "id", subscription_id
             ).execute()
+            _sync_account_history(subscription_id, sub["account_segments"])
             updated += 1
         else:
-            supabase.table("subscriptions").insert(
-                {
-                    "user_id": user_id,
-                    "plaid_account_id": sub["account_id"],
-                    "merchant_name": sub["merchant_name"],
-                    "amount": sub["amount"],
-                    "frequency": sub["frequency"],
-                    "next_charge_date": sub["next_charge_date"],
-                    "is_active": True,
-                    "needs_confirmation": sub["needs_confirmation"],
-                }
-            ).execute()
+            insert_resp = (
+                supabase.table("subscriptions")
+                .insert(
+                    {
+                        "user_id": user_id,
+                        "plaid_account_id": sub["account_id"],
+                        "merchant_name": sub["merchant_name"],
+                        "amount": sub["amount"],
+                        "frequency": sub["frequency"],
+                        "next_charge_date": sub["next_charge_date"],
+                        "is_active": True,
+                        "needs_confirmation": sub["needs_confirmation"],
+                    }
+                )
+                .execute()
+            )
+            new_id = (insert_resp.data or [{}])[0].get("id")
+            if new_id:
+                _sync_account_history(new_id, sub["account_segments"])
             inserted += 1
+
+    deactivated = _mark_stale_subscriptions(user_id, tx_rows)
 
     return {
         "detected": len(candidates),
