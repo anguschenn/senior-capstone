@@ -14,7 +14,7 @@ class SubscriptionService {
   Future<void> dismiss(String id) async {
     await AppSupabase.client
         .from('subscriptions')
-        .update({'is_active': false})
+        .update({'is_active': false, 'user_dismissed': true})
         .eq('id', id);
   }
 }

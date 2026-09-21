@@ -194,15 +194,21 @@ def _detect_from_rows(tx_rows, today=None):
             continue
 
         next_charge_date = _next_charge_date(dates[-1], frequency)
-        grace = _GRACE_DAYS.get(frequency, 7)
-        if today > next_charge_date + dt.timedelta(days=grace):
-            # The most recent charge is already past its renewal + grace
-            # window — this pattern is historically clean but no longer
-            # current. Don't resurrect it as "active"; let
-            # _mark_stale_subscriptions retire the existing row instead.
-            continue
-
         pfc_detaileds = [c[4] for c in charges]
+        needs_confirmation = _needs_confirmation(norm_merchant, pfc_detaileds)
+
+        grace = _GRACE_DAYS.get(frequency, 7)
+        if not needs_confirmation and today > next_charge_date + dt.timedelta(days=grace):
+            # A known/confirmed merchant whose last charge is already past its
+            # renewal + grace window: this pattern is historically clean but
+            # no longer current. Don't resurrect it as "active"; let
+            # _mark_stale_subscriptions retire the existing row instead.
+            #
+            # Ambiguous (needs_confirmation) candidates are exempt from this —
+            # a pattern nobody has reviewed yet should stay visible for the
+            # user to confirm or dismiss, even if it's stopped recurring,
+            # rather than silently disappearing before anyone saw it.
+            continue
 
         candidates.append({
             # Most recent charge's account — the merchant/user identity is
@@ -214,7 +220,7 @@ def _detect_from_rows(tx_rows, today=None):
             "amount": round(avg_amount, 2),
             "frequency": frequency,
             "next_charge_date": next_charge_date.isoformat(),
-            "needs_confirmation": _needs_confirmation(norm_merchant, pfc_detaileds),
+            "needs_confirmation": needs_confirmation,
         })
     return candidates
 
@@ -229,9 +235,10 @@ def _mark_stale_subscriptions(user_id, tx_rows):
 
     active_resp = (
         supabase.table("subscriptions")
-        .select("id,merchant_name,frequency,next_charge_date")
+        .select("id,merchant_name,frequency,next_charge_date,needs_confirmation")
         .eq("user_id", user_id)
         .eq("is_active", True)
+        .eq("needs_confirmation", False)
         .execute()
     )
 
@@ -311,23 +318,31 @@ def detect_and_upsert_subscriptions(user_id):
 
     existing_resp = (
         supabase.table("subscriptions")
-        .select("id,merchant_name,user_confirmed")
+        .select("id,merchant_name,user_confirmed,user_dismissed")
         .eq("user_id", user_id)
         .execute()
     )
     existing_by_key = {}
     user_confirmed_keys = set()
+    user_dismissed_keys = set()
     for row in existing_resp.data or []:
         key = _normalize_merchant(row.get("merchant_name") or "")
         existing_by_key[key] = row["id"]
         # user_confirmed=True means the user explicitly clicked "Yes, subscription"
         if row.get("user_confirmed") is True:
             user_confirmed_keys.add(key)
+        # user_dismissed=True means the user explicitly clicked "Not a
+        # subscription" — don't let re-detection resurrect it.
+        if row.get("user_dismissed") is True:
+            user_dismissed_keys.add(key)
 
     inserted = 0
     updated = 0
     for sub in candidates:
         lookup_key = sub["norm_merchant"]
+
+        if lookup_key in user_dismissed_keys:
+            continue
 
         if lookup_key in existing_by_key:
             update_data = {
