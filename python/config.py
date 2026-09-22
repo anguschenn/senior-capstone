@@ -57,6 +57,11 @@ OPENROUTER_APP_TITLE = _empty_to_none("OPENROUTER_APP_TITLE")
 # ── Backend API auth ─────────────────────────────────────────────────
 INTERNAL_API_KEY = _empty_to_none("INTERNAL_API_KEY")
 
+# ── CORS ─────────────────────────────────────────────────────────────
+# Comma-separated browser origins allowed to call /api/*. Empty means no
+# cross-origin browser access at all (fail closed), never "*".
+ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
+
 # ── Caching ──────────────────────────────────────────────────────────
 SPENDING_SNAPSHOT_CACHE_TTL_SECONDS = int(os.getenv("SPENDING_SNAPSHOT_CACHE_TTL_SECONDS", "60"))
 _SPENDING_SNAPSHOT_CACHE: dict = {}

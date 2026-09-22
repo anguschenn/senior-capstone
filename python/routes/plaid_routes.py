@@ -1,17 +1,11 @@
 """Plaid and transaction-related API routes."""
 
-import base64
 import time
 
 import plaid
 from flask import Blueprint, current_app, jsonify, request
 from plaid.model.accounts_balance_get_request import AccountsBalanceGetRequest
 from plaid.model.accounts_get_request import AccountsGetRequest
-from plaid.model.asset_report_create_request import AssetReportCreateRequest
-from plaid.model.asset_report_create_request_options import AssetReportCreateRequestOptions
-from plaid.model.asset_report_get_request import AssetReportGetRequest
-from plaid.model.asset_report_pdf_get_request import AssetReportPDFGetRequest
-from plaid.model.asset_report_user import AssetReportUser
 from plaid.model.auth_get_request import AuthGetRequest
 from plaid.model.country_code import CountryCode
 from plaid.model.institutions_get_by_id_request import InstitutionsGetByIdRequest
@@ -33,7 +27,6 @@ from config import (
 from plaid_sync import (
     IdentityStateError,
     client,
-    poll_with_retries,
     pretty_print_response,
     products,
     save_accounts_to_supabase,
@@ -366,57 +359,6 @@ def get_accounts():
         return jsonify({"error": str(error)}), 401
     except IdentityStateError as error:
         return identity_error_response(error, "/api/accounts")
-    except plaid.ApiException as error:
-        return plaid_error_response(error)
-
-
-@plaid_bp.route("/api/assets", methods=["GET"])
-def get_assets():
-    try:
-        user_id = require_supabase_user_id()
-        access_token = _first_access_token(user_id)
-        create_request = AssetReportCreateRequest(
-            access_tokens=[access_token],
-            days_requested=60,
-            options=AssetReportCreateRequestOptions(
-                webhook="https://www.example.com",
-                client_report_id="123",
-                user=AssetReportUser(
-                    client_user_id="789",
-                    first_name="Jane",
-                    middle_name="Leah",
-                    last_name="Doe",
-                    ssn="123-45-6789",
-                    phone_number="(555) 123-4567",
-                    email="jane.doe@example.com",
-                ),
-            ),
-        )
-        response = client.asset_report_create(create_request)
-        asset_report_token = response["asset_report_token"]
-
-        report_response = poll_with_retries(
-            lambda: client.asset_report_get(
-                AssetReportGetRequest(asset_report_token=asset_report_token)
-            )
-        )
-        asset_report_json = report_response["report"]
-
-        pdf = client.asset_report_pdf_get(
-            AssetReportPDFGetRequest(asset_report_token=asset_report_token)
-        )
-
-        return jsonify(
-            {
-                "error": None,
-                "json": asset_report_json.to_dict(),
-                "pdf": base64.b64encode(pdf.read()).decode("utf-8"),
-            }
-        )
-    except UserAuthError as error:
-        return jsonify({"error": str(error)}), 401
-    except IdentityStateError as error:
-        return identity_error_response(error, "/api/assets")
     except plaid.ApiException as error:
         return plaid_error_response(error)
 

@@ -212,20 +212,6 @@ def _safe_api_exception_body(error: plaid.ApiException) -> dict:
     return body
 
 
-def poll_with_retries(request_callback, ms=1000, retries_left=20):
-    while retries_left > 0:
-        try:
-            return request_callback()
-        except plaid.ApiException as error:
-            response = _safe_api_exception_body(error)
-            if response.get("error_code") != "PRODUCT_NOT_READY":
-                raise error
-            retries_left -= 1
-            if retries_left == 0:
-                raise Exception("Ran out of retries while polling") from error
-            time.sleep(ms / 1000)
-
-
 def format_error(error):
     response = _safe_api_exception_body(error)
     return {
