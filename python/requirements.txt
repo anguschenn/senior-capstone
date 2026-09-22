@@ -4,4 +4,4 @@ python-dotenv
 plaid-python
 supabase
 certifi
-
+gunicorn
