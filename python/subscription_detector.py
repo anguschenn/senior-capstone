@@ -158,14 +158,16 @@ def _detect_from_rows(tx_rows, today=None):
             continue
         if amount <= 0:
             continue
-        groups[norm].append((
-            charge_date,
-            amount,
-            raw_merchant.strip(),
-            (tx.get("pfc_primary") or "").strip(),
-            (tx.get("pfc_detailed") or "").strip(),
-            account_id,
-        ))
+        groups[norm].append(
+            (
+                charge_date,
+                amount,
+                raw_merchant.strip(),
+                (tx.get("pfc_primary") or "").strip(),
+                (tx.get("pfc_detailed") or "").strip(),
+                account_id,
+            )
+        )
 
     candidates = []
     for norm_merchant, charges in groups.items():
@@ -210,18 +212,20 @@ def _detect_from_rows(tx_rows, today=None):
             # rather than silently disappearing before anyone saw it.
             continue
 
-        candidates.append({
-            # Most recent charge's account — the merchant/user identity is
-            # what defines a subscription, not which account currently bills it
-            # (a card-on-file switch shouldn't split one subscription in two).
-            "account_id": charges[-1][5] or None,
-            "norm_merchant": norm_merchant,
-            "merchant_name": charges[-1][2] or norm_merchant,
-            "amount": round(avg_amount, 2),
-            "frequency": frequency,
-            "next_charge_date": next_charge_date.isoformat(),
-            "needs_confirmation": needs_confirmation,
-        })
+        candidates.append(
+            {
+                # Most recent charge's account — the merchant/user identity is
+                # what defines a subscription, not which account currently bills it
+                # (a card-on-file switch shouldn't split one subscription in two).
+                "account_id": charges[-1][5] or None,
+                "norm_merchant": norm_merchant,
+                "merchant_name": charges[-1][2] or norm_merchant,
+                "amount": round(avg_amount, 2),
+                "frequency": frequency,
+                "next_charge_date": next_charge_date.isoformat(),
+                "needs_confirmation": needs_confirmation,
+            }
+        )
     return candidates
 
 
@@ -274,8 +278,7 @@ def _mark_stale_subscriptions(user_id, tx_rows):
         window_end = expected + dt.timedelta(days=grace)
 
         found = any(
-            nm == norm_merchant and window_start <= d <= window_end
-            for (nm, d) in tx_lookup
+            nm == norm_merchant and window_start <= d <= window_end for (nm, d) in tx_lookup
         )
 
         if not found:
