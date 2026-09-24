@@ -47,8 +47,6 @@ class _BudgetPageState extends State<BudgetPage> {
   // Controls which budget aggregation window is visible.
   BudgetViewMode viewMode = BudgetViewMode.month;
   final Map<String, int> _manualBudgetOrder = <String, int>{};
-  final Map<String, GlobalKey> _budgetItemKeys = <String, GlobalKey>{};
-  String? _highlightedBudgetId;
 
   bool _loadingAi = false;
   String _aiError = '';
@@ -264,25 +262,8 @@ class _BudgetPageState extends State<BudgetPage> {
             '${periodLabelForSelection(widget.selectedMonth)} cash flow: ${widget.stats.cashFlowNetThisMonth >= 0 ? '+ ' : '- '}\$${widget.stats.cashFlowNetThisMonth.abs().toStringAsFixed(2)}',
           ),
           const SizedBox(height: 20),
-          // Lists overspending categories; tap a name to jump to its card.
-          Builder(
-            builder: (context) {
-              final over = _overspendCategories();
-              final byTitle = {
-                for (final c in over) c.title: c.budgetId,
-              };
-              return BudgetInsightBanner(
-                message: over.isEmpty
-                    ? _budgetInsight()
-                    : 'On track to overspend.',
-                categories: over.map((c) => c.title).toList(),
-                onCategoryTap: (title) {
-                  final id = byTitle[title];
-                  if (id != null) _scrollToBudgetCategory(id);
-                },
-              );
-            },
-          ),
+          // Insight card summarizes the highest-risk budget category at a glance.
+          BudgetInsightBanner(message: _budgetInsight()),
           const SizedBox(height: 18),
           // Category budget cards show spent vs. limit for the current time scope.
           if (activeBudgetProgress.isEmpty)
@@ -333,22 +314,14 @@ class _BudgetPageState extends State<BudgetPage> {
       },
       itemBuilder: (context, index) {
         final item = items[index];
-        final itemKey = _budgetItemKeys.putIfAbsent(
-          item.budgetId,
-          GlobalKey.new,
-        );
         return Padding(
           key: ValueKey('budget-item-${item.budgetId}'),
           padding: EdgeInsets.only(bottom: index == items.length - 1 ? 0 : 14),
-          child: KeyedSubtree(
-            key: itemKey,
-            child: BudgetProgressCard(
-              item: item,
-              index: index,
-              highlighted: _highlightedBudgetId == item.budgetId,
-              onEdit: (selectedItem) =>
-                  _showEditBudgetDialog(context, selectedItem),
-            ),
+          child: BudgetProgressCard(
+            item: item,
+            index: index,
+            onEdit: (selectedItem) =>
+                _showEditBudgetDialog(context, selectedItem),
           ),
         );
       },
@@ -366,35 +339,6 @@ class _BudgetPageState extends State<BudgetPage> {
     return '${lead.title} (${(lead.ratio * 100).toStringAsFixed(0)}%)';
   }
 
-  /// Categories projected to finish the month over budget (month view).
-  List<BudgetCategoryProgress> _overspendCategories() {
-    if (viewMode != BudgetViewMode.month) return const [];
-    final over = activeBudgetProgress
-        .where((item) => item.spent > 0 && item.isBurnRateHigh)
-        .toList()
-      ..sort((a, b) => b.projectedOverrun.compareTo(a.projectedOverrun));
-    return over;
-  }
-
-  Future<void> _scrollToBudgetCategory(String budgetId) async {
-    final key = _budgetItemKeys[budgetId];
-    final target = key?.currentContext;
-    if (target == null) return;
-
-    setState(() => _highlightedBudgetId = budgetId);
-    await Scrollable.ensureVisible(
-      target,
-      duration: const Duration(milliseconds: 350),
-      curve: Curves.easeOutCubic,
-      alignment: 0.15,
-    );
-    await Future<void>.delayed(const Duration(milliseconds: 1600));
-    if (!mounted) return;
-    if (_highlightedBudgetId == budgetId) {
-      setState(() => _highlightedBudgetId = null);
-    }
-  }
-
   // Short status sentence shown in the warning card near the top of the page.
   String _budgetInsight() {
     final lead = _topCategory();
@@ -402,31 +346,6 @@ class _BudgetPageState extends State<BudgetPage> {
     if (lead.spent <= 0 || lead.ratio <= 0) {
       return 'Budget Insight: no spending data yet.';
     }
-
-    // Month view: prefer burn-rate pace messaging (no Generate click required).
-    if (viewMode == BudgetViewMode.month) {
-      if (lead.isBurnRateHigh) {
-        return 'Burn rate alert: ${lead.title} projects '
-            '\$${lead.projectedMonthEnd.toStringAsFixed(0)} by month end '
-            '(\$${lead.projectedOverrun.toStringAsFixed(0)} over budget).';
-      }
-      if (lead.isBurnRateApproaching) {
-        return 'Burn rate alert: ${lead.title} is on pace for '
-            '\$${lead.projectedMonthEnd.toStringAsFixed(0)} by month end (near limit).';
-      }
-      // Prefer the worst burn-rate category even if ratio leader looks fine.
-      final burnLead = _topBurnRateCategory();
-      if (burnLead != null && burnLead.isBurnRateHigh) {
-        return 'Burn rate alert: ${burnLead.title} projects '
-            '\$${burnLead.projectedMonthEnd.toStringAsFixed(0)} by month end '
-            '(\$${burnLead.projectedOverrun.toStringAsFixed(0)} over budget).';
-      }
-      if (burnLead != null && burnLead.isBurnRateApproaching) {
-        return 'Burn rate alert: ${burnLead.title} is on pace for '
-            '\$${burnLead.projectedMonthEnd.toStringAsFixed(0)} by month end (near limit).';
-      }
-    }
-
     if (lead.ratio >= 1) {
       return 'Budget Insight: ${lead.title} is over limit for selected month.';
     }
@@ -443,27 +362,6 @@ class _BudgetPageState extends State<BudgetPage> {
     final lead = sorted.first;
     if (lead.spent <= 0 || lead.ratio <= 0) return null;
     return lead;
-  }
-
-  BudgetCategoryProgress? _topBurnRateCategory() {
-    if (activeBudgetProgress.isEmpty) return null;
-    final sorted = [...activeBudgetProgress]
-      ..sort((a, b) {
-        final ap = a.projectedMonthEnd;
-        final bp = b.projectedMonthEnd;
-        if (!ap.isFinite && !bp.isFinite) return 0;
-        if (!ap.isFinite) return 1;
-        if (!bp.isFinite) return -1;
-        return bp.compareTo(ap);
-      });
-    final candidates = sorted.where(
-      (item) =>
-          item.limit > 0 &&
-          item.spent > 0 &&
-          (item.isBurnRateHigh || item.isBurnRateApproaching),
-    );
-    if (candidates.isEmpty) return null;
-    return candidates.first;
   }
 
   // -------------------------------------------------------------------------
@@ -499,15 +397,14 @@ class _BudgetPageState extends State<BudgetPage> {
             FilledButton(
               onPressed: () async {
                 final parsed = double.tryParse(controller.text.trim());
-                if (parsed == null || !parsed.isFinite || parsed < 0) return;
+                if (parsed == null || parsed < 0) return;
                 final monthlyLimit = viewMode == BudgetViewMode.year
                     ? (parsed / 12)
                     : parsed;
-                // Pop first so parent rebuild during save cannot break the dialog route.
+                await widget.onUpdateBudgetLimit(item.budgetId, monthlyLimit);
                 if (dialogContext.mounted) {
                   Navigator.of(dialogContext).pop();
                 }
-                await widget.onUpdateBudgetLimit(item.budgetId, monthlyLimit);
               },
               child: const Text('Save'),
             ),
@@ -578,17 +475,17 @@ class _BudgetPageState extends State<BudgetPage> {
                 FilledButton(
                   onPressed: () async {
                     final parsed = double.tryParse(controller.text.trim());
-                    if (parsed == null || !parsed.isFinite || parsed < 0) return;
+                    if (parsed == null || parsed < 0) return;
                     final monthlyLimit = viewMode == BudgetViewMode.year
                         ? (parsed / 12)
                         : parsed;
-                    if (dialogContext.mounted) {
-                      Navigator.of(dialogContext).pop();
-                    }
                     await widget.onUpdateBudgetLimit(
                       selected.budgetId,
                       monthlyLimit,
                     );
+                    if (dialogContext.mounted) {
+                      Navigator.of(dialogContext).pop();
+                    }
                   },
                   child: const Text('Save'),
                 ),
