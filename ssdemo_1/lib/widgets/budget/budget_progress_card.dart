@@ -9,11 +9,13 @@ class BudgetProgressCard extends StatelessWidget {
     required this.item,
     required this.index,
     required this.onEdit,
+    this.highlighted = false,
   });
 
   final BudgetCategoryProgress item;
   final int index;
   final ValueChanged<BudgetCategoryProgress> onEdit;
+  final bool highlighted;
 
   @override
   Widget build(BuildContext context) {
@@ -27,7 +29,8 @@ class BudgetProgressCard extends StatelessWidget {
     final spent = item.spent;
     final remaining = (limit - spent).clamp(-999999, 999999);
 
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -36,7 +39,10 @@ class BudgetProgressCard extends StatelessWidget {
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: tone.withValues(alpha: 0.25)),
+        border: Border.all(
+          color: highlighted ? Colors.orange : tone.withValues(alpha: 0.25),
+          width: highlighted ? 2 : 1,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -78,18 +84,22 @@ class BudgetProgressCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           LinearProgressIndicator(
-            value: progress.clamp(0, 1),
+            value: progress.isFinite ? progress.clamp(0, 1) : 0,
             minHeight: 8,
-            color: isWarning ? Colors.orange : tone,
+            color: item.isBurnRateHigh
+                ? Colors.redAccent
+                : (isWarning ? Colors.orange : tone),
             backgroundColor: Colors.black12,
           ),
           const SizedBox(height: 8),
           Row(
             children: [
               Text(
-                isWarning ? 'High usage' : 'Healthy',
+                _statusLabel(item),
                 style: TextStyle(
-                  color: isWarning ? Colors.orange : tone,
+                  color: isWarning
+                      ? (item.isBurnRateHigh ? Colors.redAccent : Colors.orange)
+                      : tone,
                   fontWeight: FontWeight.w600,
                   fontSize: 12,
                 ),
@@ -104,8 +114,38 @@ class BudgetProgressCard extends StatelessWidget {
               ),
             ],
           ),
+          if (item.limit > 0 && item.spent > 0) ...[
+            const SizedBox(height: 6),
+            Text(
+              _burnRateLine(item),
+              style: TextStyle(
+                fontSize: 11,
+                color: item.isBurnRateHigh
+                    ? Colors.redAccent
+                    : (item.isBurnRateApproaching ? Colors.orange : Colors.black54),
+              ),
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  String _statusLabel(BudgetCategoryProgress item) {
+    if (item.isBurnRateHigh) return 'On track to overspend';
+    if (item.isBurnRateApproaching) return 'Burn rate high';
+    if (item.isWarning) return 'High usage';
+    return 'Healthy';
+  }
+
+  String _burnRateLine(BudgetCategoryProgress item) {
+    final projected = item.projectedMonthEnd;
+    if (item.isBurnRateHigh) {
+      return 'Burn rate: ~\$${item.burnRateDaily.toStringAsFixed(0)}/day → '
+          '~\$${projected.toStringAsFixed(0)} by month end '
+          '(+\$${item.projectedOverrun.toStringAsFixed(0)} over)';
+    }
+    return 'Burn rate: ~\$${item.burnRateDaily.toStringAsFixed(0)}/day → '
+        '~\$${projected.toStringAsFixed(0)} projected month end';
   }
 }

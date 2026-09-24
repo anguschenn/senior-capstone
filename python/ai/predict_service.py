@@ -1,3 +1,4 @@
+import calendar
 import datetime as dt
 
 from .explainers import build_predict_explainer_prompt
@@ -11,6 +12,9 @@ from .validators import (
     sanitize_subscriptions,
     to_float,
 )
+
+# Projected month-end usage at/above this fraction of limit is elevated (med) risk.
+_BURN_RATE_APPROACHING_RATIO = 0.9
 
 
 class PredictService:
@@ -45,53 +49,160 @@ class PredictService:
             return 0.6
         return 0.3
 
+    @staticmethod
+    def _month_burn_rate_context(today=None):
+        """Days elapsed / days in month for pace projection (month view only)."""
+        today = today or dt.date.today()
+        days_in_month = calendar.monthrange(today.year, today.month)[1]
+        days_elapsed = max(1, min(today.day, days_in_month))
+        return days_elapsed, days_in_month
+
     def _budget_overrun(self, view_mode, budget_progress):
-        """Compute budget overrun risk from category spend/limit ratios."""
-        ranked = sorted(budget_progress or [], key=lambda x: x.get("ratio", 0), reverse=True)
+        """Compute overrun risk from spend/limit ratios plus month burn-rate pace."""
+        ranked = sorted(
+            budget_progress or [],
+            key=lambda x: x.get("ratio", 0),
+            reverse=True,
+        )
+        use_burn_rate = view_mode == "month"
+        days_elapsed, days_in_month = self._month_burn_rate_context()
+
         at_risk = []
         estimated_overrun = 0.0
+        estimated_projected_overrun = 0.0
         max_ratio = 0.0
+        max_projected_ratio = 0.0
         has_spend_signal = False
+
         for item in ranked[:10]:
             spent = max(0.0, to_float(item.get("spent", 0)))
+            limit = max(0.0, to_float(item.get("limit", 0)))
             ratio = max(0.0, to_float(item.get("ratio", 0)))
+            if limit > 0 and ratio <= 0 and spent > 0:
+                ratio = spent / limit
             if spent > 0:
                 has_spend_signal = True
             max_ratio = max(max_ratio, ratio)
-            if ratio >= 0.8:
-                overrun = max(0.0, spent - to_float(item.get("limit", 0)))
-                estimated_overrun += overrun
-                at_risk.append(
-                    {
-                        "category": item.get("category"),
-                        "ratio": round(ratio, 2),
-                        "spent": round(spent, 2),
-                        "limit": round(to_float(item.get("limit", 0)), 2),
-                    }
-                )
+
+            burn_rate_daily = spent / days_elapsed if use_burn_rate else 0.0
+            projected_eom = (
+                burn_rate_daily * days_in_month if use_burn_rate else spent
+            )
+            allowed_daily = (
+                (limit / days_in_month) if (use_burn_rate and limit > 0) else 0.0
+            )
+            projected_ratio = (projected_eom / limit) if limit > 0 else 0.0
+            max_projected_ratio = max(max_projected_ratio, projected_ratio)
+            projected_overrun = max(0.0, projected_eom - limit) if limit > 0 else 0.0
+
+            pace_approaching = (
+                use_burn_rate
+                and limit > 0
+                and projected_ratio >= _BURN_RATE_APPROACHING_RATIO
+                and projected_eom <= limit
+            )
+            projects_over = use_burn_rate and limit > 0 and projected_eom > limit
+            ratio_at_risk = ratio >= 0.8
+
+            if not (projects_over or pace_approaching or ratio_at_risk):
+                continue
+
+            current_overrun = max(0.0, spent - limit) if limit > 0 else 0.0
+            estimated_overrun += current_overrun
+            estimated_projected_overrun += projected_overrun
+
+            if projects_over or ratio >= 1.0:
+                level = "high"
+            else:
+                level = "med"
+
+            at_risk.append(
+                {
+                    "category": item.get("category"),
+                    "ratio": round(ratio, 2),
+                    "spent": round(spent, 2),
+                    "limit": round(limit, 2),
+                    "burn_rate_daily": round(burn_rate_daily, 2),
+                    "projected_eom": round(projected_eom, 2),
+                    "projected_overrun": round(projected_overrun, 2),
+                    "allowed_daily": round(allowed_daily, 2),
+                    "level": level,
+                    "projects_over": projects_over,
+                    "pace_approaching": pace_approaching,
+                }
+            )
+
+        # Prefer highest projected overrun / ratio for ranking alerts.
+        at_risk.sort(
+            key=lambda x: (
+                1 if x.get("level") == "high" else 0,
+                x.get("projected_overrun", 0),
+                x.get("ratio", 0),
+            ),
+            reverse=True,
+        )
 
         forecast = {
             "view_mode": view_mode,
             "at_risk_count": len(at_risk),
             "estimated_overrun_total": round(estimated_overrun, 2),
+            "estimated_projected_overrun_total": round(estimated_projected_overrun, 2),
             "at_risk_categories": at_risk[:5],
+            "burn_rate_enabled": use_burn_rate,
+            "days_elapsed": days_elapsed if use_burn_rate else None,
+            "days_in_month": days_in_month if use_burn_rate else None,
         }
-        alerts = [
-            {
-                "level": "high" if item["ratio"] >= 1.0 else "med",
-                "message": f"{item['category']} at {int(item['ratio'] * 100)}% of budget",
-            }
-            for item in at_risk[:3]
-        ]
+
+        alerts = []
+        for item in at_risk[:3]:
+            category = item.get("category") or "Category"
+            if item.get("projects_over"):
+                over = item.get("projected_overrun", 0)
+                projected = item.get("projected_eom", 0)
+                alerts.append(
+                    {
+                        "level": "high",
+                        "message": (
+                            f"{category} burn rate projects "
+                            f"${projected:.0f} by month end "
+                            f"(${over:.0f} over budget)"
+                        ),
+                    }
+                )
+            elif item.get("ratio", 0) >= 1.0:
+                alerts.append(
+                    {
+                        "level": "high",
+                        "message": f"{category} at {int(item['ratio'] * 100)}% of budget",
+                    }
+                )
+            elif item.get("pace_approaching"):
+                projected = item.get("projected_eom", 0)
+                alerts.append(
+                    {
+                        "level": "med",
+                        "message": (
+                            f"{category} burn rate projects "
+                            f"${projected:.0f} by month end (near limit)"
+                        ),
+                    }
+                )
+            else:
+                alerts.append(
+                    {
+                        "level": "med",
+                        "message": f"{category} at {int(item['ratio'] * 100)}% of budget",
+                    }
+                )
+
         next_actions = [
             {
-                "id": f"cap_{item['category'].lower().replace(' ', '_')}",
-                "label": f"Cap {item['category']} spending this week",
+                "id": f"cap_{str(item.get('category', 'category')).lower().replace(' ', '_')}",
+                "label": f"Cap {item.get('category')} spending this week",
             }
             for item in at_risk[:3]
         ]
         if not next_actions and has_spend_signal:
-            # Baseline actions for low-risk periods: still actionable without overreacting.
             next_actions = [
                 {"id": "monitor_weekly", "label": "Monitor top category weekly"},
                 {
@@ -100,10 +211,19 @@ class PredictService:
                 },
             ]
         why = [
-            "Forecast uses deterministic budget ratio thresholds.",
-            "Categories at or above 80% are treated as at-risk.",
+            "Forecast uses spend/limit ratios and month burn-rate pace projection.",
+            (
+                "Burn rate projects month-end spend from daily pace "
+                f"(day {days_elapsed}/{days_in_month})."
+                if use_burn_rate
+                else "Burn-rate pace applies in month view; other views use ratio thresholds."
+            ),
+            "Categories at or above 80% usage remain at-risk.",
         ]
-        signal = min(1.0, max(0.2, max_ratio / 1.2))
+        signal = min(
+            1.0,
+            max(0.2, max(max_ratio, max_projected_ratio) / 1.2),
+        )
         sufficient = has_spend_signal or len(at_risk) > 0
         return forecast, why, alerts, next_actions, signal, sufficient
 
@@ -216,10 +336,21 @@ class PredictService:
         """Rule-based explanation used in simplified mode and as fallback."""
         if predict_type == "budget_overrun_forecast":
             at_risk_count = int(forecast.get("at_risk_count", 0) or 0)
+            projected_over = float(forecast.get("estimated_projected_overrun_total", 0) or 0)
             if at_risk_count <= 0:
                 return (
-                    "Current budget overrun risk is low; no categories are near the warning threshold.",
-                    ["No category has reached the 80% budget-usage risk threshold."],
+                    "Current budget overrun risk is low; spending pace looks sustainable.",
+                    [
+                        "No category projects over budget or has reached the 80% usage threshold.",
+                    ],
+                )
+            if projected_over > 0:
+                return (
+                    f"At-risk categories: {at_risk_count}; "
+                    f"burn rate projects ${projected_over:.0f} over budget by month end.",
+                    [
+                        "Daily spend pace extrapolated to month end exceeds category limits.",
+                    ],
                 )
             return (
                 f"At-risk categories: {forecast.get('at_risk_count', 0)}; "

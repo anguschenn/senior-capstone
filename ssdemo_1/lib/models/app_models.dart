@@ -325,8 +325,67 @@ class BudgetCategoryProgress {
   final double spent;
   final double limit;
 
-  double get ratio => limit <= 0 ? 0 : (spent / limit).clamp(0, 1.5);
-  bool get isWarning => ratio >= 0.8;
+  double get ratio {
+    if (limit <= 0 || !spent.isFinite || !limit.isFinite) return 0;
+    final value = spent / limit;
+    if (!value.isFinite) return 0;
+    return value.clamp(0, 1.5);
+  }
+
+  /// Days elapsed in the current calendar month (at least 1).
+  static int get daysElapsedThisMonth {
+    final now = DateTime.now();
+    final dim = daysInMonth(now.year, now.month);
+    final day = now.day;
+    if (day < 1) return 1;
+    if (day > dim) return dim;
+    return day;
+  }
+
+  static int daysInMonth(int year, int month) => DateTime(year, month + 1, 0).day;
+
+  /// Daily spend pace so far this month.
+  double get burnRateDaily {
+    final elapsed = daysElapsedThisMonth;
+    if (elapsed <= 0 || !spent.isFinite) return 0;
+    final value = spent / elapsed;
+    return value.isFinite ? value : 0;
+  }
+
+  /// Extrapolated month-end spend if today's pace continues.
+  double get projectedMonthEnd {
+    final now = DateTime.now();
+    final dim = daysInMonth(now.year, now.month);
+    final value = burnRateDaily * dim;
+    return value.isFinite ? value : 0;
+  }
+
+  double get projectedOverrun {
+    if (limit <= 0 || !limit.isFinite) return 0;
+    final over = projectedMonthEnd - limit;
+    if (!over.isFinite || over <= 0) return 0;
+    return over;
+  }
+
+  double get allowedDaily {
+    if (limit <= 0 || !limit.isFinite) return 0;
+    final now = DateTime.now();
+    final value = limit / daysInMonth(now.year, now.month);
+    return value.isFinite ? value : 0;
+  }
+
+  /// Projected to finish the month over the limit.
+  bool get isBurnRateHigh =>
+      limit > 0 && projectedMonthEnd.isFinite && projectedMonthEnd > limit;
+
+  /// On pace to use most of the budget (>= 90%) but not yet over.
+  bool get isBurnRateApproaching {
+    if (limit <= 0 || isBurnRateHigh) return false;
+    return projectedMonthEnd >= limit * 0.9;
+  }
+
+  bool get isWarning =>
+      ratio >= 0.8 || isBurnRateHigh || isBurnRateApproaching;
 }
 
 // Category option loaded from Supabase and reused by budget flows.
