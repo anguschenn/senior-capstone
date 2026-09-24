@@ -1,24 +1,26 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../constants/app_constants.dart';
 import '../models/app_models.dart';
+import '../models/budget_pace.dart';
 import '../utils/app_helpers.dart';
+import '../widgets/budget/budget_pace_chart_card.dart';
 import '../widgets/cash_flow/cash_flow_range_selector.dart';
 import '../widgets/cash_flow/cash_flow_totals_card.dart';
 import '../widgets/cash_flow/cash_flow_trend_summary_card.dart';
-import '../widgets/dashboard_sections.dart';
 
 class CashFlowPage extends StatefulWidget {
   const CashFlowPage({
     super.key,
     required this.transactions,
+    required this.budgetProgress,
     required this.selectedMonth,
     required this.monthOptions,
     required this.onMonthChanged,
   });
 
   final List<AppTransaction> transactions;
+  final List<BudgetCategoryProgress> budgetProgress;
   final DateTime selectedMonth;
   final List<DateTime> monthOptions;
   final ValueChanged<DateTime> onMonthChanged;
@@ -264,20 +266,29 @@ class _CashFlowPageState extends State<CashFlowPage> {
             net: _periodNet,
           ),
           const SizedBox(height: 24),
-          // Simple bar chart showing expense magnitude for the active range.
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.green.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(16),
+          // Month view: Copilot-style budget remaining + burn-pace chart.
+          if (viewMode == FlowViewMode.month &&
+              !isAllYearOption(widget.selectedMonth))
+            BudgetPaceChartCard(
+              snapshot: BudgetPaceSnapshot.build(
+                focusMonth: _focusMonth,
+                budgets: widget.budgetProgress,
+                transactions: widget.transactions,
+              ),
+            )
+          else
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.04),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Text(
+                'Switch to month view to see budget pace',
+                style: TextStyle(color: Colors.black54),
+              ),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: _buildBars(),
-            ),
-          ),
           const SizedBox(height: 20),
           // Lightweight text summary that turns the chart data into a sentence.
           CashFlowTrendSummaryCard(
@@ -289,30 +300,6 @@ class _CashFlowPageState extends State<CashFlowPage> {
         ],
       ),
     );
-  }
-
-  List<Widget> _buildBars() {
-    final series = _activeSeries;
-    if (series.isEmpty) {
-      return const [
-        ChartBar(label: '-', height: 40, value: 0),
-        ChartBar(label: '-', height: 40, value: 0),
-        ChartBar(label: '-', height: 40, value: 0),
-        ChartBar(label: '-', height: 40, value: 0),
-        ChartBar(label: '-', height: 40, value: 0),
-      ];
-    }
-    final maxExpense = series.map((e) => e.expenses).fold<double>(0, math.max);
-    final safeMax = maxExpense <= 0 ? 1 : maxExpense;
-    return series
-        .map(
-          (e) => ChartBar(
-            label: e.label,
-            height: 40 + (e.expenses / safeMax) * 80,
-            value: e.expenses,
-          ),
-        )
-        .toList();
   }
 
   // Produces the short trend summary sentence shown below the chart.

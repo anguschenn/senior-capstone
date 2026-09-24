@@ -117,6 +117,7 @@ class _MainScreenState extends State<MainScreen> {
       ),
       1 => CashFlowPage(
         transactions: visibleTransactions,
+        budgetProgress: visibleBudgetProgress,
         selectedMonth: c.selectedMonth,
         monthOptions: monthOptions,
         onMonthChanged: c.selectMonth,

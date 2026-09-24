@@ -234,35 +234,7 @@ class _BudgetPageState extends State<BudgetPage> {
             onMonthChanged: widget.onMonthChanged,
           ),
           const SizedBox(height: 12),
-          // Top controls switch time scope and open budget editing flows.
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Budget',
-                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-                ),
-              ),
-              OutlinedButton.icon(
-                onPressed: () => _showBulkEditBudgetDialog(context),
-                icon: const Icon(Icons.tune),
-                label: const Text('Edit Budget'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: OutlinedButton.icon(
-              onPressed: () => _showCustomCategoryDialog(context),
-              icon: const Icon(Icons.add_circle_outline),
-              label: const Text('Add Custom Category'),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '${periodLabelForSelection(widget.selectedMonth)} cash flow: ${widget.stats.cashFlowNetThisMonth >= 0 ? '+ ' : '- '}\$${widget.stats.cashFlowNetThisMonth.abs().toStringAsFixed(2)}',
-          ),
+          _budgetHeader(context),
           const SizedBox(height: 20),
           // Lists overspending categories; tap a name to jump to its card.
           Builder(
@@ -308,6 +280,123 @@ class _BudgetPageState extends State<BudgetPage> {
             onGenerate: _generateAiBudgetSuggestions,
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _budgetHeader(BuildContext context) {
+    final net = widget.stats.cashFlowNetThisMonth;
+    final positive = net >= 0;
+    final tone = positive ? Colors.green.shade700 : Colors.redAccent;
+    final period = periodLabelForSelection(widget.selectedMonth);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+      decoration: BoxDecoration(
+        color: Colors.green.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Budget',
+            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  positive ? Icons.trending_up : Icons.trending_down,
+                  size: 18,
+                  color: tone,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '$period cash flow',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: Colors.black54,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                Text(
+                  '${positive ? '+' : '-'}\$${net.abs().toStringAsFixed(2)}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: tone,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _headerAction(
+                  icon: Icons.add_circle_outline,
+                  label: 'Add Category',
+                  onPressed: () => _showCustomCategoryDialog(context),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _headerAction(
+                  icon: Icons.tune,
+                  label: 'Edit Budget',
+                  onPressed: () => _showBulkEditBudgetDialog(context),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _headerAction({
+    required IconData icon,
+    required String label,
+    required VoidCallback onPressed,
+  }) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 18, color: Colors.green.shade700),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.green.shade800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
