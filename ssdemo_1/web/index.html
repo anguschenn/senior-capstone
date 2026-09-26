@@ -31,6 +31,22 @@
 
   <title>ssdemo_1</title>
   <link rel="manifest" href="manifest.json">
+  <style>
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+    flutter-view, flt-glass-pane {
+      position: fixed !important;
+      inset: 0 !important;
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+    }
+  </style>
   <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
   <script>
     function plaidOpenLink(token, onSuccess, onExit) {

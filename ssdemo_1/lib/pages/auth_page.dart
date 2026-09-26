@@ -148,11 +148,12 @@ class _AuthPageState extends State<AuthPage> {
                 top: 24,
                 bottom: 24 + MediaQuery.viewInsetsOf(context).bottom,
               ),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight: constraints.maxHeight - 48,
-                  maxWidth: 420,
-                ),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: constraints.maxHeight - 48,
+                    maxWidth: 420,
+                  ),
                 child: IntrinsicHeight(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -276,6 +277,7 @@ class _AuthPageState extends State<AuthPage> {
                     ],
                   ),
                 ),
+              ),
               ),
             );
           },
