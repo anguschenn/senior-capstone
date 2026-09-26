@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -11,6 +12,7 @@ import 'account_service.dart';
 import 'auth_service.dart';
 import 'budget_service.dart';
 import 'category_service.dart';
+import 'sync_cache.dart';
 
 /// Thrown when Plaid reports ITEM_LOGIN_REQUIRED for a linked bank.
 class ItemLoginRequiredException implements Exception {
@@ -46,6 +48,14 @@ class SyncResult {
   final bool hasData;
   final Map<String, String> autoReviewedCategoryByTxId;
   final Set<String> autoLowConfidenceReviewTxIds;
+}
+
+/// A [SyncResult] rebuilt from the on-device copy, and when that copy was saved.
+class CachedSyncResult {
+  const CachedSyncResult({required this.result, required this.savedAt});
+
+  final SyncResult result;
+  final DateTime savedAt;
 }
 
 /// Orchestrates bank sync trigger and Supabase data loading.
@@ -96,12 +106,47 @@ class SyncService {
   }
 
   /// Central load path: accounts, transactions, subscriptions, budgets.
+  /// Also saves the raw rows on-device so the next launch can paint from them.
   Future<SyncResult> refreshFromSupabase(
     Map<String, String> reviewedCategoryByTxId,
     DateTime selectedMonth,
   ) async {
-    final userId = AuthService.instance.currentUserId;
-    final now = DateTime.now();
+    final raw = await fetchRaw(
+      AuthService.instance.currentUserId,
+      selectedMonth,
+    );
+    unawaited(SyncCache.instance.save(raw));
+    return buildResult(raw, reviewedCategoryByTxId);
+  }
+
+  /// The last successful load saved on this device, rebuilt into a result, or
+  /// null when there is none. Never throws: the saved copy is an optimization.
+  Future<CachedSyncResult?> loadCachedResult(
+    Map<String, String> reviewedCategoryByTxId,
+    DateTime selectedMonth,
+  ) async {
+    try {
+      final raw = await SyncCache.instance.load(
+        AuthService.instance.currentUserId,
+      );
+      if (raw == null) return null;
+      final monthYear = _monthKey(normalizedMonthOption(selectedMonth));
+      // Budget limits are stored per month; don't show another month's limits.
+      final usable = raw.monthYear == monthYear ? raw : raw.withoutBudgets();
+      return CachedSyncResult(
+        result: buildResult(usable, reviewedCategoryByTxId),
+        savedAt: raw.savedAt,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Forgets the on-device copy (sign-out, "Clear").
+  Future<void> clearSavedData() => SyncCache.instance.clear();
+
+  /// Fetches everything a refresh needs from Supabase, unparsed.
+  Future<RawSyncData> fetchRaw(String userId, DateTime selectedMonth) async {
     final focused = normalizedMonthOption(selectedMonth);
     final monthYear = _monthKey(focused);
 
@@ -151,7 +196,6 @@ class SyncService {
         .order('date', ascending: false)
         .limit(1000);
 
-    // Parse and de-duplicate transactions.
     final txRows = (rows as List).whereType<Map<String, dynamic>>().map((row) {
       final accountId = ((row['plaid_account_id'] as String?) ?? '').trim();
       final meta = accountMetaById[accountId] ?? const <String, String>{};
@@ -162,9 +206,52 @@ class SyncService {
         'subtype': meta['subtype'] ?? '',
       };
     }).toList();
-    final rememberedRulesUserId = userId;
     final rememberedRules = await CategoryService.instance
-        .fetchRememberedRuleDecisions(rememberedRulesUserId);
+        .fetchRememberedRuleDecisions(userId);
+
+    return RawSyncData(
+      userId: userId,
+      monthYear: monthYear,
+      savedAt: DateTime.now(),
+      accountsRows: accountsRows,
+      categories: userCategories,
+      budgetRows: (budgetRows as List)
+          .whereType<Map<String, dynamic>>()
+          .toList(),
+      subscriptionRows: (subscriptionRows as List)
+          .whereType<Map<String, dynamic>>()
+          .toList(),
+      txRows: txRows,
+      rememberedRules: {
+        for (final e in rememberedRules.entries)
+          e.key: {
+            'category': e.value.category,
+            'confidence': e.value.confidence,
+          },
+      },
+    );
+  }
+
+  /// Turns raw rows (fresh from Supabase or from the on-device copy) into the
+  /// parsed result the UI renders. Pure: no network, no storage.
+  SyncResult buildResult(
+    RawSyncData raw,
+    Map<String, String> reviewedCategoryByTxId, {
+    DateTime? asOf,
+  }) {
+    final now = asOf ?? DateTime.now();
+    final txRows = raw.txRows;
+    final accountsRows = raw.accountsRows;
+    final userCategories = raw.categories;
+    final rememberedRules = {
+      for (final e in raw.rememberedRules.entries)
+        e.key: CategoryDecision(
+          category: e.value['category'] ?? '',
+          confidence: e.value['confidence'] ?? 'high',
+        ),
+    };
+
+    // Parse and de-duplicate transactions.
     final parsed = txRows.map(AppTransaction.fromMap).toList();
     final deduped = <AppTransaction>[];
     final seen = <String>{};
@@ -211,8 +298,7 @@ class SyncService {
     // Build subscriptions.
     final dbSubscriptions = <DetectedSubscription>[];
     final subSeen = <String>{};
-    for (final row
-        in (subscriptionRows as List).whereType<Map<String, dynamic>>()) {
+    for (final row in raw.subscriptionRows) {
       final merchant = (row['merchant_name'] as String?)?.trim();
       if (merchant == null || merchant.isEmpty) continue;
       final rawAmount = row['amount'];
@@ -268,9 +354,7 @@ class SyncService {
 
     // Budget progress.
     final categoryMap = {for (final c in userCategories) c.id: c.name};
-    final budgetRowsList = (budgetRows as List)
-        .whereType<Map<String, dynamic>>()
-        .toList();
+    final budgetRowsList = raw.budgetRows;
     final budgetProgress = BudgetService.instance.buildProgressFromRows(
       budgetRows: budgetRowsList,
       categoryMap: categoryMap,

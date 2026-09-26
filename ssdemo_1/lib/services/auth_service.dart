@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/config/supabase_client.dart';
+import 'sync_cache.dart';
 
 class SignUpResult {
   const SignUpResult({required this.requiresEmailConfirmation});
@@ -46,7 +47,11 @@ class AuthService {
     return SignUpResult(requiresEmailConfirmation: response.session == null);
   }
 
-  Future<void> signOut() => _auth.signOut();
+  Future<void> signOut() async {
+    // Saved sync data is financial data; don't leave it on the device.
+    await SyncCache.instance.clear();
+    await _auth.signOut();
+  }
 
   Future<void> resetPasswordForEmail(String email) async {
     await _auth.resetPasswordForEmail(email.trim());

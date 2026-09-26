@@ -46,7 +46,7 @@ class _MainScreenState extends State<MainScreen> {
     super.initState();
     _ctrl.addListener(_onControllerChange);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _ctrl.refreshLiveDataOnly();
+      _ctrl.loadCachedThenRefresh();
     });
   }
 
@@ -94,6 +94,7 @@ class _MainScreenState extends State<MainScreen> {
         ),
         stats: visibleStats,
         syncing: c.syncing,
+        bankSyncBusy: c.refreshingInBackground,
         syncStatus: c.syncStatus,
         onConnectBank: c.reauthenticateBank,
         onAddBank: c.connectBankAndPullData,

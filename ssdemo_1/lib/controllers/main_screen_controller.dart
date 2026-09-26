@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../constants/app_constants.dart';
@@ -14,14 +16,28 @@ export '../services/sync_service.dart' show ItemLoginRequiredException;
 
 /// Owns all mutable state for the main screen and exposes actions for the UI.
 class MainScreenController extends ChangeNotifier {
+  MainScreenController({SyncService? sync})
+    : _sync = sync ?? SyncService.instance;
+
+  final SyncService _sync;
   bool _isDisposed = false;
   // Navigation
   int tabIndex = 0;
 
   // Sync
   bool syncing = false;
+
+  /// True while the launch refresh runs. Unlike [syncing] it does not lock the
+  /// whole screen: saved or Supabase data is already showing and stays usable;
+  /// only the bank-sync buttons wait, so two bank syncs never overlap.
+  bool refreshingInBackground = false;
   bool loginRequired = false;
   String syncStatus = 'No data loaded yet';
+
+  // Bumped whenever a refresh starts or data is cleared. A fetched result is
+  // applied only if nothing newer started meanwhile, so a slow older fetch can
+  // never overwrite fresher data.
+  int _refreshGen = 0;
 
   // Live data
   List<AppTransaction> liveTransactions = const [];
@@ -95,16 +111,16 @@ class MainScreenController extends ChangeNotifier {
   }
 
   Future<void> refreshLiveDataOnly() async {
-    if (syncing) return;
+    if (syncing || refreshingInBackground) return;
     syncing = true;
     syncStatus = 'Syncing with bank...';
     _notifyListenersSafe();
     try {
-      await SyncService.instance.triggerBankSync();
+      await _sync.triggerBankSync();
       loginRequired = false;
       syncStatus = 'Loading...';
       _notifyListenersSafe();
-      final result = await SyncService.instance.refreshFromSupabase(
+      final result = await _sync.refreshFromSupabase(
         reviewedCategoryByTxId,
         selectedMonth,
       );
@@ -121,8 +137,75 @@ class MainScreenController extends ChangeNotifier {
     }
   }
 
+  /// Reads Supabase and applies the result, unless a newer refresh has started.
+  Future<SyncResult?> _fetchAndApply() async {
+    final gen = ++_refreshGen;
+    final result = await _sync.refreshFromSupabase(
+      reviewedCategoryByTxId,
+      selectedMonth,
+    );
+    if (gen != _refreshGen || _isDisposed) return null;
+    _applySyncResult(result);
+    return result;
+  }
+
+  /// Launch path. Paints the on-device copy of the last sync immediately, then
+  /// reads Supabase (which already holds the last synced data) without waiting
+  /// on the bank, and only then pulls new bank data in the background and reads
+  /// again. The screen never waits on the (possibly cold) backend.
+  Future<void> loadCachedThenRefresh() async {
+    if (syncing || refreshingInBackground) return;
+    refreshingInBackground = true;
+    try {
+      final cached = await _sync.loadCachedResult(
+        reviewedCategoryByTxId,
+        selectedMonth,
+      );
+      if (_isDisposed) return;
+      if (cached != null) {
+        _applySyncResult(cached.result);
+        syncStatus =
+            'Showing saved data (${_ago(cached.savedAt)}) · refreshing...';
+      } else {
+        syncStatus = 'Loading...';
+      }
+      _notifyListenersSafe();
+
+      final fresh = await _fetchAndApply();
+      if (_isDisposed) return;
+      if (fresh != null) {
+        syncStatus = 'Syncing with bank...';
+        _notifyListenersSafe();
+      }
+
+      await _sync.triggerBankSync();
+      if (_isDisposed) return;
+      loginRequired = false;
+      final synced = await _fetchAndApply();
+      if (synced != null) {
+        syncStatus = synced.hasData ? 'Updated' : 'No data found';
+      }
+    } on ItemLoginRequiredException {
+      loginRequired = true;
+      syncStatus = 'Bank login expired — tap to re-authenticate';
+    } catch (e) {
+      syncStatus = 'Refresh failed: $e';
+    } finally {
+      refreshingInBackground = false;
+      _notifyListenersSafe();
+    }
+  }
+
+  String _ago(DateTime time) {
+    final age = DateTime.now().difference(time);
+    if (age.inMinutes < 1) return 'just now';
+    if (age.inHours < 1) return '${age.inMinutes}m ago';
+    if (age.inDays < 1) return '${age.inHours}h ago';
+    return '${age.inDays}d ago';
+  }
+
   Future<void> reauthenticateBank() async {
-    if (syncing) return;
+    if (syncing || refreshingInBackground) return;
     syncing = true;
     syncStatus = 'Opening bank login...';
     _notifyListenersSafe();
@@ -133,8 +216,8 @@ class MainScreenController extends ChangeNotifier {
         loginRequired = false;
         syncStatus = 'Syncing transactions...';
         _notifyListenersSafe();
-        await SyncService.instance.triggerBankSync();
-        final result = await SyncService.instance.refreshFromSupabase(
+        await _sync.triggerBankSync();
+        final result = await _sync.refreshFromSupabase(
           reviewedCategoryByTxId,
           selectedMonth,
         );
@@ -152,7 +235,7 @@ class MainScreenController extends ChangeNotifier {
   }
 
   Future<void> connectBankAndPullData() async {
-    if (syncing) return;
+    if (syncing || refreshingInBackground) return;
     syncing = true;
     syncStatus = 'Opening Plaid Link...';
     notifyListeners();
@@ -164,17 +247,17 @@ class MainScreenController extends ChangeNotifier {
         // Web platform or user cancelled — fall back to syncing existing data.
         syncStatus = 'Refreshing...';
         notifyListeners();
-        await SyncService.instance.triggerBankSync();
+        await _sync.triggerBankSync();
       } else {
         syncStatus = 'Connecting bank...';
         notifyListeners();
         await PlaidService.instance.exchangePublicToken(publicToken);
         syncStatus = 'Syncing transactions...';
         notifyListeners();
-        await SyncService.instance.triggerBankSync();
+        await _sync.triggerBankSync();
       }
 
-      final result = await SyncService.instance.refreshFromSupabase(
+      final result = await _sync.refreshFromSupabase(
         reviewedCategoryByTxId,
         selectedMonth,
       );
@@ -189,6 +272,10 @@ class MainScreenController extends ChangeNotifier {
   }
 
   void clearLiveData() {
+    // Drop any refresh still in flight and forget the on-device copy too, so
+    // cleared data doesn't reappear on the next launch.
+    _refreshGen++;
+    unawaited(_sync.clearSavedData());
     liveTransactions = const [];
     liveSubscriptions = const [];
     liveBudgetProgress = const [];
@@ -263,7 +350,9 @@ class MainScreenController extends ChangeNotifier {
       );
       if (ok) {
         try {
-          final result = await SyncService.instance.refreshFromSupabase(
+          // An older refresh still in flight predates the rule just saved.
+          _refreshGen++;
+          final result = await _sync.refreshFromSupabase(
             reviewedCategoryByTxId,
             selectedMonth,
           );

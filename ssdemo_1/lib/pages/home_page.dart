@@ -32,6 +32,7 @@ class HomePage extends StatelessWidget {
     required this.onAccountChanged,
     required this.onTransactionCategorySelected,
     required this.onReviewConfirm,
+    this.bankSyncBusy = false,
     this.aiCategorySuggestUri,
     this.apiKey,
     this.accessToken,
@@ -43,6 +44,10 @@ class HomePage extends StatelessWidget {
   final double monthlySubscriptionTotal;
   final DashboardStats stats;
   final bool syncing;
+
+  /// A background bank refresh is running: the bank buttons wait, but the rest
+  /// of the screen (e.g. the account filter) stays usable.
+  final bool bankSyncBusy;
   final String syncStatus;
   final VoidCallback onConnectBank;
   final VoidCallback onAddBank;
@@ -222,28 +227,28 @@ class HomePage extends StatelessWidget {
             runSpacing: 8,
             children: [
               FilledButton.icon(
-                onPressed: syncing ? null : onAddBank,
-                icon: syncing
+                onPressed: syncing || bankSyncBusy ? null : onAddBank,
+                icon: syncing || bankSyncBusy
                     ? const SizedBox(
                         width: 14,
                         height: 14,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.add_link),
-                label: Text(syncing ? 'Syncing' : 'Add Bank'),
+                label: Text(syncing || bankSyncBusy ? 'Syncing' : 'Add Bank'),
               ),
               if (accountOptions.isNotEmpty)
                 OutlinedButton.icon(
-                  onPressed: syncing ? null : onConnectBank,
+                  onPressed: syncing || bankSyncBusy ? null : onConnectBank,
                   icon: const Icon(Icons.refresh, size: 18),
                   label: const Text('Reconnect'),
                 ),
               OutlinedButton(
-                onPressed: syncing ? null : onRefreshLiveData,
+                onPressed: syncing || bankSyncBusy ? null : onRefreshLiveData,
                 child: const Text('Refresh'),
               ),
               TextButton(
-                onPressed: syncing ? null : onClearLiveData,
+                onPressed: syncing || bankSyncBusy ? null : onClearLiveData,
                 child: const Text('Clear'),
               ),
             ],
