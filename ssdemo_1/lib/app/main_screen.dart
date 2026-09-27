@@ -83,8 +83,12 @@ class _MainScreenState extends State<MainScreen> {
     final spendingSummary = snapshot.spendingSummary;
     final monthOptions = _monthOptions(c.liveTransactions);
 
-    final body = switch (c.tabIndex) {
-      0 => HomePage(
+    // All five tabs are built every time (not just the active one) and kept
+    // alive in an IndexedStack, so switching tabs never destroys a page's
+    // State — scroll position, the Budget tab's AI suggestion, and its
+    // manual category order all survive a switch instead of resetting.
+    final pages = <Widget>[
+      HomePage(
         transactions: visibleTransactions,
         lowConfidenceTransactions: visibleTransactions,
         subscriptions: confirmedSubscriptions.take(3).toList(),
@@ -116,14 +120,14 @@ class _MainScreenState extends State<MainScreen> {
         apiKey: EnvConfig.instance.backendApiKey,
         accessToken: AuthService.instance.currentAccessToken,
       ),
-      1 => CashFlowPage(
+      CashFlowPage(
         transactions: visibleTransactions,
         budgetProgress: visibleBudgetProgress,
         selectedMonth: c.selectedMonth,
         monthOptions: monthOptions,
         onMonthChanged: c.selectMonth,
       ),
-      2 => TransactionsPage(
+      TransactionsPage(
         transactions: visibleTransactions,
         accountOptions: c.liveAccountOptions,
         selectedMonth: c.selectedMonth,
@@ -135,7 +139,7 @@ class _MainScreenState extends State<MainScreen> {
         apiKey: EnvConfig.instance.backendApiKey,
         accessToken: AuthService.instance.currentAccessToken,
       ),
-      3 => BudgetPage(
+      BudgetPage(
         stats: visibleStats,
         budgetProgress: visibleBudgetProgress,
         budgetProgressYear: visibleBudgetProgressYear,
@@ -148,7 +152,7 @@ class _MainScreenState extends State<MainScreen> {
         monthOptions: monthOptions,
         onMonthChanged: c.selectMonth,
       ),
-      _ => SubscriptionsPage(
+      SubscriptionsPage(
         subscriptions: visibleSubscriptions,
         monthlyTotal: confirmedSubscriptions.fold<double>(
           0,
@@ -157,7 +161,8 @@ class _MainScreenState extends State<MainScreen> {
         onConfirm: c.confirmSubscription,
         onDismiss: c.dismissSubscription,
       ),
-    };
+    ];
+    final body = IndexedStack(index: c.tabIndex, children: pages);
 
     return Stack(
       children: [
