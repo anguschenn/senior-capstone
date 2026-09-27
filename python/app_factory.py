@@ -12,8 +12,10 @@ from ai.snapshot_service import SpendingSnapshotService
 from auth import require_api_key
 from config import ALLOWED_ORIGINS
 from routes.ai_routes import ai_bp
+from routes.budget_routes import budget_bp
 from routes.plaid_routes import plaid_bp
 from routes.system_routes import system_bp
+from routes.webhook_routes import webhook_bp
 
 
 def create_app() -> Flask:
@@ -39,5 +41,7 @@ def create_app() -> Flask:
 
     app.register_blueprint(plaid_bp)
     app.register_blueprint(ai_bp)
+    app.register_blueprint(budget_bp)
     app.register_blueprint(system_bp)
+    app.register_blueprint(webhook_bp)
     return app

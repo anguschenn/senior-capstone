@@ -23,6 +23,7 @@ from config import (
     PLAID_PRODUCTS,
     PLAID_REDIRECT_URI,
     PLAID_SECRET,
+    PLAID_WEBHOOK_URL,
 )
 from plaid_sync import (
     IdentityStateError,
@@ -32,8 +33,8 @@ from plaid_sync import (
     save_accounts_to_supabase,
     sync_transactions_to_supabase,
 )
-from subscription_detector import detect_and_upsert_subscriptions
 from supabase_repo import supabase
+from sync_jobs import run_post_sync
 
 plaid_bp = Blueprint("plaid", __name__)
 RECENT_TRANSACTIONS_LIMIT = 20
@@ -126,6 +127,8 @@ def create_link_token():
         )
         if PLAID_REDIRECT_URI:
             link_request_payload["redirect_uri"] = PLAID_REDIRECT_URI
+        if PLAID_WEBHOOK_URL:
+            link_request_payload["webhook"] = PLAID_WEBHOOK_URL
 
         link_request = LinkTokenCreateRequest(**link_request_payload)
 
@@ -296,14 +299,8 @@ def get_transactions():
                     "items": login_required_items,
                 }
             ), 400
-        current_app.config["snapshot_service"].invalidate(user_id)
         print(f"Sync complete for user {user_id}: {totals}")
-
-        try:
-            sub_stats = detect_and_upsert_subscriptions(user_id)
-            print(f"Subscription detection for user {user_id}: {sub_stats}")
-        except Exception as sub_error:
-            print(f"Subscription detection warning for user {user_id}: {sub_error}")
+        run_post_sync(user_id, current_app.config["snapshot_service"])
 
         rows = []
         try:

@@ -41,6 +41,9 @@ PLAID_COUNTRY_CODES = [
     c.strip() for c in os.getenv("PLAID_COUNTRY_CODES", "US").split(",") if c.strip()
 ]
 PLAID_REDIRECT_URI = _empty_to_none("PLAID_REDIRECT_URI")
+# Public HTTPS URL Plaid POSTs webhooks to (the Render /plaid/webhook route).
+# Attached to new link tokens; existing Items get it via scripts/set_item_webhooks.py.
+PLAID_WEBHOOK_URL = _empty_to_none("PLAID_WEBHOOK_URL")
 
 # ── AI model providers ───────────────────────────────────────────────
 AI_PROVIDER = (_empty_to_none("AI_PROVIDER") or "ollama").strip().lower()

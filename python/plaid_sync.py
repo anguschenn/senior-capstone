@@ -2,6 +2,7 @@
 
 import datetime as dt
 import json
+import threading
 import time
 
 import plaid
@@ -111,9 +112,27 @@ def save_accounts_to_supabase(user_id: str, plaid_item_id: str, plaid_access_tok
     return len(rows)
 
 
+# One lock per plaid_items.id so a webhook-triggered sync and an app-open sync never
+# read the same cursor at once. Process-local, which is correct only because gunicorn
+# runs a single worker (see CLAUDE.md).
+_item_locks: dict[str, threading.Lock] = {}
+_item_locks_guard = threading.Lock()
+
+
+def _item_lock(plaid_item_id: str) -> threading.Lock:
+    with _item_locks_guard:
+        return _item_locks.setdefault(plaid_item_id, threading.Lock())
+
+
 def sync_transactions_to_supabase(
     user_id: str, plaid_item_id: str, plaid_access_token: str
 ) -> dict:
+    # A second caller waits, then finds nothing new past the first caller's cursor.
+    with _item_lock(plaid_item_id):
+        return _sync_transactions_unlocked(user_id, plaid_item_id, plaid_access_token)
+
+
+def _sync_transactions_unlocked(user_id: str, plaid_item_id: str, plaid_access_token: str) -> dict:
     cursor = ""
     try:
         item_row = (

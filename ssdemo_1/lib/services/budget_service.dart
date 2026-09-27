@@ -186,6 +186,12 @@ class BudgetService {
       if (!isExpense) {
         continue;
       }
+      if (AppTransaction.isCreditCardPaymentByPfc(
+        pfcDetailed: pfcDetailed,
+        pfcPrimary: pfcPrimary,
+      )) {
+        continue;
+      }
       final expenseAmount = amount.abs();
       final bucket = _categoryService.budgetBucketForRawTransaction(
         row,

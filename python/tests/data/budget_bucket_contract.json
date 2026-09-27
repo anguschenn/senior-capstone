@@ -1,0 +1,627 @@
+{
+  "_comment": "Shared contract: python/tests/test_budget_progress.py and ssdemo_1/test/services/budget_bucket_contract_test.dart must BOTH pass these. Change the rules on one side -> add a case here and make both pass.",
+  "rules": {
+    "target|_|shops": "Shopping",
+    "costco|general merchandise|general merchandise superstores": "Food"
+  },
+  "transactions": [
+    {
+      "description": "coffee: three agreeing signals",
+      "row": {
+        "plaid_transaction_id": "tx-1",
+        "date": "2026-09-10",
+        "name": "Starbucks",
+        "merchant_name": "Starbucks",
+        "amount": 5.75,
+        "pfc_primary": "FOOD_AND_DRINK",
+        "pfc_detailed": "FOOD_AND_DRINK_COFFEE"
+      },
+      "expected": {
+        "rule_key": "starbucks|food and drink|food and drink coffee",
+        "bucket": "Food",
+        "is_expense": true,
+        "counts_as_spending": true
+      }
+    },
+    {
+      "description": "venmo outflow: strong transfer override",
+      "row": {
+        "plaid_transaction_id": "tx-2",
+        "date": "2026-09-10",
+        "name": "Venmo payment",
+        "merchant_name": "Venmo",
+        "amount": 40,
+        "pfc_primary": "TRANSFER_OUT",
+        "pfc_detailed": "TRANSFER_OUT_ACCOUNT_TRANSFER"
+      },
+      "expected": {
+        "rule_key": "venmo payment|transfer out|transfer out account transfer",
+        "bucket": "Fees & Transfers",
+        "is_expense": true,
+        "counts_as_spending": true
+      }
+    },
+    {
+      "description": "credit card payment",
+      "row": {
+        "plaid_transaction_id": "tx-3",
+        "date": "2026-09-10",
+        "name": "Payment Thank You",
+        "merchant_name": null,
+        "amount": 300,
+        "pfc_primary": "LOAN_PAYMENTS",
+        "pfc_detailed": "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT"
+      },
+      "expected": {
+        "rule_key": "payment thank you|loan payments|loan payments credit card payment",
+        "bucket": "Fees & Transfers",
+        "is_expense": true,
+        "counts_as_spending": false
+      }
+    },
+    {
+      "description": "netflix: name beats entertainment pfc",
+      "row": {
+        "plaid_transaction_id": "tx-4",
+        "date": "2026-09-10",
+        "name": "Netflix.com",
+        "merchant_name": "Netflix",
+        "amount": 15.49,
+        "pfc_primary": "ENTERTAINMENT",
+        "pfc_detailed": "ENTERTAINMENT_TV_AND_MOVIES"
+      },
+      "expected": {
+        "rule_key": "netflix.com|entertainment|entertainment tv and movies",
+        "bucket": "Subscriptions",
+        "is_expense": true,
+        "counts_as_spending": true
+      }
+    },
+    {
+      "description": "groceries: two agreeing pfc signals",
+      "row": {
+        "plaid_transaction_id": "tx-5",
+        "date": "2026-09-10",
+        "name": "Trader Joes",
+        "merchant_name": "Trader Joe's",
+        "amount": 62.1,
+        "pfc_primary": "FOOD_AND_DRINK",
+        "pfc_detailed": "FOOD_AND_DRINK_GROCERIES"
+      },
+      "expected": {
+        "rule_key": "trader joes|food and drink|food and drink groceries",
+        "bucket": "Food",
+        "is_expense": true,
+        "counts_as_spending": true
+      }
+    },
+    {
+      "description": "conflicting signals: first hit wins",
+      "row": {
+        "plaid_transaction_id": "tx-6",
+        "date": "2026-09-10",
+        "name": "Starbucks Shell",
+        "merchant_name": "Shell",
+        "amount": 48,
+        "pfc_primary": "TRANSPORTATION",
+        "pfc_detailed": "TRANSPORTATION_GAS"
+      },
+      "expected": {
+        "rule_key": "starbucks shell|transportation|transportation gas",
+        "bucket": "Transport",
+        "is_expense": true,
+        "counts_as_spending": true
+      }
+    },
+    {
+      "description": "no usable signal -> Other",
+      "row": {
+        "plaid_transaction_id": "tx-7",
+        "date": "2026-09-10",
+        "name": "Joe's Garage",
+        "merchant_name": "Joe's Garage",
+        "amount": 120,
+        "pfc_primary": "GENERAL_SERVICES",
+        "pfc_detailed": "GENERAL_SERVICES_AUTOMOTIVE"
+      },
+      "expected": {
+        "rule_key": "joe's garage|general services|general services automotive",
+        "bucket": "Other",
+        "is_expense": true,
+        "counts_as_spending": true
+      }
+    },
+    {
+      "description": "remembered rule wins",
+      "row": {
+        "plaid_transaction_id": "tx-8",
+        "date": "2026-09-10",
+        "name": "Costco",
+        "merchant_name": "Costco",
+        "amount": 210.4,
+        "pfc_primary": "GENERAL_MERCHANDISE",
+        "pfc_detailed": "GENERAL_MERCHANDISE_SUPERSTORES"
+      },
+      "expected": {
+        "rule_key": "costco|general merchandise|general merchandise superstores",
+        "bucket": "Food",
+        "is_expense": true,
+        "counts_as_spending": true
+      }
+    },
+    {
+      "description": "null name falls back to merchant; legacy category used as detailed",
+      "row": {
+        "plaid_transaction_id": "tx-9",
+        "date": "2026-09-10",
+        "name": null,
+        "merchant_name": "Target",
+        "amount": 33,
+        "pfc_primary": null,
+        "pfc_detailed": null,
+        "category": "Shops"
+      },
+      "expected": {
+        "rule_key": "target|_|shops",
+        "bucket": "Shopping",
+        "is_expense": true,
+        "counts_as_spending": true
+      }
+    },
+    {
+      "description": "empty-string name does NOT fall back (Dart ?? semantics)",
+      "row": {
+        "plaid_transaction_id": "tx-10",
+        "date": "2026-09-10",
+        "name": "",
+        "merchant_name": "Target",
+        "amount": 12,
+        "pfc_primary": null,
+        "pfc_detailed": null,
+        "category": "Shops"
+      },
+      "expected": {
+        "rule_key": "_|_|shops",
+        "bucket": "Other",
+        "is_expense": true,
+        "counts_as_spending": true
+      }
+    },
+    {
+      "description": "income is not an expense",
+      "row": {
+        "plaid_transaction_id": "tx-11",
+        "date": "2026-09-10",
+        "name": "ACME PAYROLL",
+        "merchant_name": null,
+        "amount": -1500,
+        "pfc_primary": "INCOME",
+        "pfc_detailed": "INCOME_WAGES"
+      },
+      "expected": {
+        "rule_key": "acme payroll|income|income wages",
+        "bucket": "Other",
+        "is_expense": false,
+        "counts_as_spending": false
+      }
+    },
+    {
+      "description": "refund (negative) is not an expense",
+      "row": {
+        "plaid_transaction_id": "tx-12",
+        "date": "2026-09-10",
+        "name": "Amazon refund",
+        "merchant_name": "Amazon",
+        "amount": -25,
+        "pfc_primary": "GENERAL_MERCHANDISE",
+        "pfc_detailed": "GENERAL_MERCHANDISE_ONLINE_MARKETPLACES"
+      },
+      "expected": {
+        "rule_key": "amazon refund|general merchandise|general merchandise online marketplaces",
+        "bucket": "Shopping",
+        "is_expense": false,
+        "counts_as_spending": false
+      }
+    },
+    {
+      "description": "amount stored as string",
+      "row": {
+        "plaid_transaction_id": "tx-13",
+        "date": "2026-09-10",
+        "name": "Uber",
+        "merchant_name": "Uber",
+        "amount": "18.20",
+        "pfc_primary": "TRANSPORTATION",
+        "pfc_detailed": "TRANSPORTATION_TAXIS_AND_RIDE_SHARES"
+      },
+      "expected": {
+        "rule_key": "uber|transportation|transportation taxis and ride shares",
+        "bucket": "Transport",
+        "is_expense": true,
+        "counts_as_spending": true
+      }
+    },
+    {
+      "description": "atm fee",
+      "row": {
+        "plaid_transaction_id": "tx-14",
+        "date": "2026-09-10",
+        "name": "ATM FEE",
+        "merchant_name": null,
+        "amount": 3,
+        "pfc_primary": "BANK_FEES",
+        "pfc_detailed": "BANK_FEES_ATM_FEES"
+      },
+      "expected": {
+        "rule_key": "atm fee|bank fees|bank fees atm fees",
+        "bucket": "Fees & Transfers",
+        "is_expense": true,
+        "counts_as_spending": true
+      }
+    },
+    {
+      "description": "utilities before housing",
+      "row": {
+        "plaid_transaction_id": "tx-15",
+        "date": "2026-09-10",
+        "name": "PG&E",
+        "merchant_name": "PG&E",
+        "amount": 90,
+        "pfc_primary": "RENT_AND_UTILITIES",
+        "pfc_detailed": "RENT_AND_UTILITIES_GAS_AND_ELECTRICITY"
+      },
+      "expected": {
+        "rule_key": "pg&e|rent and utilities|rent and utilities gas and electricity",
+        "bucket": "Bills & Utilities",
+        "is_expense": true,
+        "counts_as_spending": true
+      }
+    },
+    {
+      "description": "rent",
+      "row": {
+        "plaid_transaction_id": "tx-16",
+        "date": "2026-09-10",
+        "name": "Rent payment",
+        "merchant_name": null,
+        "amount": 1400,
+        "pfc_primary": "RENT_AND_UTILITIES",
+        "pfc_detailed": "RENT_AND_UTILITIES_RENT"
+      },
+      "expected": {
+        "rule_key": "rent payment|rent and utilities|rent and utilities rent",
+        "bucket": "Bills & Utilities",
+        "is_expense": true,
+        "counts_as_spending": true
+      }
+    },
+    {
+      "description": "card payment from checking: not spending (purchases already counted on the card)",
+      "row": {
+        "plaid_transaction_id": "tx-17",
+        "date": "2026-09-10",
+        "name": "Payment to Chase card ending in 4191 09/03",
+        "merchant_name": null,
+        "amount": 1000,
+        "pfc_primary": "LOAN_PAYMENTS",
+        "pfc_detailed": "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT"
+      },
+      "expected": {
+        "rule_key": "payment to chase card ending in 4191 09/03|loan payments|loan payments credit card payment",
+        "bucket": "Fees & Transfers",
+        "is_expense": true,
+        "counts_as_spending": false
+      }
+    },
+    {
+      "description": "card side of the same payment arrives negative",
+      "row": {
+        "plaid_transaction_id": "tx-18",
+        "date": "2026-09-10",
+        "name": "Payment Thank You-Mobile",
+        "merchant_name": null,
+        "amount": -1000,
+        "pfc_primary": "LOAN_DISBURSEMENTS",
+        "pfc_detailed": "LOAN_DISBURSEMENTS_OTHER_DISBURSEMENT"
+      },
+      "expected": {
+        "rule_key": "payment thank you-mobile|loan disbursements|loan disbursements other disbursement",
+        "bucket": "Other",
+        "is_expense": false,
+        "counts_as_spending": false
+      }
+    },
+    {
+      "description": "zelle to a friend still counts as spending",
+      "row": {
+        "plaid_transaction_id": "tx-19",
+        "date": "2026-09-10",
+        "name": "Zelle payment to Ryan JPM99cuy38dm",
+        "merchant_name": null,
+        "amount": 13.73,
+        "pfc_primary": "TRANSFER_OUT",
+        "pfc_detailed": "TRANSFER_OUT_TRANSFER_OUT_FROM_APPS"
+      },
+      "expected": {
+        "rule_key": "zelle payment to ryan jpm99cuy38dm|transfer out|transfer out transfer out from apps",
+        "bucket": "Fees & Transfers",
+        "is_expense": true,
+        "counts_as_spending": true
+      }
+    }
+  ],
+  "progress": {
+    "month": "2026-09",
+    "categories": {
+      "cat-food": "Food",
+      "cat-transport": "Transport",
+      "cat-shop": "Shopping",
+      "cat-fees": "Fees & Transfers",
+      "cat-subs": "Subscriptions",
+      "cat-health": "Health"
+    },
+    "budgets": [
+      {
+        "id": "b-cat-food",
+        "category_id": "cat-food",
+        "monthly_limit": 300
+      },
+      {
+        "id": "b-cat-transport",
+        "category_id": "cat-transport",
+        "monthly_limit": 100
+      },
+      {
+        "id": "b-cat-shop",
+        "category_id": "cat-shop",
+        "monthly_limit": 0
+      },
+      {
+        "id": "b-cat-fees",
+        "category_id": "cat-fees",
+        "monthly_limit": 500
+      },
+      {
+        "id": "b-cat-subs",
+        "category_id": "cat-subs",
+        "monthly_limit": 20
+      },
+      {
+        "id": "b-cat-health",
+        "category_id": "cat-health",
+        "monthly_limit": 50
+      }
+    ],
+    "transactions": [
+      {
+        "plaid_transaction_id": "tx-1",
+        "date": "2026-09-10",
+        "name": "Starbucks",
+        "merchant_name": "Starbucks",
+        "amount": 5.75,
+        "pfc_primary": "FOOD_AND_DRINK",
+        "pfc_detailed": "FOOD_AND_DRINK_COFFEE"
+      },
+      {
+        "plaid_transaction_id": "tx-2",
+        "date": "2026-09-10",
+        "name": "Venmo payment",
+        "merchant_name": "Venmo",
+        "amount": 40,
+        "pfc_primary": "TRANSFER_OUT",
+        "pfc_detailed": "TRANSFER_OUT_ACCOUNT_TRANSFER"
+      },
+      {
+        "plaid_transaction_id": "tx-3",
+        "date": "2026-09-10",
+        "name": "Payment Thank You",
+        "merchant_name": null,
+        "amount": 300,
+        "pfc_primary": "LOAN_PAYMENTS",
+        "pfc_detailed": "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT"
+      },
+      {
+        "plaid_transaction_id": "tx-4",
+        "date": "2026-09-10",
+        "name": "Netflix.com",
+        "merchant_name": "Netflix",
+        "amount": 15.49,
+        "pfc_primary": "ENTERTAINMENT",
+        "pfc_detailed": "ENTERTAINMENT_TV_AND_MOVIES"
+      },
+      {
+        "plaid_transaction_id": "tx-5",
+        "date": "2026-09-10",
+        "name": "Trader Joes",
+        "merchant_name": "Trader Joe's",
+        "amount": 62.1,
+        "pfc_primary": "FOOD_AND_DRINK",
+        "pfc_detailed": "FOOD_AND_DRINK_GROCERIES"
+      },
+      {
+        "plaid_transaction_id": "tx-6",
+        "date": "2026-09-10",
+        "name": "Starbucks Shell",
+        "merchant_name": "Shell",
+        "amount": 48,
+        "pfc_primary": "TRANSPORTATION",
+        "pfc_detailed": "TRANSPORTATION_GAS"
+      },
+      {
+        "plaid_transaction_id": "tx-7",
+        "date": "2026-09-10",
+        "name": "Joe's Garage",
+        "merchant_name": "Joe's Garage",
+        "amount": 120,
+        "pfc_primary": "GENERAL_SERVICES",
+        "pfc_detailed": "GENERAL_SERVICES_AUTOMOTIVE"
+      },
+      {
+        "plaid_transaction_id": "tx-8",
+        "date": "2026-09-10",
+        "name": "Costco",
+        "merchant_name": "Costco",
+        "amount": 210.4,
+        "pfc_primary": "GENERAL_MERCHANDISE",
+        "pfc_detailed": "GENERAL_MERCHANDISE_SUPERSTORES"
+      },
+      {
+        "plaid_transaction_id": "tx-9",
+        "date": "2026-09-10",
+        "name": null,
+        "merchant_name": "Target",
+        "amount": 33,
+        "pfc_primary": null,
+        "pfc_detailed": null,
+        "category": "Shops"
+      },
+      {
+        "plaid_transaction_id": "tx-10",
+        "date": "2026-09-10",
+        "name": "",
+        "merchant_name": "Target",
+        "amount": 12,
+        "pfc_primary": null,
+        "pfc_detailed": null,
+        "category": "Shops"
+      },
+      {
+        "plaid_transaction_id": "tx-11",
+        "date": "2026-09-10",
+        "name": "ACME PAYROLL",
+        "merchant_name": null,
+        "amount": -1500,
+        "pfc_primary": "INCOME",
+        "pfc_detailed": "INCOME_WAGES"
+      },
+      {
+        "plaid_transaction_id": "tx-12",
+        "date": "2026-09-10",
+        "name": "Amazon refund",
+        "merchant_name": "Amazon",
+        "amount": -25,
+        "pfc_primary": "GENERAL_MERCHANDISE",
+        "pfc_detailed": "GENERAL_MERCHANDISE_ONLINE_MARKETPLACES"
+      },
+      {
+        "plaid_transaction_id": "tx-13",
+        "date": "2026-09-10",
+        "name": "Uber",
+        "merchant_name": "Uber",
+        "amount": "18.20",
+        "pfc_primary": "TRANSPORTATION",
+        "pfc_detailed": "TRANSPORTATION_TAXIS_AND_RIDE_SHARES"
+      },
+      {
+        "plaid_transaction_id": "tx-14",
+        "date": "2026-09-10",
+        "name": "ATM FEE",
+        "merchant_name": null,
+        "amount": 3,
+        "pfc_primary": "BANK_FEES",
+        "pfc_detailed": "BANK_FEES_ATM_FEES"
+      },
+      {
+        "plaid_transaction_id": "tx-15",
+        "date": "2026-09-10",
+        "name": "PG&E",
+        "merchant_name": "PG&E",
+        "amount": 90,
+        "pfc_primary": "RENT_AND_UTILITIES",
+        "pfc_detailed": "RENT_AND_UTILITIES_GAS_AND_ELECTRICITY"
+      },
+      {
+        "plaid_transaction_id": "tx-16",
+        "date": "2026-09-10",
+        "name": "Rent payment",
+        "merchant_name": null,
+        "amount": 1400,
+        "pfc_primary": "RENT_AND_UTILITIES",
+        "pfc_detailed": "RENT_AND_UTILITIES_RENT"
+      },
+      {
+        "plaid_transaction_id": "tx-17",
+        "date": "2026-09-10",
+        "name": "Payment to Chase card ending in 4191 09/03",
+        "merchant_name": null,
+        "amount": 1000,
+        "pfc_primary": "LOAN_PAYMENTS",
+        "pfc_detailed": "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT"
+      },
+      {
+        "plaid_transaction_id": "tx-18",
+        "date": "2026-09-10",
+        "name": "Payment Thank You-Mobile",
+        "merchant_name": null,
+        "amount": -1000,
+        "pfc_primary": "LOAN_DISBURSEMENTS",
+        "pfc_detailed": "LOAN_DISBURSEMENTS_OTHER_DISBURSEMENT"
+      },
+      {
+        "plaid_transaction_id": "tx-19",
+        "date": "2026-09-10",
+        "name": "Zelle payment to Ryan JPM99cuy38dm",
+        "merchant_name": null,
+        "amount": 13.73,
+        "pfc_primary": "TRANSFER_OUT",
+        "pfc_detailed": "TRANSFER_OUT_TRANSFER_OUT_FROM_APPS"
+      },
+      {
+        "plaid_transaction_id": "tx-aug",
+        "date": "2026-08-31",
+        "name": "Starbucks",
+        "merchant_name": "Starbucks",
+        "amount": 999,
+        "pfc_primary": "FOOD_AND_DRINK",
+        "pfc_detailed": "FOOD_AND_DRINK_COFFEE"
+      },
+      {
+        "plaid_transaction_id": "tx-oct",
+        "date": "2026-10-01",
+        "name": "Uber",
+        "merchant_name": "Uber",
+        "amount": 999,
+        "pfc_primary": "TRANSPORTATION",
+        "pfc_detailed": "TRANSPORTATION_TAXIS_AND_RIDE_SHARES"
+      }
+    ],
+    "expected": [
+      {
+        "category_id": "cat-food",
+        "category": "Food",
+        "spent": 278.25,
+        "limit": 300.0
+      },
+      {
+        "category_id": "cat-transport",
+        "category": "Transport",
+        "spent": 66.2,
+        "limit": 100.0
+      },
+      {
+        "category_id": "cat-shop",
+        "category": "Shopping",
+        "spent": 33.0,
+        "limit": 0.0
+      },
+      {
+        "category_id": "cat-fees",
+        "category": "Fees & Transfers",
+        "spent": 56.73,
+        "limit": 500.0
+      },
+      {
+        "category_id": "cat-subs",
+        "category": "Subscriptions",
+        "spent": 15.49,
+        "limit": 20.0
+      },
+      {
+        "category_id": "cat-health",
+        "category": "Health",
+        "spent": 0.0,
+        "limit": 50.0
+      }
+    ]
+  }
+}

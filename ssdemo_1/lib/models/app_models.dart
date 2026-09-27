@@ -68,7 +68,16 @@ class AppTransaction {
 
   double get displayAmount => amount.abs();
 
-  double get expenseAmount => isExpense ? displayAmount : 0;
+  bool get isCreditCardPayment => isCreditCardPaymentByPfc(
+    pfcDetailed: rawPfcDetailed,
+    pfcPrimary: rawPfcPrimary,
+  );
+
+  /// Spending contributed by this transaction. A credit card payment is money
+  /// moving between the user's own accounts: the purchases already count on
+  /// the card, so counting the payment from checking too would double-count.
+  double get expenseAmount =>
+      isExpense && !isCreditCardPayment ? displayAmount : 0;
 
   double get incomeAmount => isIncome ? displayAmount : 0;
 
@@ -178,6 +187,14 @@ class AppTransaction {
     final desc = description.toLowerCase().replaceAll('_', ' ');
     return RegExp(r'\bdeposit\b', caseSensitive: false).hasMatch(desc);
   }
+
+  /// Plaid labels the checking-side payment LOAN_PAYMENTS_CREDIT_CARD_PAYMENT.
+  /// (The card side arrives as a negative amount, so it is never an expense.)
+  static bool isCreditCardPaymentByPfc({
+    required String pfcDetailed,
+    required String pfcPrimary,
+  }) =>
+      '$pfcDetailed $pfcPrimary'.toUpperCase().contains('CREDIT_CARD_PAYMENT');
 
   static bool isExpenseByPfc({
     required String pfcDetailed,
@@ -342,7 +359,8 @@ class BudgetCategoryProgress {
     return day;
   }
 
-  static int daysInMonth(int year, int month) => DateTime(year, month + 1, 0).day;
+  static int daysInMonth(int year, int month) =>
+      DateTime(year, month + 1, 0).day;
 
   /// Daily spend pace so far this month.
   double get burnRateDaily {
@@ -384,8 +402,7 @@ class BudgetCategoryProgress {
     return projectedMonthEnd >= limit * 0.9;
   }
 
-  bool get isWarning =>
-      ratio >= 0.8 || isBurnRateHigh || isBurnRateApproaching;
+  bool get isWarning => ratio >= 0.8 || isBurnRateHigh || isBurnRateApproaching;
 }
 
 // Category option loaded from Supabase and reused by budget flows.
