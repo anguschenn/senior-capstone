@@ -154,130 +154,146 @@ class _AuthPageState extends State<AuthPage> {
                     minHeight: constraints.maxHeight - 48,
                     maxWidth: 420,
                   ),
-                child: IntrinsicHeight(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                  Text(
-                    'SmartSpend',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    _isSignUp ? 'Create account' : 'Sign in',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 24),
-                  SegmentedButton<bool>(
-                    segments: const [
-                      ButtonSegment<bool>(value: false, label: Text('Sign In')),
-                      ButtonSegment<bool>(value: true, label: Text('Sign Up')),
-                    ],
-                    selected: {_isSignUp},
-                    onSelectionChanged: (selection) {
-                      if (selection.isEmpty) return;
-                      setState(() {
-                        _isSignUp = selection.first;
-                        _error = '';
-                        _message = '';
-                        _passwordController.clear();
-                        _confirmPasswordController.clear();
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 20),
-                  TextField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    autofillHints: const [AutofillHints.username],
-                    textInputAction: TextInputAction.next,
-                    onSubmitted: (_) => _passwordFocusNode.requestFocus(),
-                    decoration: const InputDecoration(
-                      labelText: 'Email',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _passwordController,
-                    focusNode: _passwordFocusNode,
-                    obscureText: !_passwordVisible,
-                    autofillHints: const [AutofillHints.password],
-                    textInputAction: _isSignUp
-                        ? TextInputAction.next
-                        : TextInputAction.done,
-                    onSubmitted: (_) {
-                      if (_isSignUp) {
-                        _confirmPasswordFocusNode.requestFocus();
-                      } else {
-                        _submit();
-                      }
-                    },
-                    decoration: InputDecoration(
-                      labelText: 'Password',
-                      border: const OutlineInputBorder(),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _passwordVisible
-                              ? Icons.visibility
-                              : Icons.visibility_off,
+                  child: IntrinsicHeight(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          'SmartSpend',
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.headlineMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
-                        onPressed: () => setState(
-                          () => _passwordVisible = !_passwordVisible,
+                        const SizedBox(height: 12),
+                        Text(
+                          _isSignUp ? 'Create account' : 'Sign in',
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.titleMedium,
                         ),
-                      ),
+                        const SizedBox(height: 24),
+                        SegmentedButton<bool>(
+                          segments: const [
+                            ButtonSegment<bool>(
+                              value: false,
+                              label: Text('Sign In'),
+                            ),
+                            ButtonSegment<bool>(
+                              value: true,
+                              label: Text('Sign Up'),
+                            ),
+                          ],
+                          selected: {_isSignUp},
+                          onSelectionChanged: (selection) {
+                            if (selection.isEmpty) return;
+                            setState(() {
+                              _isSignUp = selection.first;
+                              _error = '';
+                              _message = '';
+                              _passwordController.clear();
+                              _confirmPasswordController.clear();
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 20),
+                        TextField(
+                          controller: _emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          autofillHints: const [AutofillHints.username],
+                          textInputAction: TextInputAction.next,
+                          onSubmitted: (_) => _passwordFocusNode.requestFocus(),
+                          decoration: const InputDecoration(
+                            labelText: 'Email',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _passwordController,
+                          focusNode: _passwordFocusNode,
+                          obscureText: !_passwordVisible,
+                          autofillHints: const [AutofillHints.password],
+                          textInputAction: _isSignUp
+                              ? TextInputAction.next
+                              : TextInputAction.done,
+                          onSubmitted: (_) {
+                            if (_isSignUp) {
+                              _confirmPasswordFocusNode.requestFocus();
+                            } else {
+                              _submit();
+                            }
+                          },
+                          decoration: InputDecoration(
+                            labelText: 'Password',
+                            border: const OutlineInputBorder(),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _passwordVisible
+                                    ? Icons.visibility
+                                    : Icons.visibility_off,
+                              ),
+                              onPressed: () => setState(
+                                () => _passwordVisible = !_passwordVisible,
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (!_isSignUp)
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: _submitting
+                                  ? null
+                                  : _sendPasswordReset,
+                              child: const Text('Forgot password?'),
+                            ),
+                          ),
+                        if (_isSignUp) ...[
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _confirmPasswordController,
+                            focusNode: _confirmPasswordFocusNode,
+                            obscureText: !_passwordVisible,
+                            textInputAction: TextInputAction.done,
+                            onSubmitted: (_) => _submit(),
+                            decoration: const InputDecoration(
+                              labelText: 'Confirm password',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ],
+                        if (_error.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Text(
+                            _error,
+                            style: const TextStyle(color: Colors.red),
+                          ),
+                        ],
+                        if (_message.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          Text(
+                            _message,
+                            style: const TextStyle(color: Colors.green),
+                          ),
+                        ],
+                        const SizedBox(height: 20),
+                        FilledButton(
+                          onPressed: _submitting ? null : _submit,
+                          child: _submitting
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : Text(_isSignUp ? 'Create Account' : 'Sign In'),
+                        ),
+                      ],
                     ),
-                  ),
-                  if (!_isSignUp)
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: _submitting ? null : _sendPasswordReset,
-                        child: const Text('Forgot password?'),
-                      ),
-                    ),
-                  if (_isSignUp) ...[
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _confirmPasswordController,
-                      focusNode: _confirmPasswordFocusNode,
-                      obscureText: !_passwordVisible,
-                      textInputAction: TextInputAction.done,
-                      onSubmitted: (_) => _submit(),
-                      decoration: const InputDecoration(
-                        labelText: 'Confirm password',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ],
-                  if (_error.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Text(_error, style: const TextStyle(color: Colors.red)),
-                  ],
-                  if (_message.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Text(_message, style: const TextStyle(color: Colors.green)),
-                  ],
-                  const SizedBox(height: 20),
-                  FilledButton(
-                    onPressed: _submitting ? null : _submit,
-                    child: _submitting
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Text(_isSignUp ? 'Create Account' : 'Sign In'),
-                  ),
-                    ],
                   ),
                 ),
-              ),
               ),
             );
           },

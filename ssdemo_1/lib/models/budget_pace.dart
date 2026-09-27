@@ -2,10 +2,7 @@ import 'app_models.dart';
 
 /// One day on the monthly cumulative-spend curve.
 class BudgetPacePoint {
-  const BudgetPacePoint({
-    required this.day,
-    required this.cumulativeSpent,
-  });
+  const BudgetPacePoint({required this.day, required this.cumulativeSpent});
 
   /// 1-based day of the focus month.
   final int day;
@@ -92,8 +89,7 @@ class BudgetPaceSnapshot {
     final projectedEom = elapsed <= 0
         ? spentToDate
         : (spentToDate / elapsed) * dim;
-    final safeProjected =
-        projectedEom.isFinite ? projectedEom : spentToDate;
+    final safeProjected = projectedEom.isFinite ? projectedEom : spentToDate;
 
     return BudgetPaceSnapshot(
       totalBudgeted: totalBudgeted.isFinite ? totalBudgeted : 0,

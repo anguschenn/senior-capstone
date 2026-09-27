@@ -122,7 +122,9 @@ class BudgetProgressCard extends StatelessWidget {
                 fontSize: 11,
                 color: item.isBurnRateHigh
                     ? Colors.redAccent
-                    : (item.isBurnRateApproaching ? Colors.orange : Colors.black54),
+                    : (item.isBurnRateApproaching
+                          ? Colors.orange
+                          : Colors.black54),
               ),
             ),
           ],

@@ -240,9 +240,7 @@ class _BudgetPageState extends State<BudgetPage> {
           Builder(
             builder: (context) {
               final over = _overspendCategories();
-              final byTitle = {
-                for (final c in over) c.title: c.budgetId,
-              };
+              final byTitle = {for (final c in over) c.title: c.budgetId};
               return BudgetInsightBanner(
                 message: over.isEmpty
                     ? _budgetInsight()
@@ -331,10 +329,7 @@ class _BudgetPageState extends State<BudgetPage> {
                 ),
                 Text(
                   '${positive ? '+' : '-'}\$${net.abs().toStringAsFixed(2)}',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: tone,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.w700, color: tone),
                 ),
               ],
             ),
@@ -458,10 +453,11 @@ class _BudgetPageState extends State<BudgetPage> {
   /// Categories projected to finish the month over budget (month view).
   List<BudgetCategoryProgress> _overspendCategories() {
     if (viewMode != BudgetViewMode.month) return const [];
-    final over = activeBudgetProgress
-        .where((item) => item.spent > 0 && item.isBurnRateHigh)
-        .toList()
-      ..sort((a, b) => b.projectedOverrun.compareTo(a.projectedOverrun));
+    final over =
+        activeBudgetProgress
+            .where((item) => item.spent > 0 && item.isBurnRateHigh)
+            .toList()
+          ..sort((a, b) => b.projectedOverrun.compareTo(a.projectedOverrun));
     return over;
   }
 
@@ -667,7 +663,9 @@ class _BudgetPageState extends State<BudgetPage> {
                 FilledButton(
                   onPressed: () async {
                     final parsed = double.tryParse(controller.text.trim());
-                    if (parsed == null || !parsed.isFinite || parsed < 0) return;
+                    if (parsed == null || !parsed.isFinite || parsed < 0) {
+                      return;
+                    }
                     final monthlyLimit = viewMode == BudgetViewMode.year
                         ? (parsed / 12)
                         : parsed;

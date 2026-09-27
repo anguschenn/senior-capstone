@@ -7,10 +7,7 @@ import '../../models/budget_pace.dart';
 
 /// Monthly budget remaining chart: solid actual spend, dashed even-pace line.
 class BudgetPaceChartCard extends StatelessWidget {
-  const BudgetPaceChartCard({
-    super.key,
-    required this.snapshot,
-  });
+  const BudgetPaceChartCard({super.key, required this.snapshot});
 
   final BudgetPaceSnapshot snapshot;
 
@@ -73,7 +70,10 @@ class BudgetPaceChartCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: tone,
                     borderRadius: BorderRadius.circular(20),
@@ -188,7 +188,11 @@ class _BudgetPaceChartPainter extends CustomPainter {
     final dir = (b - a) / dist;
     var drawn = 0.0;
     while (drawn < dist) {
-      canvas.drawLine(a + dir * drawn, a + dir * math.min(drawn + dash, dist), paint);
+      canvas.drawLine(
+        a + dir * drawn,
+        a + dir * math.min(drawn + dash, dist),
+        paint,
+      );
       drawn += dash + gap;
     }
   }

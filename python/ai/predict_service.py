@@ -85,12 +85,8 @@ class PredictService:
             max_ratio = max(max_ratio, ratio)
 
             burn_rate_daily = spent / days_elapsed if use_burn_rate else 0.0
-            projected_eom = (
-                burn_rate_daily * days_in_month if use_burn_rate else spent
-            )
-            allowed_daily = (
-                (limit / days_in_month) if (use_burn_rate and limit > 0) else 0.0
-            )
+            projected_eom = burn_rate_daily * days_in_month if use_burn_rate else spent
+            allowed_daily = (limit / days_in_month) if (use_burn_rate and limit > 0) else 0.0
             projected_ratio = (projected_eom / limit) if limit > 0 else 0.0
             max_projected_ratio = max(max_projected_ratio, projected_ratio)
             projected_overrun = max(0.0, projected_eom - limit) if limit > 0 else 0.0
