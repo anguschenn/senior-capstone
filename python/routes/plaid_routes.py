@@ -34,7 +34,7 @@ from plaid_sync import (
     sync_transactions_to_supabase,
 )
 from supabase_repo import supabase
-from sync_jobs import run_post_sync
+from sync_jobs import record_sync, run_post_sync
 
 plaid_bp = Blueprint("plaid", __name__)
 RECENT_TRANSACTIONS_LIMIT = 20
@@ -300,7 +300,10 @@ def get_transactions():
                 }
             ), 400
         print(f"Sync complete for user {user_id}: {totals}")
-        run_post_sync(user_id, current_app.config["snapshot_service"])
+        record_sync(user_id, "app")
+        # Subscription detection re-reads every transaction; skip it when nothing changed.
+        if any(totals.values()):
+            run_post_sync(user_id, current_app.config["snapshot_service"])
 
         rows = []
         try:

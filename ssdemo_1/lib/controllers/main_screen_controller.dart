@@ -34,8 +34,13 @@ class MainScreenController extends ChangeNotifier {
   bool loginRequired = false;
   String syncStatus = 'No data loaded yet';
 
-  /// When this session last got a confirmed bank sync from the backend.
+  /// When the banks were last synced: by this session, or by the backend
+  /// (webhook or an earlier launch) as recorded in sync_status.
   DateTime? lastBankSyncAt;
+
+  /// Launch skips the bank sync when the backend synced more recently than
+  /// this; Plaid webhooks keep Supabase current in between. Refresh always syncs.
+  static const launchSyncMaxAge = Duration(hours: 3);
 
   // Bumped whenever a refresh starts or data is cleared. A fetched result is
   // applied only if nothing newer started meanwhile, so a slow older fetch can
@@ -176,6 +181,21 @@ class MainScreenController extends ChangeNotifier {
 
       final fresh = await _fetchAndApply();
       if (_isDisposed) return;
+
+      // Webhooks keep Supabase current, so when the last sync is recent the
+      // data just read is already up to date: skip the bank round trip (and a
+      // possible cold start of the backend).
+      final serverSyncedAt = await _sync.fetchLastSyncedAt();
+      if (_isDisposed) return;
+      if (serverSyncedAt != null) lastBankSyncAt = serverSyncedAt;
+      if (fresh != null &&
+          serverSyncedAt != null &&
+          DateTime.now().difference(serverSyncedAt) < launchSyncMaxAge) {
+        syncStatus = fresh.hasData
+            ? 'Up to date · bank synced ${_clockLabel(serverSyncedAt)}'
+            : 'No data found';
+        return;
+      }
       if (fresh != null) {
         syncStatus = 'Syncing with bank...';
         _notifyListenersSafe();

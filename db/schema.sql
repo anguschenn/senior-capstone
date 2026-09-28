@@ -117,6 +117,14 @@ create table category_match_rules (
   unique (user_id, rule_key)
 );
 
+-- Last successful bank sync per user (webhook or app). Readable by the app so it
+-- can skip the launch sync when data is fresh; see migrations/012_sync_status.sql.
+create table sync_status (
+  user_id uuid primary key references users(id) on delete cascade,
+  last_synced_at timestamptz not null,
+  source text not null check (source in ('webhook', 'app'))
+);
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Row-level security, the auth.users -> public.users trigger, NOT NULL
 -- constraints and indexes all live in db/migrations/009_security_model.sql.

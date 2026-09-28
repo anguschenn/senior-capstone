@@ -34,6 +34,7 @@ class _FakeSync implements SyncService {
   final supabaseReplies = <Completer<SyncResult>>[];
   final bankReply = Completer<void>();
   bool bankSucceeds = true;
+  DateTime? serverSyncedAt;
 
   @override
   Future<CachedSyncResult?> loadCachedResult(
@@ -60,6 +61,9 @@ class _FakeSync implements SyncService {
     calls.add('bank');
     return bankReply.future.then((_) => bankSucceeds);
   }
+
+  @override
+  Future<DateTime?> fetchLastSyncedAt() async => serverSyncedAt;
 
   @override
   Future<void> clearSavedData() async {
@@ -151,6 +155,58 @@ void main() {
         "Showing saved data · couldn't reach bank sync",
       );
       expect(controller.lastBankSyncAt, isNull);
+    });
+
+    test('skips the bank sync when the backend synced recently', () async {
+      build(cached: _saved(1));
+      sync.serverSyncedAt = DateTime.now().subtract(
+        const Duration(minutes: 40),
+      );
+
+      final done = controller.loadCachedThenRefresh();
+      await pumpEventQueue();
+      sync.supabaseReplies[0].complete(_result(2));
+      await done;
+
+      expect(sync.calls, ['cache', 'supabase']);
+      expect(controller.liveStats.totalBalance, 2);
+      expect(controller.syncStatus, startsWith('Up to date · bank synced '));
+      expect(controller.lastBankSyncAt, sync.serverSyncedAt);
+      expect(controller.refreshingInBackground, isFalse);
+    });
+
+    test(
+      'still syncs when the last backend sync is over 3 hours old',
+      () async {
+        build(cached: _saved(1));
+        sync.serverSyncedAt = DateTime.now().subtract(const Duration(hours: 4));
+
+        final done = controller.loadCachedThenRefresh();
+        await pumpEventQueue();
+        sync.supabaseReplies[0].complete(_result(2));
+        await pumpEventQueue();
+        expect(sync.calls, ['cache', 'supabase', 'bank']);
+
+        sync.bankReply.complete();
+        await pumpEventQueue();
+        sync.supabaseReplies[1].complete(_result(3));
+        await done;
+        expect(controller.syncStatus, startsWith('Updated · bank synced '));
+      },
+    );
+
+    test('Refresh always syncs, even right after a webhook sync', () async {
+      build();
+      sync.serverSyncedAt = DateTime.now().subtract(const Duration(minutes: 5));
+
+      final done = controller.refreshLiveDataOnly();
+      await pumpEventQueue();
+      expect(sync.calls, ['bank']);
+      sync.bankReply.complete();
+      await pumpEventQueue();
+      sync.supabaseReplies[0].complete(_result(2));
+      await done;
+      expect(controller.syncStatus, startsWith('Updated · bank synced '));
     });
 
     test('first launch with nothing saved shows Loading, then data', () async {

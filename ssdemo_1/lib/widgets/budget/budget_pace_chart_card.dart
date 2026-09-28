@@ -11,6 +11,35 @@ class BudgetPaceChartCard extends StatelessWidget {
 
   final BudgetPaceSnapshot snapshot;
 
+  /// X-axis labels: day 1, every 5th day, and the month's last day. A 5-day
+  /// mark within 2 days of the end is dropped so labels don't collide.
+  /// Line colour for a point [gap] above (+) or below (-) the even-pace line,
+  /// as a share of the month's budget: green well under, yellow then orange as
+  /// it nears the line, red once it crosses and pulls away.
+  static Color paceColor(double gap) {
+    const stops = <(double, Color)>[
+      (-0.10, Color(0xFF2E7D32)),
+      (-0.04, Color(0xFFF9A825)),
+      (0.00, Color(0xFFEF6C00)),
+      (0.08, Color(0xFFE53935)),
+    ];
+    if (gap <= stops.first.$1) return stops.first.$2;
+    for (var i = 1; i < stops.length; i++) {
+      final (x1, c1) = stops[i];
+      if (gap <= x1) {
+        final (x0, c0) = stops[i - 1];
+        return Color.lerp(c0, c1, (gap - x0) / (x1 - x0))!;
+      }
+    }
+    return stops.last.$2;
+  }
+
+  static List<int> axisDays(int daysInMonth) => [
+    1,
+    for (var d = 5; d < daysInMonth - 2; d += 5) d,
+    if (daysInMonth > 1) daysInMonth,
+  ];
+
   @override
   Widget build(BuildContext context) {
     final over = snapshot.isOverBudget;
@@ -62,7 +91,7 @@ class BudgetPaceChartCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 SizedBox(
-                  height: 88,
+                  height: 200,
                   width: double.infinity,
                   child: CustomPaint(
                     painter: _BudgetPaceChartPainter(snapshot: snapshot),
@@ -114,8 +143,9 @@ class _BudgetPaceChartPainter extends CustomPainter {
     if (points.isEmpty || snapshot.daysInMonth <= 0) return;
 
     const pad = 8.0;
+    const axisH = 18.0;
     final chartW = size.width - pad * 2;
-    final chartH = size.height - pad * 2;
+    final chartH = size.height - pad * 2 - axisH;
     if (chartW <= 0 || chartH <= 0) return;
 
     final maxY = math.max(snapshot.totalBudgeted, snapshot.spentToDate);
@@ -129,9 +159,27 @@ class _BudgetPaceChartPainter extends CustomPainter {
       return Offset(pad + xNorm * chartW, pad + chartH * (1 - yNorm));
     }
 
+    _dayAxis(canvas, map, chartH + pad);
+
     final actual = <Offset>[
       map(1, 0),
       for (final p in points) map(p.day.toDouble(), p.cumulativeSpent),
+    ];
+    // Gap to the even-pace line at each point, as a share of the budget.
+    double gapAt(double day, double spent) {
+      final budget = snapshot.totalBudgeted;
+      if (budget <= 0) return 0;
+      final dim = snapshot.daysInMonth;
+      final expected = dim <= 1 ? budget : budget * (day - 1) / (dim - 1);
+      return (spent - expected) / budget;
+    }
+
+    final colors = <Color>[
+      BudgetPaceChartCard.paceColor(-0.10),
+      for (final p in points)
+        BudgetPaceChartCard.paceColor(
+          gapAt(p.day.toDouble(), p.cumulativeSpent),
+        ),
     ];
 
     final budgetLine = Paint()
@@ -146,29 +194,25 @@ class _BudgetPaceChartPainter extends CustomPainter {
       budgetLine,
     );
 
-    final path = Path()..moveTo(actual.first.dx, actual.first.dy);
+    // Each segment blends between its endpoints' colours, so the line shifts
+    // smoothly from green to yellow/orange to red as it approaches and
+    // crosses the budget line.
     for (var i = 1; i < actual.length; i++) {
-      path.lineTo(actual[i].dx, actual[i].dy);
+      final a = actual[i - 1];
+      final b = actual[i];
+      if ((b - a).distance < 0.5) continue;
+      canvas.drawLine(
+        a,
+        b,
+        Paint()
+          ..strokeWidth = 5
+          ..strokeCap = StrokeCap.round
+          ..shader = ui.Gradient.linear(a, b, [colors[i - 1], colors[i]]),
+      );
     }
-    final over = !snapshot.isUnderPace;
-    canvas.drawPath(
-      path,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 5
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round
-        ..shader = ui.Gradient.linear(
-          Offset(actual.first.dx, 0),
-          Offset(math.max(actual.last.dx, actual.first.dx + 1), 0),
-          over
-              ? const [Color(0xFFF9A825), Color(0xFFE53935)]
-              : const [Color(0xFFF9A825), Color(0xFF2E7D32)],
-        ),
-    );
 
     final last = actual.last;
-    final dot = over ? const Color(0xFFE53935) : const Color(0xFF2E7D32);
+    final dot = colors.last;
     canvas.drawCircle(last, 6, Paint()..color = Colors.white);
     canvas.drawCircle(
       last,
@@ -178,6 +222,29 @@ class _BudgetPaceChartPainter extends CustomPainter {
         ..strokeWidth = 3
         ..color = dot,
     );
+  }
+
+  /// Faint vertical guides with day labels underneath the plot.
+  void _dayAxis(
+    Canvas canvas,
+    Offset Function(double day, double spent) map,
+    double baselineY,
+  ) {
+    final guide = Paint()
+      ..color = Colors.black.withValues(alpha: 0.06)
+      ..strokeWidth = 1;
+    for (final day in BudgetPaceChartCard.axisDays(snapshot.daysInMonth)) {
+      final x = map(day.toDouble(), 0).dx;
+      canvas.drawLine(Offset(x, 8), Offset(x, baselineY), guide);
+      final label = TextPainter(
+        text: TextSpan(
+          text: '$day',
+          style: const TextStyle(fontSize: 11, color: Color(0xFF8A8A8A)),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      label.paint(canvas, Offset(x - label.width / 2, baselineY + 4));
+    }
   }
 
   void _dashed(Canvas canvas, Offset a, Offset b, Paint paint) {

@@ -148,6 +148,24 @@ class SyncService {
   /// Forgets the on-device copy (sign-out, "Clear").
   Future<void> clearSavedData() => SyncCache.instance.clear();
 
+  /// When the backend last synced this user's banks (by webhook or by the
+  /// app), read straight from Supabase so it never wakes the backend. Null
+  /// when unknown, including before migration 012 is applied; callers then
+  /// sync as usual.
+  Future<DateTime?> fetchLastSyncedAt() async {
+    try {
+      final row = await AppSupabase.client
+          .from('sync_status')
+          .select('last_synced_at')
+          .eq('user_id', AuthService.instance.currentUserId)
+          .maybeSingle();
+      final raw = row?['last_synced_at'] as String?;
+      return raw == null ? null : DateTime.tryParse(raw)?.toLocal();
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Fetches everything a refresh needs from Supabase, unparsed.
   Future<RawSyncData> fetchRaw(String userId, DateTime selectedMonth) async {
     final focused = normalizedMonthOption(selectedMonth);
