@@ -33,6 +33,7 @@ class _FakeSync implements SyncService {
   final calls = <String>[];
   final supabaseReplies = <Completer<SyncResult>>[];
   final bankReply = Completer<void>();
+  bool bankSucceeds = true;
 
   @override
   Future<CachedSyncResult?> loadCachedResult(
@@ -55,9 +56,9 @@ class _FakeSync implements SyncService {
   }
 
   @override
-  Future<void> triggerBankSync() {
+  Future<bool> triggerBankSync() {
     calls.add('bank');
-    return bankReply.future;
+    return bankReply.future.then((_) => bankSucceeds);
   }
 
   @override
@@ -125,8 +126,31 @@ void main() {
       await done;
 
       expect(controller.liveStats.totalBalance, 3);
-      expect(controller.syncStatus, 'Updated');
+      expect(controller.syncStatus, startsWith('Updated · bank synced '));
+      expect(controller.syncStatus, matches(RegExp(r'\d{1,2}:\d{2} (AM|PM)$')));
+      expect(controller.lastBankSyncAt, isNotNull);
       expect(sync.calls, ['cache', 'supabase', 'bank', 'supabase']);
+    });
+
+    test('says so when the bank sync could not be reached', () async {
+      build(cached: _saved(1));
+      sync.bankSucceeds = false;
+
+      final done = controller.loadCachedThenRefresh();
+      await pumpEventQueue();
+      sync.supabaseReplies[0].complete(_result(2));
+      await pumpEventQueue();
+      sync.bankReply.complete();
+      await pumpEventQueue();
+      sync.supabaseReplies[1].complete(_result(3));
+      await done;
+
+      expect(controller.liveStats.totalBalance, 3);
+      expect(
+        controller.syncStatus,
+        "Showing saved data · couldn't reach bank sync",
+      );
+      expect(controller.lastBankSyncAt, isNull);
     });
 
     test('first launch with nothing saved shows Loading, then data', () async {

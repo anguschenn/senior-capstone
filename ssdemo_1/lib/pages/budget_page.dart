@@ -4,8 +4,10 @@ import '../models/ai/ai_models.dart';
 import '../models/app_models.dart';
 import '../models/budget/budget_view_mode.dart';
 import '../services/ai_api_client.dart';
+import '../services/category_service.dart';
 import '../utils/app_helpers.dart';
 import '../widgets/budget/budget_ai_analysis_card.dart';
+import '../widgets/budget/budget_alert_toasts.dart';
 import '../widgets/budget/budget_insight_banner.dart';
 import '../widgets/budget/budget_progress_card.dart';
 import '../widgets/budget/budget_scope_selector.dart';
@@ -24,6 +26,8 @@ class BudgetPage extends StatefulWidget {
     required this.selectedMonth,
     required this.monthOptions,
     required this.onMonthChanged,
+    this.transactions = const [],
+    this.reviewedCategoryByTxId = const {},
   });
 
   final DashboardStats stats;
@@ -39,6 +43,10 @@ class BudgetPage extends StatefulWidget {
   final List<DateTime> monthOptions;
   final ValueChanged<DateTime> onMonthChanged;
 
+  /// Visible transactions, for the per-category breakdown on each card.
+  final List<AppTransaction> transactions;
+  final Map<String, String> reviewedCategoryByTxId;
+
   @override
   State<BudgetPage> createState() => _BudgetPageState();
 }
@@ -49,6 +57,9 @@ class _BudgetPageState extends State<BudgetPage> {
   final Map<String, int> _manualBudgetOrder = <String, int>{};
   final Map<String, GlobalKey> _budgetItemKeys = <String, GlobalKey>{};
   String? _highlightedBudgetId;
+  // Alert popups the user closed, keyed by month + budget so a new month
+  // shows them again.
+  final Set<String> _dismissedAlertKeys = <String>{};
 
   bool _loadingAi = false;
   String _aiError = '';
@@ -214,71 +225,102 @@ class _BudgetPageState extends State<BudgetPage> {
   @override
   Widget build(BuildContext context) {
     // Budget page combines editable category limits with lightweight insight text.
+    final alerts = _overspendCategories()
+        .where((c) => !_dismissedAlertKeys.contains(_alertKey(c)))
+        .take(4)
+        .toList();
     return SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.all(20),
+      child: Stack(
         children: [
-          BudgetScopeSelector(
-            viewMode: viewMode,
-            onViewModeChanged: (mode) {
-              setState(() {
-                viewMode = mode;
-                _aiSuggestion = null;
-                _aiError = '';
-                _aiContextSource = '';
-              });
-            },
-            selectedMonth: widget.selectedMonth,
-            monthOptions: _monthOnlyOptions,
-            yearOptions: _yearOptions,
-            onMonthChanged: widget.onMonthChanged,
-          ),
-          const SizedBox(height: 12),
-          _budgetHeader(context),
-          const SizedBox(height: 20),
-          // Lists overspending categories; tap a name to jump to its card.
-          Builder(
-            builder: (context) {
-              final over = _overspendCategories();
-              final byTitle = {for (final c in over) c.title: c.budgetId};
-              return BudgetInsightBanner(
-                message: over.isEmpty
-                    ? _budgetInsight()
-                    : 'On track to overspend.',
-                categories: over.map((c) => c.title).toList(),
-                onCategoryTap: (title) {
-                  final id = byTitle[title];
-                  if (id != null) _scrollToBudgetCategory(id);
-                },
-              );
-            },
-          ),
-          const SizedBox(height: 18),
-          // Category budget cards show spent vs. limit for the current time scope.
-          if (activeBudgetProgress.isEmpty)
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.04),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Text('No budgets configured for this view yet.'),
+          _budgetListView(context),
+          // One floating alert per category on pace to overspend.
+          Positioned(
+            top: 12,
+            right: 12,
+            child: BudgetAlertToasts(
+              items: alerts,
+              onTap: (c) => _scrollToBudgetCategory(c.budgetId),
+              onDismiss: (c) =>
+                  setState(() => _dismissedAlertKeys.add(_alertKey(c))),
             ),
-          if (activeBudgetProgress.isNotEmpty) _budgetList(context),
-          const SizedBox(height: 18),
-          BudgetAiAnalysisCard(
-            loading: _loadingAi,
-            error: _aiError,
-            suggestion: _aiSuggestion,
-            contextSource: _aiContextSource,
-            highestCategoryText: _highestCategoryText(),
-            expensesLabel: _selectedRangeExpensesLabel(),
-            expensesValue: _selectedRangeExpensesValue(),
-            canGenerate: _hasEnoughAiData(),
-            onGenerate: _generateAiBudgetSuggestions,
           ),
         ],
       ),
+    );
+  }
+
+  String _alertKey(BudgetCategoryProgress item) =>
+      '${widget.selectedMonth.year}-${widget.selectedMonth.month}|${item.budgetId}';
+
+  Widget _budgetListView(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        BudgetScopeSelector(
+          viewMode: viewMode,
+          onViewModeChanged: (mode) {
+            setState(() {
+              viewMode = mode;
+              _aiSuggestion = null;
+              _aiError = '';
+              _aiContextSource = '';
+            });
+          },
+          selectedMonth: widget.selectedMonth,
+          monthOptions: _monthOnlyOptions,
+          yearOptions: _yearOptions,
+          onMonthChanged: widget.onMonthChanged,
+        ),
+        const SizedBox(height: 12),
+        _budgetHeader(context),
+        const SizedBox(height: 20),
+        // Lists overspending categories; tap a name to jump to its card.
+        Builder(
+          builder: (context) {
+            final flagged = _overspendCategories();
+            final byTitle = {for (final c in flagged) c.title: c.budgetId};
+            return BudgetInsightBanner(
+              message: _budgetInsight(),
+              overCategories: [
+                for (final c in flagged)
+                  if (c.isOverBudget) c.title,
+              ],
+              atRiskCategories: [
+                for (final c in flagged)
+                  if (!c.isOverBudget) c.title,
+              ],
+              onCategoryTap: (title) {
+                final id = byTitle[title];
+                if (id != null) _scrollToBudgetCategory(id);
+              },
+            );
+          },
+        ),
+        const SizedBox(height: 18),
+        // Category budget cards show spent vs. limit for the current time scope.
+        if (activeBudgetProgress.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.04),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Text('No budgets configured for this view yet.'),
+          ),
+        if (activeBudgetProgress.isNotEmpty) _budgetList(context),
+        const SizedBox(height: 18),
+        BudgetAiAnalysisCard(
+          loading: _loadingAi,
+          error: _aiError,
+          suggestion: _aiSuggestion,
+          contextSource: _aiContextSource,
+          highestCategoryText: _highestCategoryText(),
+          expensesLabel: _selectedRangeExpensesLabel(),
+          expensesValue: _selectedRangeExpensesValue(),
+          canGenerate: _hasEnoughAiData(),
+          onGenerate: _generateAiBudgetSuggestions,
+        ),
+      ],
     );
   }
 
@@ -399,6 +441,7 @@ class _BudgetPageState extends State<BudgetPage> {
   // Builds the visible list of budget cards for the selected time scope.
   Widget _budgetList(BuildContext context) {
     final items = orderedBudgetProgress;
+    final txByCategory = _transactionsByCategory();
     return ReorderableListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -429,6 +472,8 @@ class _BudgetPageState extends State<BudgetPage> {
             child: BudgetProgressCard(
               item: item,
               index: index,
+              transactions:
+                  txByCategory[normalizeCategoryKey(item.title)] ?? const [],
               highlighted: _highlightedBudgetId == item.budgetId,
               onEdit: (selectedItem) =>
                   _showEditBudgetDialog(context, selectedItem),
@@ -440,6 +485,33 @@ class _BudgetPageState extends State<BudgetPage> {
   }
 
   // -------------------------------------------------------------------------
+  /// Spending transactions behind each card, largest first. Grouped exactly
+  /// like the card's "spent" figure (BudgetService.rebasedProgressFromTemplate),
+  /// so the rows add up to it.
+  Map<String, List<AppTransaction>> _transactionsByCategory() {
+    final focus = widget.selectedMonth;
+    final out = <String, List<AppTransaction>>{};
+    for (final tx in widget.transactions) {
+      if (tx.expenseAmount <= 0) continue;
+      if (viewMode == BudgetViewMode.month &&
+          (tx.date.year != focus.year || tx.date.month != focus.month)) {
+        continue;
+      }
+      if (viewMode == BudgetViewMode.year && tx.date.year != focus.year) {
+        continue;
+      }
+      final bucket = CategoryService.instance.budgetBucketFor(
+        tx,
+        widget.reviewedCategoryByTxId,
+      );
+      out.putIfAbsent(normalizeCategoryKey(bucket), () => []).add(tx);
+    }
+    for (final list in out.values) {
+      list.sort((a, b) => b.expenseAmount.compareTo(a.expenseAmount));
+    }
+    return out;
+  }
+
   // Budget insight text helpers
   // -------------------------------------------------------------------------
 

@@ -10,12 +10,16 @@ class BudgetProgressCard extends StatelessWidget {
     required this.index,
     required this.onEdit,
     this.highlighted = false,
+    this.transactions = const [],
   });
 
   final BudgetCategoryProgress item;
   final int index;
   final ValueChanged<BudgetCategoryProgress> onEdit;
   final bool highlighted;
+
+  /// Spending behind this card, largest first; shown in a dropdown.
+  final List<AppTransaction> transactions;
 
   @override
   Widget build(BuildContext context) {
@@ -105,6 +109,19 @@ class BudgetProgressCard extends StatelessWidget {
                 ),
               ),
               const Spacer(),
+              if (item.limit > 0) ...[
+                Text(
+                  '${(item.usedRatio * 100).toStringAsFixed(0)}% used',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: item.isOverBudget
+                        ? Colors.redAccent
+                        : Colors.black54,
+                  ),
+                ),
+                const SizedBox(width: 10),
+              ],
               Text(
                 'Remaining: ${remaining >= 0 ? '' : '-'}\$${remaining.abs().toStringAsFixed(2)}',
                 style: TextStyle(
@@ -128,6 +145,8 @@ class BudgetProgressCard extends StatelessWidget {
               ),
             ),
           ],
+          if (transactions.isNotEmpty)
+            _TransactionBreakdown(transactions: transactions, tone: tone),
         ],
       ),
     );
@@ -149,5 +168,83 @@ class BudgetProgressCard extends StatelessWidget {
     }
     return 'Burn rate: ~\$${item.burnRateDaily.toStringAsFixed(0)}/day → '
         '~\$${projected.toStringAsFixed(0)} projected month end';
+  }
+}
+
+/// Collapsible list of the transactions behind a budget card.
+class _TransactionBreakdown extends StatelessWidget {
+  const _TransactionBreakdown({required this.transactions, required this.tone});
+
+  static const _initialRows = 10;
+
+  final List<AppTransaction> transactions;
+  final Color tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final count = transactions.length;
+    final hidden = count - _initialRows;
+    return ExpansionTile(
+      tilePadding: EdgeInsets.zero,
+      childrenPadding: const EdgeInsets.only(bottom: 4),
+      dense: true,
+      visualDensity: VisualDensity.compact,
+      shape: const Border(),
+      collapsedShape: const Border(),
+      iconColor: tone,
+      collapsedIconColor: tone,
+      title: Text(
+        '$count transaction${count == 1 ? '' : 's'}',
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: tone,
+        ),
+      ),
+      children: [
+        for (final tx in transactions.take(_initialRows))
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 52,
+                  child: Text(
+                    shortDate(tx.date),
+                    style: const TextStyle(fontSize: 11, color: Colors.black54),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    tx.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  formatMoney(tx.expenseAmount, signed: false),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        if (hidden > 0)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                '+ $hidden smaller transaction${hidden == 1 ? '' : 's'}',
+                style: const TextStyle(fontSize: 11, color: Colors.black54),
+              ),
+            ),
+          ),
+      ],
+    );
   }
 }

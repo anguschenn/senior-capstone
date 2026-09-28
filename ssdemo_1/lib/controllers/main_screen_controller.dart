@@ -34,6 +34,9 @@ class MainScreenController extends ChangeNotifier {
   bool loginRequired = false;
   String syncStatus = 'No data loaded yet';
 
+  /// When this session last got a confirmed bank sync from the backend.
+  DateTime? lastBankSyncAt;
+
   // Bumped whenever a refresh starts or data is cleared. A fetched result is
   // applied only if nothing newer started meanwhile, so a slow older fetch can
   // never overwrite fresher data.
@@ -116,7 +119,7 @@ class MainScreenController extends ChangeNotifier {
     syncStatus = 'Syncing with bank...';
     _notifyListenersSafe();
     try {
-      await _sync.triggerBankSync();
+      final synced = await _sync.triggerBankSync();
       loginRequired = false;
       syncStatus = 'Loading...';
       _notifyListenersSafe();
@@ -125,7 +128,7 @@ class MainScreenController extends ChangeNotifier {
         selectedMonth,
       );
       _applySyncResult(result);
-      syncStatus = result.hasData ? 'Updated' : 'No data found';
+      syncStatus = result.hasData ? _updatedStatus(synced) : 'No data found';
     } on ItemLoginRequiredException {
       loginRequired = true;
       syncStatus = 'Bank login expired — tap to re-authenticate';
@@ -178,12 +181,14 @@ class MainScreenController extends ChangeNotifier {
         _notifyListenersSafe();
       }
 
-      await _sync.triggerBankSync();
+      final bankSynced = await _sync.triggerBankSync();
       if (_isDisposed) return;
       loginRequired = false;
       final synced = await _fetchAndApply();
       if (synced != null) {
-        syncStatus = synced.hasData ? 'Updated' : 'No data found';
+        syncStatus = synced.hasData
+            ? _updatedStatus(bankSynced)
+            : 'No data found';
       }
     } on ItemLoginRequiredException {
       loginRequired = true;
@@ -194,6 +199,32 @@ class MainScreenController extends ChangeNotifier {
       refreshingInBackground = false;
       _notifyListenersSafe();
     }
+  }
+
+  /// "Updated · bank synced 3:42 PM" when the backend confirmed the sync;
+  /// otherwise says plainly that the data shown may be behind the bank.
+  String _updatedStatus(bool bankSynced) {
+    if (bankSynced) {
+      lastBankSyncAt = DateTime.now();
+      return 'Updated · bank synced ${_clockLabel(lastBankSyncAt!)}';
+    }
+    final last = lastBankSyncAt;
+    return last == null
+        ? "Showing saved data · couldn't reach bank sync"
+        : 'Showing saved data · last bank sync ${_clockLabel(last)}';
+  }
+
+  /// "3:42 PM" today, "Sep 26, 3:42 PM" on another day.
+  static String _clockLabel(DateTime time, {DateTime? now}) {
+    final clock = now ?? DateTime.now();
+    final hour = time.hour % 12 == 0 ? 12 : time.hour % 12;
+    final minute = time.minute.toString().padLeft(2, '0');
+    final label = '$hour:$minute ${time.hour < 12 ? 'AM' : 'PM'}';
+    final sameDay =
+        time.year == clock.year &&
+        time.month == clock.month &&
+        time.day == clock.day;
+    return sameDay ? label : '${shortDate(time)}, $label';
   }
 
   String _ago(DateTime time) {
@@ -216,13 +247,13 @@ class MainScreenController extends ChangeNotifier {
         loginRequired = false;
         syncStatus = 'Syncing transactions...';
         _notifyListenersSafe();
-        await _sync.triggerBankSync();
+        final synced = await _sync.triggerBankSync();
         final result = await _sync.refreshFromSupabase(
           reviewedCategoryByTxId,
           selectedMonth,
         );
         _applySyncResult(result);
-        syncStatus = result.hasData ? 'Updated' : 'No data found';
+        syncStatus = result.hasData ? _updatedStatus(synced) : 'No data found';
       } else {
         syncStatus = 'Re-authentication cancelled';
       }

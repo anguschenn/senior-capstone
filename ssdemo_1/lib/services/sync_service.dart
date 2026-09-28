@@ -77,9 +77,10 @@ class SyncService {
     return headers;
   }
 
-  /// Triggers the backend bank sync endpoint.
+  /// Triggers the backend bank sync endpoint. Returns true when the backend
+  /// confirmed the sync, false when it could not be reached or failed.
   /// Throws [ItemLoginRequiredException] if re-authentication is needed.
-  Future<void> triggerBankSync() async {
+  Future<bool> triggerBankSync() async {
     try {
       final response = await http
           .get(ApiConfig.instance.transactionsUri, headers: _backendHeaders())
@@ -87,10 +88,12 @@ class SyncService {
       if (response.statusCode == 400 && _isLoginRequired(response.body)) {
         throw const ItemLoginRequiredException();
       }
+      return response.statusCode == 200;
     } on ItemLoginRequiredException {
       rethrow;
     } catch (_) {
       // Other network/server errors are best-effort — don't block the UI.
+      return false;
     }
   }
 

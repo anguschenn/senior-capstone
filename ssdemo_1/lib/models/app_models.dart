@@ -349,6 +349,16 @@ class BudgetCategoryProgress {
     return value.clamp(0, 1.5);
   }
 
+  /// Share of the limit spent, unclamped (for "137% used" labels; [ratio] is
+  /// capped for progress bars).
+  double get usedRatio {
+    if (limit <= 0 || !spent.isFinite || !limit.isFinite) return 0;
+    final value = spent / limit;
+    return value.isFinite ? value : 0;
+  }
+
+  bool get isOverBudget => limit > 0 && spent > limit;
+
   /// Days elapsed in the current calendar month (at least 1).
   static int get daysElapsedThisMonth {
     final now = DateTime.now();

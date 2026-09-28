@@ -151,6 +151,8 @@ class _MainScreenState extends State<MainScreen> {
         selectedMonth: c.selectedMonth,
         monthOptions: monthOptions,
         onMonthChanged: c.selectMonth,
+        transactions: visibleTransactions,
+        reviewedCategoryByTxId: c.reviewedCategoryByTxId,
       ),
       SubscriptionsPage(
         subscriptions: visibleSubscriptions,
