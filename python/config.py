@@ -1,6 +1,7 @@
 """Centralised configuration loaded once from environment variables."""
 
 import os
+import re
 import threading
 
 import certifi
@@ -61,9 +62,33 @@ OPENROUTER_APP_TITLE = _empty_to_none("OPENROUTER_APP_TITLE")
 INTERNAL_API_KEY = _empty_to_none("INTERNAL_API_KEY")
 
 # ── CORS ─────────────────────────────────────────────────────────────
-# Comma-separated browser origins allowed to call /api/*. Empty means no
-# cross-origin browser access at all (fail closed), never "*".
-ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
+_REGEX_CHARS = set("*\\]?$^[()")
+
+
+def parse_allowed_origins(raw: str) -> list:
+    """Comma-separated browser origins allowed to call /api/*.
+
+    Exact origins stay exact. "scheme://host:*" means that host on any port (flutter run
+    picks a random port each launch). The wildcard is only accepted as the whole port and
+    is compiled to a strict digits-only match: handed to flask-cors as a plain string,
+    "http://localhost:*" would be a prefix regex that also matches http://localhost.evil.com.
+    Any other regex-looking entry is dropped for the same reason. Empty means no
+    cross-origin browser access at all (fail closed), never "*".
+    """
+    origins: list = []
+    for entry in (part.strip() for part in raw.split(",")):
+        if not entry:
+            continue
+        if entry.endswith(":*") and not _REGEX_CHARS & set(entry[:-2]):
+            origins.append(re.compile("^" + re.escape(entry[:-2]) + r":[0-9]{1,5}$"))
+        elif _REGEX_CHARS & set(entry):
+            print(f"ALLOWED_ORIGINS: ignoring unsupported pattern {entry!r}")
+        else:
+            origins.append(entry)
+    return origins
+
+
+ALLOWED_ORIGINS = parse_allowed_origins(os.getenv("ALLOWED_ORIGINS", ""))
 
 # ── Caching ──────────────────────────────────────────────────────────
 SPENDING_SNAPSHOT_CACHE_TTL_SECONDS = int(os.getenv("SPENDING_SNAPSHOT_CACHE_TTL_SECONDS", "60"))
