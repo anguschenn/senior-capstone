@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -71,6 +72,10 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
   static const Duration _followUpWindow = Duration(minutes: 20);
   static const _client = AiApiClient();
   static const _store = ChatHistoryStore.instance;
+
+  /// Debug builds only: which model answers, "local" (Ollama) or "online"
+  /// (OpenRouter). Kept across panel openings while the app runs.
+  static String _modelSource = 'local';
 
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -250,6 +255,7 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
         history: historyPayload,
         spendingSummary: _activeSummary,
         context: _chatContext,
+        modelSource: kDebugMode ? _modelSource : null,
       );
       setState(() {
         _turns[_turns.length - 1] = _ChatTurn(
@@ -481,6 +487,20 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
                   ],
                 ),
               ),
+              if (kDebugMode)
+                SegmentedTabs<String>(
+                  key: const ValueKey('ai-model-source'),
+                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  value: _modelSource,
+                  segments: const {
+                    'local': 'Local model',
+                    'online': 'Online model',
+                  },
+                  onChanged: (source) {
+                    if (_sending) return;
+                    setState(() => _modelSource = source);
+                  },
+                ),
               if (widget.contextLabel != null)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),

@@ -3,6 +3,7 @@
 from flask import Blueprint, current_app, jsonify, request
 
 from ai import server_summary
+from ai.providers import current_llm_info, use_provider
 from ai.response_utils import confidence_label, short_copy
 from ai.validators import clamp_str
 from api.http_helpers import log_route_error
@@ -10,6 +11,16 @@ from auth import UserAuthError, is_rate_limited_for_ai, require_supabase_user_id
 from config import CHAT_SERVER_SUMMARY_ENABLED
 
 ai_bp = Blueprint("ai", __name__)
+
+
+_MODEL_SOURCES = {"local": "ollama", "online": "openrouter"}
+
+
+def _switched_provider(body):
+    """The provider the app's model switch asks for, when the switch is turned on."""
+    if not current_app.config.get("model_switch_enabled") or not isinstance(body, dict):
+        return ""
+    return _MODEL_SOURCES.get(str(body.get("model_source") or "").lower(), "")
 
 
 def _record_question(body, response):
@@ -47,7 +58,14 @@ def ai_chat():
         payload, summary_source = _with_server_summary(body, user_id)
         if payload is None:
             return jsonify({"retry_with_summary": True}), 200
-        response = current_app.config["chat_service"].handle_chat(payload, user_id=user_id)
+        chat_service = current_app.config["chat_service"]
+        provider = _switched_provider(body)
+        if provider:
+            with use_provider(provider):
+                response = chat_service.handle_chat(payload, user_id=user_id)
+                response["model_used"] = current_llm_info()
+        else:
+            response = chat_service.handle_chat(payload, user_id=user_id)
         if isinstance(response, dict):
             response["summary_source"] = summary_source
         _record_question(body, response)

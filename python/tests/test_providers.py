@@ -23,7 +23,7 @@ class OllamaRequestTests(unittest.TestCase):
     def _sent_body(self, generation_config):
         sent = {}
 
-        def fake_urlopen(req, timeout=None):
+        def fake_urlopen(req, timeout=None, **_kwargs):
             sent["body"] = json.loads(req.data.decode("utf-8"))
             return _Response({"response": '{"reply":"ok"}'})
 
@@ -52,7 +52,7 @@ class OllamaRequestTests(unittest.TestCase):
     def test_json_falls_back_when_structured_output_is_unavailable(self):
         sent = []
 
-        def fake_urlopen(req, timeout=None):
+        def fake_urlopen(req, timeout=None, **_kwargs):
             body = json.loads(req.data.decode("utf-8"))
             sent.append(body)
             if "format" in body:
@@ -73,7 +73,7 @@ class OpenRouterRequestTests(unittest.TestCase):
     def _run(self, fail_first_with=None):
         sent = []
 
-        def fake_urlopen(req, timeout=None):
+        def fake_urlopen(req, timeout=None, **_kwargs):
             body = json.loads(req.data.decode("utf-8"))
             sent.append(body)
             if fail_first_with and len(sent) == 1:
