@@ -282,8 +282,8 @@ def _mark_stale_subscriptions(user_id, tx_rows):
         )
 
         if not found:
-            supabase.table("subscriptions").update({"is_active": False}).eq(
-                "id", sub["id"]
+            supabase.table("subscriptions").update({"is_active": False}).eq("id", sub["id"]).eq(
+                "user_id", user_id
             ).execute()
             deactivated += 1
 
@@ -358,7 +358,7 @@ def detect_and_upsert_subscriptions(user_id):
                 update_data["needs_confirmation"] = sub["needs_confirmation"]
             supabase.table("subscriptions").update(update_data).eq(
                 "id", existing_by_key[lookup_key]
-            ).execute()
+            ).eq("user_id", user_id).execute()
             updated += 1
         else:
             supabase.table("subscriptions").insert(
