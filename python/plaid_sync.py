@@ -241,7 +241,3 @@ def format_error(error):
             "error_type": response.get("error_type", "API_ERROR"),
         }
     }
-
-
-def pretty_print_response(response):
-    print(json.dumps(response, indent=2, sort_keys=True, default=str))
