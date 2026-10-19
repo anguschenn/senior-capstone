@@ -21,3 +21,17 @@ def short_copy(text: str) -> str:
         if idx > 0:
             return clamp_str(value[: idx + 1], 160)
     return clamp_str(value, 160)
+
+
+def describe_plaid_amount(amount) -> str:
+    """Label a signed Plaid amount by direction so neither users nor the LLM misread it.
+
+    Plaid convention: positive = money out of the account (a purchase), negative = money in
+    (a paycheck or refund). Printing the raw sign reads backwards ("+$50" for a purchase).
+    """
+    value = float(amount or 0)
+    if value > 0:
+        return f"spent ${value:.2f}"
+    if value < 0:
+        return f"received ${abs(value):.2f}"
+    return "$0.00"
