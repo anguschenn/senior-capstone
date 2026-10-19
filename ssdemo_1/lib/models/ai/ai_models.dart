@@ -48,6 +48,19 @@ class AiChatResponse {
       periodResolved: _parseStringKeyedMap(json['period_resolved']),
     );
   }
+
+  /// The fields [AiChatResponse.fromJson] reads, for saving a chat on the device.
+  Map<String, dynamic> toJson() => {
+    'reply': copy,
+    'insights': insights,
+    'actions': actions,
+    'citations': citations,
+    'context_source': contextSource,
+    'intent': intent,
+    'answer_source': answerSource,
+    'facts_used': factsUsed,
+    'period_resolved': periodResolved,
+  };
 }
 
 class AiBudgetAlert {

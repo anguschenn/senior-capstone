@@ -174,10 +174,8 @@ class _BudgetInsightBannerState extends State<BudgetInsightBanner> {
             budgetAlertUsageText(item),
             style: TextStyle(fontSize: 12, color: color),
           ),
-          Text(
-            budgetAlertPaceText(item),
-            style: TextStyle(fontSize: 12, color: color),
-          ),
+          if (budgetAlertPaceText(item) case final pace?)
+            Text(pace, style: TextStyle(fontSize: 12, color: color)),
         ],
       ),
     );

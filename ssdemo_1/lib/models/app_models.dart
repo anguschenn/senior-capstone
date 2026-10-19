@@ -359,6 +359,7 @@ class BudgetCategoryProgress {
     required this.title,
     required this.spent,
     required this.limit,
+    this.paceApplies = true,
   });
 
   final String budgetId;
@@ -366,6 +367,21 @@ class BudgetCategoryProgress {
   final String title;
   final double spent;
   final double limit;
+
+  /// Whether [spent] is the current month so far, so a month-end pace means
+  /// something. False for a finished month, a year or all time: there is
+  /// nothing left to project, only over or under the limit.
+  final bool paceApplies;
+
+  /// The same figures with no month-end projection.
+  BudgetCategoryProgress withoutPace() => BudgetCategoryProgress(
+    budgetId: budgetId,
+    categoryId: categoryId,
+    title: title,
+    spent: spent,
+    limit: limit,
+    paceApplies: false,
+  );
 
   double get ratio {
     if (limit <= 0 || !spent.isFinite || !limit.isFinite) return 0;
@@ -411,8 +427,10 @@ class BudgetCategoryProgress {
     return value.isFinite ? value : 0;
   }
 
-  /// Extrapolated month-end spend if today's pace continues.
+  /// Extrapolated month-end spend if today's pace continues; just [spent]
+  /// when [paceApplies] is false.
   double get projectedMonthEnd {
+    if (!paceApplies) return spent.isFinite ? spent : 0;
     final now = DateTime.now();
     final dim = daysInMonth(now.year, now.month);
     final value = burnRateDaily * dim;
@@ -435,11 +453,14 @@ class BudgetCategoryProgress {
 
   /// Projected to finish the month over the limit.
   bool get isBurnRateHigh =>
-      limit > 0 && projectedMonthEnd.isFinite && projectedMonthEnd > limit;
+      paceApplies &&
+      limit > 0 &&
+      projectedMonthEnd.isFinite &&
+      projectedMonthEnd > limit;
 
   /// On pace to use most of the budget (>= 90%) but not yet over.
   bool get isBurnRateApproaching {
-    if (limit <= 0 || isBurnRateHigh) return false;
+    if (!paceApplies || limit <= 0 || isBurnRateHigh) return false;
     return projectedMonthEnd >= limit * 0.9;
   }
 

@@ -90,7 +90,7 @@ class BudgetProgressCard extends StatelessWidget {
           LinearProgressIndicator(
             value: progress.isFinite ? progress.clamp(0, 1) : 0,
             minHeight: 8,
-            color: item.isBurnRateHigh
+            color: item.isBurnRateHigh || item.isOverBudget
                 ? Colors.redAccent
                 : (isWarning ? Colors.orange : tone),
             backgroundColor: Colors.black12,
@@ -106,7 +106,9 @@ class BudgetProgressCard extends StatelessWidget {
                             ? Colors.orange
                             : Colors.black54)
                       : isWarning
-                      ? (item.isBurnRateHigh ? Colors.redAccent : Colors.orange)
+                      ? (item.isBurnRateHigh || item.isOverBudget
+                            ? Colors.redAccent
+                            : Colors.orange)
                       : tone,
                   fontWeight: FontWeight.w600,
                   fontSize: 12,
@@ -136,7 +138,7 @@ class BudgetProgressCard extends StatelessWidget {
                 ),
             ],
           ),
-          if (item.limit > 0 && item.spent > 0) ...[
+          if (item.paceApplies && item.limit > 0 && item.spent > 0) ...[
             const SizedBox(height: 6),
             Text(
               _burnRateLine(item),
@@ -160,6 +162,7 @@ class BudgetProgressCard extends StatelessWidget {
   String _statusLabel(BudgetCategoryProgress item) {
     // Without a limit there is nothing to be healthy against.
     if (!item.hasLimit) return 'No budget set';
+    if (!item.paceApplies && item.isOverBudget) return 'Over budget';
     if (item.isBurnRateHigh) return 'On track to overspend';
     if (item.isBurnRateApproaching) return 'Burn rate high';
     if (item.isWarning) return 'High usage';

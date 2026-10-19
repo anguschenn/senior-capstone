@@ -1401,3 +1401,43 @@ class TestChatServiceV2Regression(unittest.TestCase):
             with self.subTest(prompt=prompt):
                 gaps = service._coverage_gaps(prompt, total, "amount_lookup", summary)
                 self.assertIn(gap, gaps)
+
+    def test_full_questions_do_not_borrow_from_the_previous_one(self):
+        summary = self._round2_summary()
+        worse = self._ask_with(
+            "Is April worse than March?",
+            summary,
+            [{"role": "user", "text": "What's my income in April?"}],
+        )
+        self.assertEqual(worse["resolved_query"]["metric"], "expenses")
+        self.assertIn("Spending", worse["reply"])
+        subs = self._ask_with(
+            "What subscriptions am I paying for?",
+            summary,
+            [{"role": "user", "text": "Is my spending in April worse than March?"}],
+        )
+        self.assertEqual(subs["intent"], "data_pointer")
+        self.assertIn("Subs tab", subs["reply"])
+        # A fragment still borrows: "and april?" after a May question.
+        followup = self._ask_with(
+            "and march?", summary, [{"role": "user", "text": "How much did I spend in April?"}]
+        )
+        self.assertIn("2026-03", followup["reply"])
+
+    def test_model_context_labels_periods_and_paces_the_current_month(self):
+        from datetime import date
+
+        today = date.today()
+        key = today.strftime("%Y-%m")
+        summary = self._round2_summary()
+        summary["time_anchor"] = {"selected_month": key, "selected_year": today.year}
+        summary["totals"] = {**summary["totals"], "expenses_month": 300.0}
+        summary["annual_summary"] = {
+            "year": today.year,
+            "monthly_expense_trend": [{"month": key, "expenses": 300.0}],
+        }
+        text = self._service()._summary_to_text(summary)
+        self.assertIn("top categories last 30 days:", text)
+        if today.day < 28:  # month-end days have nothing left to project
+            self.assertIn(f"{key} 300 so far ({today.day} of", text)
+            self.assertIn("expenses on pace for about", text)

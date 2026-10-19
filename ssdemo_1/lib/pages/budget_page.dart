@@ -88,12 +88,25 @@ class _BudgetPageState extends State<BudgetPage> {
     return out;
   }
 
-  List<BudgetCategoryProgress> get activeBudgetProgress =>
-      viewMode == BudgetViewMode.month
-      ? widget.budgetProgress
-      : (viewMode == BudgetViewMode.year
-            ? widget.budgetProgressYear
-            : widget.budgetProgressAll);
+  List<BudgetCategoryProgress> get activeBudgetProgress {
+    final source = viewMode == BudgetViewMode.month
+        ? widget.budgetProgress
+        : (viewMode == BudgetViewMode.year
+              ? widget.budgetProgressYear
+              : widget.budgetProgressAll);
+    if (_showsCurrentMonth) return source;
+    // A finished month, a year or all time: no month-end pace to project.
+    return [for (final item in source) item.withoutPace()];
+  }
+
+  bool get _showsCurrentMonth {
+    if (viewMode != BudgetViewMode.month) return false;
+    final month = widget.selectedMonth;
+    final now = DateTime.now();
+    return !isAllYearOption(month) &&
+        month.year == now.year &&
+        month.month == now.month;
+  }
 
   List<BudgetCategoryProgress> get orderedBudgetProgress {
     final ordered = [...activeBudgetProgress];
@@ -534,12 +547,16 @@ class _BudgetPageState extends State<BudgetPage> {
     return '${lead.title} (${(lead.ratio * 100).toStringAsFixed(0)}%)';
   }
 
-  /// Categories projected to finish the month over budget (month view).
+  /// Categories over budget or projected to finish the month over it
+  /// (month view; past months can only be over).
   List<BudgetCategoryProgress> _overspendCategories() {
     if (viewMode != BudgetViewMode.month) return const [];
     final over =
         activeBudgetProgress
-            .where((item) => item.spent > 0 && item.isBurnRateHigh)
+            .where(
+              (item) =>
+                  item.spent > 0 && (item.isOverBudget || item.isBurnRateHigh),
+            )
             .toList()
           ..sort((a, b) => b.projectedOverrun.compareTo(a.projectedOverrun));
     return over;

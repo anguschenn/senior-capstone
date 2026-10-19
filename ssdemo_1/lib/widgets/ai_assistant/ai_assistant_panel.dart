@@ -6,15 +6,22 @@ import '../../models/ai/ai_models.dart';
 import '../../models/app_models.dart';
 import '../../services/ai_api_client.dart';
 import '../../services/auth_service.dart';
+import '../../services/chat_history_store.dart';
 import 'ai_response_card.dart';
 
 /// Single chat turn: user prompt + optional structured response.
 class _ChatTurn {
-  _ChatTurn({required this.prompt, this.response, this.error});
+  _ChatTurn({
+    required this.prompt,
+    this.response,
+    this.error,
+    DateTime? askedAt,
+  }) : askedAt = askedAt ?? DateTime.now();
 
   final String prompt;
   final AiChatResponse? response;
   final String? error;
+  final DateTime askedAt;
 }
 
 class AIAssistantPanel extends StatefulWidget {
@@ -38,12 +45,11 @@ class AIAssistantPanel extends StatefulWidget {
 }
 
 class _AIAssistantPanelState extends State<AIAssistantPanel> {
-  static const int _maxCachedTurns = 6;
-  static const Duration _cacheTtl = Duration(minutes: 20);
-  static final Map<String, List<_ChatTurn>> _cachedTurnsByKey =
-      <String, List<_ChatTurn>>{};
-  static final Map<String, DateTime> _cachedAtByKey = <String, DateTime>{};
+  /// Only turns this recent go to the server as context for follow-ups, so
+  /// a question from yesterday doesn't steer today's answer.
+  static const Duration _followUpWindow = Duration(minutes: 20);
   static const _client = AiApiClient();
+  static const _store = ChatHistoryStore.instance;
 
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -58,43 +64,61 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
         widget.spendingSummaryByAccount.containsKey(widget.initialAccountId)
         ? widget.initialAccountId
         : kAllAccountsId;
-    _restoreTurnsFromCache();
+    _loadSavedTurns();
   }
 
   @override
   void dispose() {
-    _persistTurnsToCache();
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
-  void _restoreTurnsFromCache() {
-    final key = _cacheKey;
-    final cachedTurns = _cachedTurnsByKey[key];
-    final cachedAt = _cachedAtByKey[key];
-    if (cachedTurns == null || cachedAt == null) return;
-    if (DateTime.now().difference(cachedAt) > _cacheTtl) {
-      _cachedTurnsByKey.remove(key);
-      _cachedAtByKey.remove(key);
+  String? get _userId => AuthService.instance.currentUser?.id;
+
+  /// Shows the saved chat for the current account scope.
+  Future<void> _loadSavedTurns() async {
+    final userId = _userId;
+    if (userId == null) return;
+    final accountId = _resolvedAccountId;
+    final saved = await _store.load(userId, accountId);
+    if (!mounted || accountId != _resolvedAccountId || _turns.isNotEmpty) {
       return;
     }
-    _turns
-      ..clear()
-      ..addAll(cachedTurns);
+    setState(() {
+      _turns.addAll([
+        for (final turn in saved)
+          _ChatTurn(
+            prompt: turn.prompt,
+            response: turn.response,
+            askedAt: turn.askedAt,
+          ),
+      ]);
+    });
     _scrollToBottom();
   }
 
-  void _persistTurnsToCache() {
-    final key = _cacheKey;
-    final successfulTurns = _turns
-        .where((turn) => turn.response != null)
-        .toList();
-    final start = successfulTurns.length > _maxCachedTurns
-        ? successfulTurns.length - _maxCachedTurns
-        : 0;
-    _cachedTurnsByKey[key] = successfulTurns.sublist(start);
-    _cachedAtByKey[key] = DateTime.now();
+  /// Saves the answered turns; failed or pending ones aren't worth keeping.
+  void _saveTurns() {
+    final userId = _userId;
+    if (userId == null) return;
+    _store.save(userId, _resolvedAccountId, [
+      for (final turn in _turns)
+        if (turn.response != null)
+          SavedChatTurn(
+            prompt: turn.prompt,
+            response: turn.response!,
+            askedAt: turn.askedAt,
+          ),
+    ]);
+  }
+
+  void _clearChat() {
+    final userId = _userId;
+    if (userId != null) {
+      _store.clear(userId: userId, accountId: _resolvedAccountId);
+    }
+    setState(_turns.clear);
   }
 
   String get _resolvedAccountId {
@@ -106,8 +130,6 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
     return kAllAccountsId;
   }
 
-  String get _cacheKey => '${widget.chatApiUri.origin}|$_resolvedAccountId';
-
   Map<String, dynamic> get _activeSummary {
     return widget.spendingSummaryByAccount[_resolvedAccountId] ??
         widget.spendingSummaryByAccount[kAllAccountsId] ??
@@ -116,7 +138,8 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
 
   List<AiChatMessage> _buildHistoryPayload() {
     final history = <AiChatMessage>[];
-    for (final turn in _turns) {
+    final since = DateTime.now().subtract(_followUpWindow);
+    for (final turn in _turns.where((t) => t.askedAt.isAfter(since))) {
       history.add(AiChatMessage(role: 'user', text: turn.prompt));
       final reply = turn.response?.copy;
       if (reply != null && reply.trim().isNotEmpty) {
@@ -151,7 +174,6 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
       _turns.add(turn);
       _sending = true;
     });
-    _persistTurnsToCache();
     _controller.clear();
     _scrollToBottom();
 
@@ -168,9 +190,10 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
         _turns[_turns.length - 1] = _ChatTurn(
           prompt: prompt,
           response: aiRespRaw,
+          askedAt: turn.askedAt,
         );
       });
-      _persistTurnsToCache();
+      _saveTurns();
     } catch (e) {
       setState(() {
         _turns[_turns.length - 1] = _ChatTurn(
@@ -178,9 +201,9 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
           error: e is AiApiException
               ? e.message
               : 'Failed to reach AI service.',
+          askedAt: turn.askedAt,
         );
       });
-      _persistTurnsToCache();
     } finally {
       if (mounted) {
         setState(() => _sending = false);
@@ -264,15 +287,33 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
               mainAxisSize: MainAxisSize.max,
               children: [
                 // Header
-                const Row(
+                Row(
                   children: [
-                    Icon(Icons.smart_toy_outlined, color: Colors.green),
-                    SizedBox(width: 10),
-                    Text(
-                      'AI Assistant',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                    const Icon(Icons.smart_toy_outlined, color: Colors.green),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Text(
+                        'AI Assistant',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    // Fades in once there is a chat to clear.
+                    AnimatedOpacity(
+                      opacity: _turns.isEmpty ? 0 : 1,
+                      duration: const Duration(milliseconds: 200),
+                      child: TextButton.icon(
+                        onPressed: _turns.isEmpty || _sending
+                            ? null
+                            : _clearChat,
+                        icon: const Icon(Icons.delete_outline, size: 18),
+                        label: const Text('Clear chat'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.black54,
+                          visualDensity: VisualDensity.compact,
+                        ),
                       ),
                     ),
                   ],
@@ -315,7 +356,7 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
                             _selectedAccountId = value;
                             _turns.clear();
                           });
-                          _restoreTurnsFromCache();
+                          _loadSavedTurns();
                         },
                 ),
                 const SizedBox(height: 12),
