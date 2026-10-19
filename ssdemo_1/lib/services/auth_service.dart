@@ -1,7 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/config/supabase_client.dart';
-import 'chat_history_store.dart';
 import 'sync_cache.dart';
 
 class SignUpResult {
@@ -49,9 +48,8 @@ class AuthService {
   }
 
   Future<void> signOut() async {
-    // Saved sync data and chats are financial data; don't leave them on the device.
+    // Saved sync data is financial data; don't leave it on the device.
     await SyncCache.instance.clear();
-    await ChatHistoryStore.instance.clear();
     await _auth.signOut();
   }
 

@@ -125,6 +125,17 @@ create table sync_status (
   source text not null check (source in ('webhook', 'app'))
 );
 
+-- AI assistant chat history, newest 30 questions per user and account scope;
+-- see migrations/013_ai_chat_messages.sql for RLS and the trimming trigger.
+create table ai_chat_messages (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id) on delete cascade,
+  account_scope text not null,
+  prompt text not null,
+  response jsonb not null,
+  asked_at timestamptz not null default now()
+);
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Row-level security, the auth.users -> public.users trigger, NOT NULL
 -- constraints and indexes all live in db/migrations/009_security_model.sql.

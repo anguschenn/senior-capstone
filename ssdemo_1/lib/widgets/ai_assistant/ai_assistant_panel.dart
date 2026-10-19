@@ -64,6 +64,7 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
         widget.spendingSummaryByAccount.containsKey(widget.initialAccountId)
         ? widget.initialAccountId
         : kAllAccountsId;
+    _store.removeDeviceCopies();
     _loadSavedTurns();
   }
 
@@ -98,25 +99,26 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
     _scrollToBottom();
   }
 
-  /// Saves the answered turns; failed or pending ones aren't worth keeping.
-  void _saveTurns() {
+  /// Saves an answered turn; failed ones aren't worth keeping.
+  void _saveTurn(_ChatTurn turn) {
     final userId = _userId;
-    if (userId == null) return;
-    _store.save(userId, _resolvedAccountId, [
-      for (final turn in _turns)
-        if (turn.response != null)
-          SavedChatTurn(
-            prompt: turn.prompt,
-            response: turn.response!,
-            askedAt: turn.askedAt,
-          ),
-    ]);
+    final response = turn.response;
+    if (userId == null || response == null) return;
+    _store.add(
+      userId,
+      _resolvedAccountId,
+      SavedChatTurn(
+        prompt: turn.prompt,
+        response: response,
+        askedAt: turn.askedAt,
+      ),
+    );
   }
 
   void _clearChat() {
     final userId = _userId;
     if (userId != null) {
-      _store.clear(userId: userId, accountId: _resolvedAccountId);
+      _store.clear(userId, _resolvedAccountId);
     }
     setState(_turns.clear);
   }
@@ -193,7 +195,7 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
           askedAt: turn.askedAt,
         );
       });
-      _saveTurns();
+      _saveTurn(_turns.last);
     } catch (e) {
       setState(() {
         _turns[_turns.length - 1] = _ChatTurn(
