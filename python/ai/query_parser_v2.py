@@ -2986,6 +2986,23 @@ def _parse_query(message, summary, history=None):
 # ── Follow-ups ───────────────────────────────────────────────────────────
 
 _FOLLOWUP_CUE_RE = re.compile(r"^(and|what about|how about|same for|and for|also|ok and|then)\b\s*")
+_STANDALONE_QUESTION_RE = re.compile(
+    r"^(is|was|are|were|am|do|does|did|can|could|should|will|would|have|has|"
+    r"what|which|who|where|when|how|why)\b\s+\S+\s+\S+"
+)
+_ANAPHORA_RE = re.compile(r"\b(it|that|this|those|these|them|same|then)\b")
+
+
+def _standalone_question(text):
+    """A full question with no "and"/"what about" cue and nothing pointing back ("it",
+    "that"), so it shouldn't borrow the previous question's metric, months or category."""
+    return (
+        not _FOLLOWUP_CUE_RE.match(text)
+        and bool(_STANDALONE_QUESTION_RE.match(text))
+        and not _ANAPHORA_RE.search(text)
+    )
+
+
 _WHY_ONLY_RE = re.compile(
     r"^(but )?(why|how come)( is that| is it| was it| did that happen| so)?"
     r"( so)?( high| low| much| little| big)?$|"
@@ -3128,6 +3145,11 @@ def _resolve_followup(text, summary, history):
     has_category = bool(_categories_in(text, summary))
     metric_only = bool(cue) and bool(_amount_metric(text)) and not (has_period or has_category)
     if not cue and not (has_period or has_category):
+        return None
+    if _standalone_question(text):
+        # "is october worse than september?" after an income question, or "what
+        # subscriptions am I paying for?" after a comparison: a full question of its
+        # own, not a fragment to splice onto the previous one.
         return None
     if (_amount_metric(text) or _AMOUNT_ASK_RE.search(text)) and not metric_only:
         return None
@@ -5045,6 +5067,7 @@ def _followup_about_previous(text, previous, summary):
     new_category = _category_in(text, summary)
     if (
         new_category
+        and not _standalone_question(text)
         and prev_spec.task_type in {"category_change", "compare_periods"}
         and len([k for k in (prev_spec.period_key or "").split(",") if k]) == 2
     ):

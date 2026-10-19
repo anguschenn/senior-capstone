@@ -7,6 +7,7 @@ from config import AI_ROUTER_V2_ENABLED
 from .explainers import build_chat_prompt
 from .intent_router import IntentRouter
 from .parsers import extract_json_object
+from .query_executors_v2 import _month_scale as month_scale
 from .query_executors_v2 import execute_plan_v2
 from .query_parser_v2 import (
     _categories_in,
@@ -126,12 +127,7 @@ class ChatService:
             monthly_expense_trend[-3:] if len(monthly_expense_trend) > 3 else monthly_expense_trend
         )
         trend_text = (
-            ", ".join(
-                f"{m.get('month')} {float(m.get('expenses', 0)):.0f}"
-                for m in trend_tail
-                if isinstance(m, dict)
-            )
-            or "none"
+            ", ".join(self._trend_point(m) for m in trend_tail if isinstance(m, dict)) or "none"
         )
         month_index = (
             summary.get("month_index") if isinstance(summary.get("month_index"), dict) else {}
@@ -203,6 +199,12 @@ class ChatService:
             f"expenses ${float(totals.get('expenses_month', 0)):.2f}, "
             f"net ${float(totals.get('net_month', 0)):.2f}"
         )
+        factor, progress = month_scale(self._selected_month_key(summary))
+        if progress:
+            month_text += (
+                f" ({progress[0]} of {progress[1]} days; expenses on pace for about "
+                f"${float(totals.get('expenses_month', 0) or 0) * factor:.0f} for the full month)"
+            )
         scope_text = ""
         if summary.get("scope") == "single_account":
             label = clamp_str(summary.get("scope_label", ""), 64) or "the selected account"
@@ -221,9 +223,23 @@ class ChatService:
             f"30d expenses: ${float(totals.get('expenses_30d', 0)):.2f}; "
             f"tx_count_30d: {int(totals.get('tx_count_30d', 0))}; "
             f"expense_tx_count_30d: {int(totals.get('expense_tx_count_30d', 0))}; "
-            f"top categories: {cat_text}; "
+            f"top categories last 30 days: {cat_text}; "
             f"recent transactions: {recent_text}"
             f"{annual_text}"
+        )
+
+    @staticmethod
+    def _trend_point(point):
+        """"2026-09 1880", or "2026-10 1017 so far (19 of 31 days, on pace for about 1659)"
+        so the model doesn't compare an unfinished month with full ones."""
+        month = point.get("month")
+        expenses = float(point.get("expenses", 0) or 0)
+        factor, progress = month_scale(month)
+        if not progress:
+            return f"{month} {expenses:.0f}"
+        return (
+            f"{month} {expenses:.0f} so far ({progress[0]} of {progress[1]} days, "
+            f"on pace for about {expenses * factor:.0f})"
         )
 
     def _fallback_reply(self, intent, summary, message="", query_spec=None):
