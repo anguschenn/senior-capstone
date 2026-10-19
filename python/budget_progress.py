@@ -246,6 +246,21 @@ def build_budget_progress(
         key = normalize_category_key(budget_bucket_for_row(row, remembered_rules))
         spent_by_key[key] = spent_by_key.get(key, 0.0) + abs(float(row["amount"]))
 
+    # A bucket with no budget row of its own counts toward "Other" when there is one, so the
+    # cards add up to the month's expenses (BudgetService.cardKeyForBucket).
+    card_keys = {
+        normalize_category_key(
+            category_names_by_id.get(str(row.get("category_id") or "").strip(), "Unknown")
+        )
+        for row in budget_rows
+    }
+    other_key = normalize_category_key("Other")
+    spent_by_card: dict[str, float] = {}
+    for key, amount in spent_by_key.items():
+        if key not in card_keys and other_key in card_keys:
+            key = other_key
+        spent_by_card[key] = spent_by_card.get(key, 0.0) + amount
+
     progress = []
     for row in budget_rows:
         budget_id = str(row.get("id") or "").strip()
@@ -254,7 +269,7 @@ def build_budget_progress(
             continue
         title = category_names_by_id.get(category_id, "Unknown")
         limit = float(row.get("monthly_limit") or 0)
-        spent = spent_by_key.get(normalize_category_key(title), 0.0)
+        spent = spent_by_card.get(normalize_category_key(title), 0.0)
         progress.append(
             {
                 "budget_id": budget_id,

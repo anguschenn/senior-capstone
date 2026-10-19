@@ -11,6 +11,29 @@ class BudgetService {
 
   final _categoryService = CategoryService.instance;
   static const _budgetMonthColumn = 'month_year';
+  static final _otherKey = normalizeCategoryKey('Other');
+
+  /// Which card a spending bucket counts toward. A bucket with no budget card
+  /// of its own (say a remembered category the budget doesn't list) goes to
+  /// "Other" when there is one, so the cards still add up to the month's
+  /// expenses on Home. Mirrored by python/budget_progress.py.
+  static String cardKeyForBucket(String bucketKey, Set<String> cardKeys) {
+    if (cardKeys.contains(bucketKey)) return bucketKey;
+    if (cardKeys.contains(_otherKey)) return _otherKey;
+    return bucketKey;
+  }
+
+  static Map<String, double> _foldIntoCards(
+    Map<String, double> spentByBucket,
+    Set<String> cardKeys,
+  ) {
+    final out = <String, double>{};
+    for (final entry in spentByBucket.entries) {
+      final key = cardKeyForBucket(entry.key, cardKeys);
+      out[key] = (out[key] ?? 0) + entry.value;
+    }
+    return out;
+  }
 
   Future<void> ensureMonthlyBudgetRows(
     List<CategoryOption> categories,
@@ -202,6 +225,12 @@ class BudgetService {
           (spentByCategoryName[bucketKey] ?? 0) + expenseAmount;
     }
 
+    final spentByCard = _foldIntoCards(spentByCategoryName, {
+      for (final row in budgetRows)
+        normalizeCategoryKey(
+          categoryMap[(row['category_id'] as String?)?.trim()] ?? 'Unknown',
+        ),
+    });
     final progress = <BudgetCategoryProgress>[];
     for (final row in budgetRows) {
       final budgetId = (row['id'] as String?)?.trim();
@@ -223,7 +252,7 @@ class BudgetService {
           budgetId: budgetId,
           categoryId: categoryId,
           title: title,
-          spent: spentByCategoryName[titleKey] ?? 0,
+          spent: spentByCard[titleKey] ?? 0,
           limit: yearly ? monthlyLimit * 12 : monthlyLimit,
         ),
       );
@@ -324,13 +353,16 @@ class BudgetService {
       final key = normalizeCategoryKey(bucket);
       spentByCategory[key] = (spentByCategory[key] ?? 0) + tx.expenseAmount;
     }
+    final spentByCard = _foldIntoCards(spentByCategory, {
+      for (final item in template) normalizeCategoryKey(item.title),
+    });
     final rebased = template
         .map(
           (item) => BudgetCategoryProgress(
             budgetId: item.budgetId,
             categoryId: item.categoryId,
             title: item.title,
-            spent: spentByCategory[normalizeCategoryKey(item.title)] ?? 0,
+            spent: spentByCard[normalizeCategoryKey(item.title)] ?? 0,
             limit: item.limit,
           ),
         )

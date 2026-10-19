@@ -93,6 +93,7 @@ def sanitize_spending_summary(summary):
         "version": max(1, min(int(to_float(summary.get("version", 1), 1)), 9)),
         "scope": clamp_str(summary.get("scope", ""), 32),
         "scope_label": clamp_str(summary.get("scope_label", ""), 64),
+        "account_type": clamp_str(summary.get("account_type", ""), 32),
         "generated_at": clamp_str(summary.get("generated_at", ""), 40),
         "window_days": max(1, min(int(to_float(summary.get("window_days", 30), 30)), 365)),
     }
@@ -235,6 +236,19 @@ def sanitize_spending_summary(summary):
                 "expense_tx_count": max(0, int(to_float(item.get("expense_tx_count", 0)))),
                 "top_category": cleaned_top,
             }
+            # Card payments are neither income nor spending; older app builds don't send
+            # them, and their income then still includes payments onto a card.
+            for key in ("card_payments_in", "card_payments_out"):
+                if key in item:
+                    cleaned_month_index[month_text][key] = max(0.0, to_float(item.get(key, 0)))
+            raw_categories = item.get("categories")
+            if isinstance(raw_categories, dict):
+                categories = {}
+                for name, amount in list(raw_categories.items())[:20]:
+                    name_text = clamp_str(name, 64)
+                    if name_text:
+                        categories[name_text] = max(0.0, to_float(amount, 0.0))
+                cleaned_month_index[month_text]["categories"] = categories
         if cleaned_month_index:
             cleaned["month_index"] = cleaned_month_index
 

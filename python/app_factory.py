@@ -9,6 +9,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from ai.chat_service import ChatService
 from ai.predict_service import PredictService
 from ai.providers import generate_llm_reply
+from ai.question_log import record_question
 from ai.snapshot_service import SpendingSnapshotService
 from auth import require_api_key
 from config import ALLOWED_ORIGINS
@@ -44,6 +45,7 @@ def create_app() -> Flask:
         get_detailed_snapshot=snapshot_service.get_cached_snapshot,
     )
     app.config["predict_service"] = PredictService(generate_reply=generate_llm_reply)
+    app.config["question_log"] = record_question
 
     app.register_blueprint(plaid_bp)
     app.register_blueprint(ai_bp)

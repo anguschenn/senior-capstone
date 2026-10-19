@@ -38,7 +38,7 @@ _MONTH_NAME_RE = re.compile(
 # day ("may 2026", "may 5th"). Other month names have no such ambiguity.
 _MAY_MONTH_BEFORE_RE = re.compile(
     r"\b(in|of|during|for|since|until|till|from|to|through|thru|between|before|after"
-    r"|early|late|mid|last|this|next|and|or|vs|versus)[\s-]+$"
+    r"|early|late|mid|last|this|next|and|or|vs|versus|than|with)[\s-]+$"
 )
 _MAY_MONTH_AFTER_RE = re.compile(r"^\s+(20\d{2}|\d{1,2}(st|nd|rd|th)?)\b")
 

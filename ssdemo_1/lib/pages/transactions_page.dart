@@ -266,7 +266,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
                     itemBuilder: (context, i) {
                       final tx = filtered[i];
                       final effectiveCategory = tx.isIncome
-                          ? 'Income'
+                          ? tx.inflowLabel
                           : (widget.reviewedCategoryByTxId[tx.id] ??
                                 budgetCategoryFromPfc(
                                   pfcDetailed: tx.category,

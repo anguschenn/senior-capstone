@@ -28,18 +28,21 @@ class BudgetBucketContractTests(unittest.TestCase):
                 self.assertEqual(counts_as_spending(row), expected["counts_as_spending"])
 
     def test_month_progress(self):
-        spec = FIXTURE["progress"]
-        progress = build_budget_progress(
-            budget_rows=spec["budgets"],
-            category_names_by_id=spec["categories"],
-            tx_rows=spec["transactions"],
-            remembered_rules=FIXTURE["rules"],
-            month=spec["month"],
-        )
-        actual = [
-            {k: item[k] for k in ("category_id", "category", "spent", "limit")} for item in progress
-        ]
-        self.assertEqual(actual, spec["expected"])
+        for case in ("progress", "progress_unbudgeted"):
+            with self.subTest(case):
+                spec = FIXTURE[case]
+                progress = build_budget_progress(
+                    budget_rows=spec["budgets"],
+                    category_names_by_id=spec["categories"],
+                    tx_rows=spec["transactions"],
+                    remembered_rules=FIXTURE["rules"],
+                    month=spec["month"],
+                )
+                actual = [
+                    {k: item[k] for k in ("category_id", "category", "spent", "limit")}
+                    for item in progress
+                ]
+                self.assertEqual(actual, spec["expected"])
 
     def test_progress_feeds_burn_rate_check(self):
         """Output shape is what PredictService's burn-rate check sanitizes and reads."""

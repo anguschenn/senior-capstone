@@ -2,7 +2,8 @@
   "_comment": "Shared contract: python/tests/test_budget_progress.py and ssdemo_1/test/services/budget_bucket_contract_test.dart must BOTH pass these. Change the rules on one side -> add a case here and make both pass.",
   "rules": {
     "target|_|shops": "Shopping",
-    "costco|general merchandise|general merchandise superstores": "Food"
+    "costco|general merchandise|general merchandise superstores": "Food",
+    "hilton hotel|_|_": "Travel"
   },
   "transactions": [
     {
@@ -621,6 +622,60 @@
         "category": "Health",
         "spent": 0.0,
         "limit": 50.0
+      }
+    ]
+  },
+  "progress_unbudgeted": {
+    "_comment": "Spending whose bucket has no budget card (Travel here) counts toward Other, so the cards add up to Home's expenses.",
+    "month": "2026-09",
+    "categories": {
+      "cat-food": "Food",
+      "cat-other": "Other"
+    },
+    "budgets": [
+      {
+        "id": "b-cat-food",
+        "category_id": "cat-food",
+        "monthly_limit": 300
+      },
+      {
+        "id": "b-cat-other",
+        "category_id": "cat-other",
+        "monthly_limit": 0
+      }
+    ],
+    "transactions": [
+      {
+        "plaid_transaction_id": "tx-u1",
+        "date": "2026-09-10",
+        "name": "Starbucks",
+        "merchant_name": "Starbucks",
+        "amount": 5.75,
+        "pfc_primary": "FOOD_AND_DRINK",
+        "pfc_detailed": "FOOD_AND_DRINK_COFFEE"
+      },
+      {
+        "plaid_transaction_id": "tx-u2",
+        "date": "2026-09-12",
+        "name": "Hilton Hotel",
+        "merchant_name": "Hilton",
+        "amount": 120,
+        "pfc_primary": "",
+        "pfc_detailed": ""
+      }
+    ],
+    "expected": [
+      {
+        "category_id": "cat-food",
+        "category": "Food",
+        "spent": 5.75,
+        "limit": 300
+      },
+      {
+        "category_id": "cat-other",
+        "category": "Other",
+        "spent": 120,
+        "limit": 0
       }
     ]
   }

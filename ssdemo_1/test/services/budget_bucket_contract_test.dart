@@ -66,46 +66,51 @@ void main() {
       });
     }
 
-    test('month progress matches the Budget page computation', () {
-      final spec = _fixture['progress'] as Map<String, dynamic>;
-      final categories = (spec['categories'] as Map<String, dynamic>)
-          .cast<String, String>();
-      final rows = (spec['transactions'] as List).cast<Map<String, dynamic>>();
-      final txs = rows.map(AppTransaction.fromMap).toList();
-      final reviewed = {
-        for (var i = 0; i < rows.length; i++) txs[i].id: _bucketFor(rows[i]),
-      };
-      final template = [
-        for (final b in (spec['budgets'] as List).cast<Map<String, dynamic>>())
-          BudgetCategoryProgress(
-            budgetId: b['id'] as String,
-            categoryId: b['category_id'] as String,
-            title: categories[b['category_id']] ?? 'Unknown',
-            spent: 0,
-            limit: (b['monthly_limit'] as num).toDouble(),
-          ),
-      ];
-      final month = DateTime.parse('${spec['month']}-01');
-      final progress = BudgetService.instance.rebasedProgressFromTemplate(
-        template: template,
-        txs: txs,
-        focusMonth: month,
-        yearly: false,
-        allTime: false,
-        reviewedCategoryByTxId: reviewed,
-      );
-
-      final expected = (spec['expected'] as List).cast<Map<String, dynamic>>();
-      expect(progress.length, expected.length);
-      for (var i = 0; i < expected.length; i++) {
-        expect(progress[i].categoryId, expected[i]['category_id']);
-        expect(progress[i].title, expected[i]['category']);
-        expect(
-          progress[i].spent,
-          closeTo((expected[i]['spent'] as num).toDouble(), 0.005),
+    for (final caseKey in ['progress', 'progress_unbudgeted']) {
+      test('month progress matches the Budget page computation ($caseKey)', () {
+        final spec = _fixture[caseKey] as Map<String, dynamic>;
+        final categories = (spec['categories'] as Map<String, dynamic>)
+            .cast<String, String>();
+        final rows = (spec['transactions'] as List)
+            .cast<Map<String, dynamic>>();
+        final txs = rows.map(AppTransaction.fromMap).toList();
+        final reviewed = {
+          for (var i = 0; i < rows.length; i++) txs[i].id: _bucketFor(rows[i]),
+        };
+        final template = [
+          for (final b
+              in (spec['budgets'] as List).cast<Map<String, dynamic>>())
+            BudgetCategoryProgress(
+              budgetId: b['id'] as String,
+              categoryId: b['category_id'] as String,
+              title: categories[b['category_id']] ?? 'Unknown',
+              spent: 0,
+              limit: (b['monthly_limit'] as num).toDouble(),
+            ),
+        ];
+        final month = DateTime.parse('${spec['month']}-01');
+        final progress = BudgetService.instance.rebasedProgressFromTemplate(
+          template: template,
+          txs: txs,
+          focusMonth: month,
+          yearly: false,
+          allTime: false,
+          reviewedCategoryByTxId: reviewed,
         );
-        expect(progress[i].limit, (expected[i]['limit'] as num).toDouble());
-      }
-    });
+
+        final expected = (spec['expected'] as List)
+            .cast<Map<String, dynamic>>();
+        expect(progress.length, expected.length);
+        for (var i = 0; i < expected.length; i++) {
+          expect(progress[i].categoryId, expected[i]['category_id']);
+          expect(progress[i].title, expected[i]['category']);
+          expect(
+            progress[i].spent,
+            closeTo((expected[i]['spent'] as num).toDouble(), 0.005),
+          );
+          expect(progress[i].limit, (expected[i]['limit'] as num).toDouble());
+        }
+      });
+    }
   });
 }

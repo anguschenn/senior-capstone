@@ -390,7 +390,7 @@ class HomePage extends StatelessWidget {
             ),
           ...recentTransactions.map((tx) {
             final effectiveCategory = tx.isIncome
-                ? 'Income'
+                ? tx.inflowLabel
                 : (reviewedCategoryByTxId[tx.id] ??
                       budgetCategoryFromPfc(
                         pfcDetailed: tx.category,
@@ -457,7 +457,7 @@ class HomePage extends StatelessWidget {
             final selected =
                 reviewedCategoryByTxId[tx.id] ??
                 (tx.isIncome
-                    ? 'Income'
+                    ? tx.inflowLabel
                     : budgetCategoryFromPfc(
                         pfcDetailed: tx.category,
                         pfcPrimary: tx.primaryCategory,
