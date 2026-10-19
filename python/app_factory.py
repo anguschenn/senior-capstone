@@ -4,6 +4,7 @@ import logging
 
 from flask import Flask
 from flask_cors import CORS
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from ai.chat_service import ChatService
 from ai.predict_service import PredictService
@@ -20,6 +21,11 @@ from routes.webhook_routes import webhook_bp
 
 def create_app() -> Flask:
     app = Flask(__name__)
+    # Render terminates TLS at one proxy hop that appends the client to X-Forwarded-For.
+    # Trust exactly that hop (x_for=1) so request.remote_addr is the real client for
+    # per-IP rate limiting; anything a client prepends itself is ignored. No other
+    # X-Forwarded-* header is trusted (x_proto=0 here; host/port/prefix default to 0).
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=0)
     if not ALLOWED_ORIGINS:
         logging.warning("ALLOWED_ORIGINS is empty; browser clients will be blocked by CORS")
     CORS(

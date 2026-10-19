@@ -31,10 +31,18 @@ def _check_rate_limit(key: str, limit: int = AI_RATE_LIMIT_PER_MINUTE) -> bool:
         return True
 
 
-def is_rate_limited_for_ai() -> bool:
-    """Check per-IP rate limit for AI endpoints. Returns True if blocked."""
-    ip = request.remote_addr or "unknown"
-    return not _check_rate_limit(f"ai:{ip}", AI_RATE_LIMIT_PER_MINUTE)
+def is_rate_limited_for_ai(user_id: str | None = None) -> bool:
+    """Check the AI rate limit. Returns True if blocked.
+
+    Keyed by Supabase user id when the route has authenticated one, else by client IP.
+    remote_addr is the real client only because app_factory wraps the app in
+    ProxyFix(x_for=1); without it every request behind Render's proxy shares one bucket.
+    """
+    if user_id:
+        key = f"ai:user:{user_id}"
+    else:
+        key = f"ai:ip:{request.remote_addr or 'unknown'}"
+    return not _check_rate_limit(key, AI_RATE_LIMIT_PER_MINUTE)
 
 
 def require_api_key():
