@@ -103,6 +103,7 @@ def info():
 @plaid_bp.route("/api/create_link_token", methods=["POST"])
 def create_link_token():
     try:
+        user_id = require_supabase_user_id()
         if not PLAID_CLIENT_ID or not PLAID_SECRET:
             return jsonify(
                 {"error": "Missing Plaid credentials: PLAID_CLIENT_ID/PLAID_SECRET"}
@@ -117,7 +118,8 @@ def create_link_token():
             client_name="SmartSpend",
             country_codes=[CountryCode(code) for code in PLAID_COUNTRY_CODES],
             language="en",
-            user=LinkTokenCreateRequestUser(client_user_id=str(time.time())),
+            # A stable per-user id lets Plaid tie Items to one user and flag duplicates.
+            user=LinkTokenCreateRequestUser(client_user_id=user_id),
         )
         if PLAID_REDIRECT_URI:
             link_request_payload["redirect_uri"] = PLAID_REDIRECT_URI
@@ -128,11 +130,13 @@ def create_link_token():
 
         response = client.link_token_create(link_request)
         return jsonify(response.to_dict())
+    except UserAuthError as error:
+        return jsonify({"error": str(error)}), 401
     except plaid.ApiException as error:
         return plaid_error_response(error)
     except Exception as error:
         log_route_error("/api/create_link_token unexpected", error)
-        return jsonify({"error": f"Failed to create link token: {error}"}), 500
+        return jsonify({"error": "Failed to create link token"}), 500
 
 
 @plaid_bp.route("/api/create_link_token_update", methods=["POST"])
@@ -156,7 +160,7 @@ def create_link_token_update():
             client_name="SmartSpend",
             country_codes=[CountryCode(code) for code in PLAID_COUNTRY_CODES],
             language="en",
-            user=LinkTokenCreateRequestUser(client_user_id=str(time.time())),
+            user=LinkTokenCreateRequestUser(client_user_id=user_id),
         )
         if PLAID_REDIRECT_URI:
             link_request["redirect_uri"] = PLAID_REDIRECT_URI
