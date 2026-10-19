@@ -4,12 +4,7 @@ import time
 
 import plaid
 from flask import Blueprint, current_app, jsonify, request
-from plaid.model.accounts_balance_get_request import AccountsBalanceGetRequest
-from plaid.model.accounts_get_request import AccountsGetRequest
-from plaid.model.auth_get_request import AuthGetRequest
 from plaid.model.country_code import CountryCode
-from plaid.model.institutions_get_by_id_request import InstitutionsGetByIdRequest
-from plaid.model.item_get_request import ItemGetRequest
 from plaid.model.item_public_token_exchange_request import ItemPublicTokenExchangeRequest
 from plaid.model.link_token_create_request import LinkTokenCreateRequest
 from plaid.model.link_token_create_request_user import LinkTokenCreateRequestUser
@@ -28,7 +23,6 @@ from config import (
 from plaid_sync import (
     IdentityStateError,
     client,
-    pretty_print_response,
     products,
     save_accounts_to_supabase,
     sync_transactions_to_supabase,
@@ -229,35 +223,6 @@ def set_access_token():
         return plaid_error_response(error)
 
 
-def _first_access_token(user_id: str) -> str:
-    items = (
-        supabase.table("plaid_items")
-        .select("id,access_token")
-        .eq("user_id", user_id)
-        .limit(1)
-        .execute()
-    )
-    if not items.data or not items.data[0].get("access_token"):
-        raise IdentityStateError(IdentityStateError.STORED_ITEM_NOT_FOUND, "No linked items")
-    return items.data[0]["access_token"]
-
-
-@plaid_bp.route("/api/auth", methods=["GET"])
-def get_auth():
-    try:
-        user_id = require_supabase_user_id()
-        access_token = _first_access_token(user_id)
-        response = client.auth_get(AuthGetRequest(access_token=access_token))
-        pretty_print_response(response.to_dict())
-        return jsonify(response.to_dict())
-    except UserAuthError as error:
-        return jsonify({"error": str(error)}), 401
-    except IdentityStateError as error:
-        return identity_error_response(error, "/api/auth")
-    except plaid.ApiException as error:
-        return plaid_error_response(error)
-
-
 @plaid_bp.route("/api/transactions", methods=["GET"])
 def get_transactions():
     started_at = time.time()
@@ -329,64 +294,3 @@ def get_transactions():
     except Exception as error:
         log_route_error("/api/transactions unexpected", error)
         return jsonify({"error": "Internal server error"}), 500
-
-
-@plaid_bp.route("/api/balance", methods=["GET"])
-def get_balance():
-    try:
-        user_id = require_supabase_user_id()
-        access_token = _first_access_token(user_id)
-        response = client.accounts_balance_get(AccountsBalanceGetRequest(access_token=access_token))
-        pretty_print_response(response.to_dict())
-        return jsonify(response.to_dict())
-    except UserAuthError as error:
-        return jsonify({"error": str(error)}), 401
-    except IdentityStateError as error:
-        return identity_error_response(error, "/api/balance")
-    except plaid.ApiException as error:
-        return plaid_error_response(error)
-
-
-@plaid_bp.route("/api/accounts", methods=["GET"])
-def get_accounts():
-    try:
-        user_id = require_supabase_user_id()
-        access_token = _first_access_token(user_id)
-        response = client.accounts_get(AccountsGetRequest(access_token=access_token))
-        pretty_print_response(response.to_dict())
-        return jsonify(response.to_dict())
-    except UserAuthError as error:
-        return jsonify({"error": str(error)}), 401
-    except IdentityStateError as error:
-        return identity_error_response(error, "/api/accounts")
-    except plaid.ApiException as error:
-        return plaid_error_response(error)
-
-
-@plaid_bp.route("/api/item", methods=["GET"])
-def item():
-    try:
-        user_id = require_supabase_user_id()
-        access_token = _first_access_token(user_id)
-        response = client.item_get(ItemGetRequest(access_token=access_token))
-        institution_response = client.institutions_get_by_id(
-            InstitutionsGetByIdRequest(
-                institution_id=response["item"]["institution_id"],
-                country_codes=[CountryCode(code) for code in PLAID_COUNTRY_CODES],
-            )
-        )
-        pretty_print_response(response.to_dict())
-        pretty_print_response(institution_response.to_dict())
-        return jsonify(
-            {
-                "error": None,
-                "item": response.to_dict()["item"],
-                "institution": institution_response.to_dict()["institution"],
-            }
-        )
-    except UserAuthError as error:
-        return jsonify({"error": str(error)}), 401
-    except IdentityStateError as error:
-        return identity_error_response(error, "/api/item")
-    except plaid.ApiException as error:
-        return plaid_error_response(error)
