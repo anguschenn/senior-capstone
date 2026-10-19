@@ -4,6 +4,7 @@ import '../models/ai/ai_models.dart';
 import '../models/app_models.dart';
 import '../models/budget/budget_view_mode.dart';
 import '../services/ai_api_client.dart';
+import '../services/budget_service.dart';
 import '../services/category_service.dart';
 import '../utils/app_helpers.dart';
 import '../widgets/budget/budget_ai_analysis_card.dart';
@@ -490,6 +491,9 @@ class _BudgetPageState extends State<BudgetPage> {
   /// so the rows add up to it.
   Map<String, List<AppTransaction>> _transactionsByCategory() {
     final focus = widget.selectedMonth;
+    final cardKeys = {
+      for (final item in activeBudgetProgress) normalizeCategoryKey(item.title),
+    };
     final out = <String, List<AppTransaction>>{};
     for (final tx in widget.transactions) {
       if (tx.expenseAmount <= 0) continue;
@@ -504,7 +508,11 @@ class _BudgetPageState extends State<BudgetPage> {
         tx,
         widget.reviewedCategoryByTxId,
       );
-      out.putIfAbsent(normalizeCategoryKey(bucket), () => []).add(tx);
+      final key = BudgetService.cardKeyForBucket(
+        normalizeCategoryKey(bucket),
+        cardKeys,
+      );
+      out.putIfAbsent(key, () => []).add(tx);
     }
     for (final list in out.values) {
       list.sort((a, b) => b.expenseAmount.compareTo(a.expenseAmount));
