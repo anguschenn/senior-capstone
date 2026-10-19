@@ -10,12 +10,16 @@ from app_factory import create_app
 API_KEY = "test-internal-api-key"
 VALID_TOKEN = "valid-supabase-token"
 USER_ID = "user-123"
+OTHER_TOKEN = "other-supabase-token"
+OTHER_USER_ID = "user-456"
+_USERS_BY_TOKEN = {VALID_TOKEN: USER_ID, OTHER_TOKEN: OTHER_USER_ID}
 
 
 def fake_get_user(token):
-    """Stand-in for supabase.auth.get_user: only VALID_TOKEN resolves to a user."""
-    if token == VALID_TOKEN:
-        return SimpleNamespace(user=SimpleNamespace(id=USER_ID))
+    """Stand-in for supabase.auth.get_user: only the known test tokens resolve to a user."""
+    user_id = _USERS_BY_TOKEN.get(token)
+    if user_id:
+        return SimpleNamespace(user=SimpleNamespace(id=user_id))
     return SimpleNamespace(user=None)
 
 

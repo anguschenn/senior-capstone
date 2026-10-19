@@ -16,8 +16,8 @@ def ai_ping():
     rate-limited with the other AI endpoints."""
     llm_info = current_llm_info()
     try:
-        require_supabase_user_id()
-        if is_rate_limited_for_ai():
+        user_id = require_supabase_user_id()
+        if is_rate_limited_for_ai(user_id):
             return jsonify({"error": "Rate limit exceeded"}), 429
         return jsonify(ping_llm())
     except UserAuthError as error:
