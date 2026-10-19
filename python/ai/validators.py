@@ -369,6 +369,19 @@ def sanitize_spending_summary(summary):
             )
     cleaned["recent_transactions"] = recent
 
+    budgets = summary.get("budgets")
+    if isinstance(budgets, dict) and isinstance(budgets.get("items"), list):
+        items = []
+        for item in budgets["items"][:30]:
+            if not isinstance(item, dict):
+                continue
+            name = clamp_str(item.get("category", ""), 64)
+            limit = to_float(item.get("limit", 0))
+            if name and limit > 0:
+                spent = max(0.0, to_float(item.get("spent", 0)))
+                items.append({"category": name, "spent": spent, "limit": limit})
+        cleaned["budgets"] = {"month": clamp_str(budgets.get("month", ""), 16), "items": items}
+
     annual = summary.get("annual_summary")
     if isinstance(annual, dict):
         annual_totals = annual.get("totals") if isinstance(annual.get("totals"), dict) else {}

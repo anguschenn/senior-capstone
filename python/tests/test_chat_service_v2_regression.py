@@ -1441,3 +1441,76 @@ class TestChatServiceV2Regression(unittest.TestCase):
         if today.day < 28:  # month-end days have nothing left to project
             self.assertIn(f"{key} 300 so far ({today.day} of", text)
             self.assertIn("expenses on pace for about", text)
+
+    def test_followup_chains_keep_their_subject(self):
+        summary = self._round2_summary()
+        history = []
+        replies = []
+        for prompt in (
+            "How much did I spend on food in May?",
+            "and in April?",
+            "what about shopping?",
+            "why?",
+            "how does that compare to March?",
+        ):
+            response = self._ask_with(prompt, summary, list(history))
+            replies.append(response["reply"])
+            history += [
+                {"role": "user", "text": prompt},
+                {"role": "assistant", "text": response["reply"]},
+            ]
+        self.assertIn("Shopping", replies[2])
+        self.assertIn("2026-04", replies[2])
+        self.assertIn("Shopping", replies[3])
+        self.assertIn("Shopping", replies[4])
+        self.assertIn("2026-03", replies[4])
+
+    def test_was_it_worse_than_compares_the_previous_month(self):
+        summary = self._round2_summary()
+        spending = self._ask_with(
+            "Was it worse than March?",
+            summary,
+            [{"role": "user", "text": "How much did I spend in April?"}],
+        )
+        self.assertEqual(spending["resolved_query"]["intent"], "compare_periods")
+        self.assertTrue(spending["reply"].startswith("Yes."))  # $1988 vs $1750
+        income = self._ask_with(
+            "Was it worse than March?",
+            summary,
+            [{"role": "user", "text": "What's my income in April?"}],
+        )
+        self.assertTrue(income["reply"].startswith("No."))  # $1998 vs $1800
+
+    def _budget_summary(self):
+        summary = self._round2_summary()
+        summary["budgets"] = {
+            "month": "2026-05",
+            "items": [
+                {"category": "Food", "spent": 400.0, "limit": 300.0},
+                {"category": "Shopping", "spent": 150.0, "limit": 500.0},
+            ],
+        }
+        return summary
+
+    def test_budget_questions_use_the_limits_the_app_sends(self):
+        summary = self._budget_summary()
+        left = self._ask_with("How much is left of my shopping budget?", summary)["reply"]
+        self.assertIn("Shopping budget is $500.00", left)
+        self.assertIn("have $350.00 left", left)
+        over = self._ask_with("Am I over budget?", summary)["reply"]
+        self.assertTrue(over.startswith("Yes."))
+        self.assertIn("Food ($400 of $300)", over)
+        which = self._ask_with("Which budgets am I over?", summary)["reply"]
+        self.assertFalse(which.startswith("Yes."))
+        share = self._ask_with("What portion of my budget did I use?", summary)["reply"]
+        self.assertIn("$550 of $800", share)
+        usual = self._ask_with("Is my food budget too low?", summary)["reply"]
+        self.assertIn("Food $300", usual)
+        other_month = self._ask_with("Was I over budget in April?", summary)["reply"]
+        self.assertIn("Pick 2026-04 in the Month menu", other_month)
+        none_set = self._ask_with(
+            "Am I over budget?", {**summary, "budgets": {"month": "2026-05", "items": []}}
+        )["reply"]
+        self.assertIn("haven't set any budget limits", none_set)
+        older_app = self._ask_with("Am I over budget?", self._round2_summary())["reply"]
+        self.assertIn("doesn't get your budget limits", older_app)

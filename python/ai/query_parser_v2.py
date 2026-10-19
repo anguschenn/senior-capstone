@@ -1055,9 +1055,30 @@ def _outside_summary_spec(text, summary, scope):
         _BUDGET_STATUS_RE.search(text)
         and not _ADVICE_RE.search(text)
         and not re.search(r"\bshould\b", text)
-        and not re.search(r"\b(portion|share|percent|percentage|how much of)\b", text)
     ):
-        return QuerySpec(task_type="data_pointer", scope=scope, reason_mode="budget_status")
+        month = ""
+        if re.search(r"\b(last|previous) month\b", text):
+            month = _months_back(selected_month_key(summary), 1)
+        elif _named_month_keys(text, summary):
+            month = _named_month_keys(text, summary)[0]
+        return QuerySpec(
+            task_type="data_pointer",
+            scope=scope,
+            reason_mode="budget_status",
+            category=_category_in(text, summary) or "",
+            period_type="month" if month else "unknown",
+            period_key=month,
+            # "am I over budget?" gets a Yes/No lead; "which budgets am I over?" doesn't,
+            # "what share of my budget did I use?" gets the overall usage, and "is my
+            # food budget realistic?" weighs each limit against usual spending
+            compare_to="realistic"
+            if re.search(r"\b(realistic|reasonable|enough|too (low|high|tight|much|little))\b", text)
+            else "share"
+            if re.search(r"\b(portion|share|percent|percentage|how much of)\b", text)
+            else "yes_no"
+            if re.match(r"^(am|is|are|was|were|did|do|have|has)\b.*\bover\b", text)
+            else "",
+        )
     return None
 
 
@@ -2502,6 +2523,8 @@ def parse_query_v2(message, summary, history=None):
         # "will I spend more this month than last month" compares this month's pace
         message = f"will this month cost {will_more.group(1)} than {will_more.group(2)}"
     season = re.search(r"\blast (summer|spring|fall|autumn|winter)\b", _normalize(message))
+    if history:
+        history = _resolved_history(history, summary)
     previous = _normalize(_last_user_text(history) or "") if history else ""
     if season and re.search(rf"\bthis {season.group(1)}\b", previous):
         # "and last summer?" after "...this summer": the year before
@@ -3019,6 +3042,53 @@ _PERIOD_WORDS_RE = re.compile(
     r"aug|august|sep|sept|september|oct|october|nov|november|dec|december|q[1-4]|"
     r"(first|second|third|fourth) quarter|(first|second) half|summer|spring|fall|autumn|winter)\b"
 )
+
+
+def _spec_text(spec):
+    """A plain question that parses back to [spec], for the kinds a follow-up chain
+    builds on ("how much did i spend on shopping in 2026-09"); "" for anything else."""
+    keys = [k for k in (spec.period_key or "").split(",") if k]
+    if not keys or not all(re.match(r"^20\d{2}-\d{2}$", k) for k in keys):
+        return ""
+    category = (spec.category or "").split(",")[0]
+    on = f" on {category.lower()}" if category else ""
+    if spec.task_type in {"amount_lookup", "category_spending"} and len(keys) == 1:
+        if spec.metric == "income" and not category:
+            return f"how much did i earn in {keys[0]}"
+        if spec.metric == "net" and not category:
+            return f"what was my net cash flow in {keys[0]}"
+        if spec.metric == "expenses":
+            return f"how much did i spend{on} in {keys[0]}"
+    if spec.task_type == "compare_periods" and len(keys) == 2 and spec.metric == "expenses":
+        subject = f"{category.lower()} spending" if category else "spending"
+        return f"compare {subject} in {keys[0]} and {keys[1]}"
+    return ""
+
+
+def _resolved_history(history, summary):
+    """[history] with each short follow-up replaced by the full question it stood for,
+    so a chain ("food in august?" -> "and in september?" -> "what about shopping?" ->
+    "why?") keeps its subject instead of only looking one message back. A "why?" stands
+    for the question it asked about."""
+    resolved = []
+    for turn in history or []:
+        text = turn.get("text") if isinstance(turn, dict) else None
+        if not (isinstance(turn, dict) and turn.get("role") == "user" and text):
+            resolved.append(turn)
+            continue
+        asked = _normalize(str(text))
+        full = ""
+        if len(asked.split()) <= 7 and _last_user_text(resolved):
+            if _WHY_ONLY_RE.match(asked):
+                full = _last_user_text(resolved)
+            else:
+                merged = _resolve_followup(asked, summary, resolved)
+                if isinstance(merged, str):
+                    full = merged
+                elif merged is not None:
+                    full = _spec_text(merged)
+        resolved.append({**turn, "text": full} if full else turn)
+    return resolved
 
 
 def _last_user_text(history):
@@ -4284,12 +4354,15 @@ def _derived_metric_spec(text, summary, scope):
         mode = "weeks"  # "how much did I spend each week this month"
     elif re.search(r"\bweekends?\b", text) and not _last_weekend_asked(text):
         mode = "weekends"
-        if "last month" in text or _named_month_keys(text, summary):
+        this_month = re.search(r"\b(this|current) month\b", text)
+        if this_month or "last month" in text or _named_month_keys(text, summary):
             return QuerySpec(
                 task_type="derived_metric",
                 metric="expenses",
                 period_type="month",
-                period_key=previous_month_key(summary)
+                period_key=selected_month_key(summary)
+                if this_month
+                else previous_month_key(summary)
                 if "last month" in text
                 else _named_month_keys(text, summary)[0],
                 scope=scope,
@@ -4866,6 +4939,15 @@ def _all_time_spec(text, summary, scope):
     )
 
 
+def _asked_way(word, metric):
+    """compare_to for "is that more/worse/... than X": worse spending is more of it,
+    worse income or net is less."""
+    if word in {"worse", "better"}:
+        less_is_worse = metric in {"income", "net"}
+        return "asked_less" if (word == "worse") == less_is_worse else "asked_more"
+    return "asked_less" if word in {"less", "lower", "smaller"} else "asked_more"
+
+
 def _followup_about_previous(text, previous, summary):
     """Follow-ups that act on the previous question's answer."""
     prev_spec = _parse_query(previous, summary)
@@ -4874,7 +4956,9 @@ def _followup_about_previous(text, previous, summary):
         re.match(r"^20\d{2}-\d{2}$", month)
     )
     than = re.match(
-        r"^(is|was) (that|it|this) (more|less|higher|lower|bigger|smaller) than (.+?)\??$", text
+        r"^(is|was) (that|it|this) (more|less|higher|lower|bigger|smaller|worse|better) "
+        r"than (.+?)\??$",
+        text,
     )
     stack = re.match(
         r"^(?:how (?:does|did|do) (?:that|it|this) (?:stack up|compare|measure up|look) "
@@ -4897,11 +4981,7 @@ def _followup_about_previous(text, previous, summary):
                 period_key=f"{month},{other}",
                 scope=prev_spec.scope,
                 category=(prev_spec.category or "").split(",")[0],
-                compare_to=""
-                if not than
-                else "asked_less"
-                if than.group(3) in {"less", "lower", "smaller"}
-                else "asked_more",
+                compare_to="" if not than else _asked_way(than.group(3), prev_spec.metric),
             )
     then = re.search(r"\b(then|that month|in that month|that same month)$", text)
     if (

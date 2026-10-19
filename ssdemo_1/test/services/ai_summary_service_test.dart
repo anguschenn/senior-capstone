@@ -73,6 +73,38 @@ void main() {
       expect(result['account_type'], '');
     });
 
+    test('budgets carry the selected month\'s limits, not unbudgeted ones', () {
+      final result = AiSummaryService.instance.build(
+        transactions: const [],
+        budgetProgress: const [
+          BudgetCategoryProgress(
+            budgetId: 'b1',
+            categoryId: 'c1',
+            title: 'Food',
+            spent: 516.44,
+            limit: 100,
+          ),
+          BudgetCategoryProgress(
+            budgetId: 'b2',
+            categoryId: 'c2',
+            title: 'Health',
+            spent: 20,
+            limit: 0,
+          ),
+        ],
+        stats: _stats(),
+        selectedAccountId: kAllAccountsId,
+        scopeLabel: 'All',
+        focusMonth: DateTime(2026, 10),
+      );
+      expect(result['budgets'], {
+        'month': '2026-10',
+        'items': [
+          {'category': 'Food', 'spent': 516.44, 'limit': 100.0},
+        ],
+      });
+    });
+
     test('credit card payments are not income, and their totals are kept', () {
       final now = DateTime.now();
       final cardPayment = _tx(

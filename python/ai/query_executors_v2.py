@@ -3525,12 +3525,163 @@ def _exec_data_pointer(query_spec, summary, scope_label):
             "Open the Subs tab to review your recurring charges.",
         )
     if mode == "budget_status":
+        answer = _budget_status(query_spec, summary)
+        if answer is not None:
+            return answer
         return _pointer(
             "Chat doesn't get your budget limits yet. The Budget tab shows each category's "
             "spending against its limit and its month-end pace.",
             "Open the Budget tab to see which categories are near or over their limit.",
         )
     return None
+
+
+def _budget_vs_usual(items, asked, month, summary, answer):
+    """"is my food budget realistic?": each limit against the average of the recent full
+    months' spending in that category."""
+    keys, month_index = _recent_full_months(summary)
+    if not keys:
+        return None
+    chosen = [i for i in items if not asked or i["category"].lower() == asked.lower()]
+    if not chosen:
+        return answer(
+            f"You don't have a budget limit for {asked} in {month}.",
+            f"Set a {asked} limit in the Budget tab.",
+        )
+    lines = []
+    for item in chosen:
+        values = [
+            float(((month_index.get(k) or {}).get("categories") or {}).get(item["category"], 0) or 0)
+            for k in keys
+        ]
+        usual = sum(values) / len(values)
+        limit = float(item["limit"])
+        if usual <= 0:
+            verdict = "chat's monthly totals have no recent spending to compare it with"
+        elif limit < usual * 0.8:
+            verdict = f"well below your usual ${usual:.0f} a month, so it's hard to keep"
+        elif limit > usual * 1.25:
+            verdict = f"well above your usual ${usual:.0f} a month, so you could lower it"
+        else:
+            verdict = f"close to your usual ${usual:.0f} a month"
+        lines.append(f"{item['category']} ${limit:.0f}: {verdict}")
+    span = f"{keys[-1]} to {keys[0]}" if len(keys) > 1 else keys[0]
+    return {
+        **answer(
+            "; ".join(lines) + ".",
+            "Adjust a limit in the Budget tab if it's far from what you usually spend.",
+        ),
+        "insights": [f"Usual = average spending per category over {span}."],
+    }
+
+
+def _budget_status(query_spec, summary):
+    """Budget asks answered from the limits the app sends for its selected month:
+    one category's limit and what's left, or which categories are over or on pace to go
+    over. None when the app sent no budget block (older app versions)."""
+    budgets = summary.get("budgets") if isinstance(summary, dict) else None
+    if not isinstance(budgets, dict) or not isinstance(budgets.get("items"), list):
+        return None
+    month = budgets.get("month") or _selected_month(summary)
+    items = budgets["items"]
+    factor, progress = _month_scale(month)
+
+    def answer(reply, action):
+        return {
+            "reply": reply,
+            "insights": [f"Limits and spending are the Budget tab's figures for {month}."],
+            "actions": [action],
+            "missing_fields": [],
+            "facts_used": ["budgets"],
+            "period_resolved": month,
+        }
+
+    if query_spec.period_key and query_spec.period_key != month:
+        return answer(
+            f"Chat only gets the budgets for the month picked in the app, {month}. Pick "
+            f"{query_spec.period_key} in the Month menu, then ask again.",
+            "Pick that month in the Month menu.",
+        )
+    if not items:
+        return answer(
+            f"You haven't set any budget limits for {month}.",
+            "Set a limit for a category in the Budget tab.",
+        )
+
+    def pace(item):
+        return float(item["spent"]) * factor if progress else float(item["spent"])
+
+    asked = (query_spec.category or "").split(",")[0]
+    if query_spec.compare_to == "realistic":
+        return _budget_vs_usual(items, asked, month, summary, answer)
+    if asked:
+        item = next((i for i in items if i["category"].lower() == asked.lower()), None)
+        if item is None:
+            return answer(
+                f"You don't have a budget limit for {asked} in {month}.",
+                f"Set a {asked} limit in the Budget tab.",
+            )
+        spent, limit = float(item["spent"]), float(item["limit"])
+        left = limit - spent
+        state = f"have ${left:.2f} left" if left >= 0 else f"are ${-left:.2f} over"
+        reply = (
+            f"For {month}, your {item['category']} budget is ${limit:.2f}: you've spent "
+            f"${spent:.2f}, so you {state}."
+        )
+        if progress and left >= 0 and pace(item) > limit:
+            reply += (
+                f" At this pace you'd reach about ${pace(item):.0f} by month end, over the limit."
+            )
+        return answer(reply, f"Open the Budget tab for {item['category']}'s transactions.")
+
+    if query_spec.compare_to == "share":
+        spent = sum(float(i["spent"]) for i in items)
+        limit = sum(float(i["limit"]) for i in items)
+        return answer(
+            f"In {month} you've used ${spent:.0f} of ${limit:.0f} across your budgets "
+            f"({spent / limit * 100:.0f}%).",
+            "Ask how much is left of one category's budget.",
+        )
+
+    over = [i for i in items if float(i["spent"]) > float(i["limit"])]
+    heading = [i for i in items if progress and i not in over and pace(i) > float(i["limit"])]
+    parts = []
+    if over:
+        parts.append(
+            "Over budget: "
+            + ", ".join(
+                f"{i['category']} (${float(i['spent']):.0f} of ${float(i['limit']):.0f})"
+                for i in over
+            )
+            + "."
+        )
+    if heading:
+        parts.append(
+            "On pace to go over: "
+            + ", ".join(
+                f"{i['category']} (${float(i['spent']):.0f} of ${float(i['limit']):.0f}, "
+                f"on pace for ${pace(i):.0f})"
+                for i in heading
+            )
+            + "."
+        )
+    if not parts:
+        return answer(
+            f"No. In {month}, every category with a budget is within its limit.",
+            "Ask how much is left of a category's budget.",
+        )
+    within = len(items) - len(over) - len(heading)
+    tail = ""
+    if within:
+        tail = (
+            " The other category with a budget is within its limit."
+            if within == 1
+            else f" The other {within} categories with a budget are within their limits."
+        )
+    lead = "Yes. " if over and query_spec.compare_to == "yes_no" else ""
+    return answer(
+        f"{lead}For {month}: " + " ".join(parts) + tail, "Open the Budget tab to adjust a limit."
+    )
 
 
 def _earn_vs_spend_verdict(query_spec, net):

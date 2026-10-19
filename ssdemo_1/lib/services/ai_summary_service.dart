@@ -1,5 +1,6 @@
 import '../constants/app_constants.dart';
 import '../models/app_models.dart';
+import '../utils/app_helpers.dart';
 
 /// Builds the compact spending snapshot sent to the AI chat endpoint.
 class AiSummaryService {
@@ -424,6 +425,20 @@ class AiSummaryService {
         )
         .toList();
 
+    // Budget limits for the selected month, so chat can answer "how much is
+    // left of my food budget". A category without a limit isn't a budget, and
+    // the all-year view's limits are yearly, so it sends none.
+    final budgets = {
+      'month': _monthKey(anchor),
+      'items': isAllYearOption(focus)
+          ? const <Map<String, dynamic>>[]
+          : [
+              for (final b in budgetProgress)
+                if (b.hasLimit)
+                  {'category': b.title, 'spent': b.spent, 'limit': b.limit},
+            ],
+    };
+
     final annualTopCategories = annualCategoryTotals.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
 
@@ -738,6 +753,7 @@ class AiSummaryService {
       'top_expense_categories': topCategoryPayload,
       'recent_transactions': recent,
       'budget_alerts': budgetAlerts,
+      'budgets': budgets,
       'annual_summary': {
         'year': annualYear,
         'totals': {
