@@ -6,6 +6,7 @@ import time
 
 from flask import jsonify, request
 from supabase import Client
+from supabase_auth.errors import AuthError, AuthRetryableError
 
 from config import AI_RATE_LIMIT_PER_MINUTE, INTERNAL_API_KEY
 from supabase_repo import supabase
@@ -65,7 +66,15 @@ def require_supabase_user_id() -> str:
         raise UserAuthError("Missing Supabase access token")
 
     auth_client: Client = supabase
-    response = auth_client.auth.get_user(token)
+    try:
+        response = auth_client.auth.get_user(token)
+    except AuthRetryableError:
+        # Supabase unreachable or 5xx: not the caller's fault, so let the route's
+        # generic handler answer instead of telling a signed-in user they are logged out.
+        raise
+    except AuthError as error:
+        # Expired/forged/revoked token. The SDK message is not echoed to the client.
+        raise UserAuthError("Invalid Supabase access token") from error
     user = getattr(response, "user", None)
     user_id = getattr(user, "id", None)
     if not user_id:
