@@ -12,6 +12,7 @@ AppTransaction _tx({
   String transactionType = 'debit',
   String rawPfcPrimary = '',
   String rawPfcDetailed = '',
+  String accountType = 'depository',
 }) {
   return AppTransaction(
     dedupeKey: id,
@@ -25,7 +26,7 @@ AppTransaction _tx({
     primaryCategory: category,
     date: date,
     amount: amount,
-    accountType: 'depository',
+    accountType: accountType,
     accountSubtype: 'checking',
     pending: false,
     confidence: 'high',
@@ -70,6 +71,57 @@ void main() {
       expect(result.containsKey('year_index'), isTrue);
       expect(result.containsKey('day_index_recent'), isTrue);
       expect(result['account_type'], '');
+    });
+
+    test('credit card payments are not income, and their totals are kept', () {
+      final now = DateTime.now();
+      final cardPayment = _tx(
+        id: 'p1',
+        date: now,
+        amount: -500,
+        name: 'Payment Thank You-Mobile',
+        rawPfcPrimary: 'LOAN_DISBURSEMENTS',
+        rawPfcDetailed: 'LOAN_DISBURSEMENTS_OTHER_DISBURSEMENT',
+        accountType: 'credit',
+      );
+      final cardRefund = _tx(
+        id: 'p2',
+        date: now,
+        amount: -20,
+        name: 'Store refund',
+        accountType: 'credit',
+      );
+      final bankPayment = _tx(
+        id: 'p3',
+        date: now,
+        amount: 500,
+        name: 'Payment to Chase card ending in 4191',
+        rawPfcPrimary: 'LOAN_PAYMENTS',
+        rawPfcDetailed: 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT',
+      );
+      final paycheck = _tx(id: 'p4', date: now, amount: -1000, name: 'Payroll');
+
+      expect(cardPayment.incomeAmount, 0);
+      expect(cardPayment.cardPaymentAmount, 500);
+      expect(cardPayment.inflowLabel, 'Fees & Transfers');
+      expect(cardRefund.incomeAmount, 20);
+      expect(paycheck.incomeAmount, 1000);
+      expect(paycheck.inflowLabel, 'Income');
+
+      final result = AiSummaryService.instance.build(
+        transactions: [cardPayment, cardRefund, bankPayment, paycheck],
+        budgetProgress: const [],
+        stats: _stats(),
+        selectedAccountId: kAllAccountsId,
+        scopeLabel: 'All',
+      );
+      final key =
+          '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}';
+      final month = (result['month_index'] as Map)[key] as Map;
+      expect(month['income'], 1020);
+      expect(month['expenses'], 0);
+      expect(month['card_payments_in'], 500);
+      expect(month['card_payments_out'], 500);
     });
 
     test('a single selected account carries its account type', () {

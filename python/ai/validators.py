@@ -236,6 +236,11 @@ def sanitize_spending_summary(summary):
                 "expense_tx_count": max(0, int(to_float(item.get("expense_tx_count", 0)))),
                 "top_category": cleaned_top,
             }
+            # Card payments are neither income nor spending; older app builds don't send
+            # them, and their income then still includes payments onto a card.
+            for key in ("card_payments_in", "card_payments_out"):
+                if key in item:
+                    cleaned_month_index[month_text][key] = max(0.0, to_float(item.get(key, 0)))
             raw_categories = item.get("categories")
             if isinstance(raw_categories, dict):
                 categories = {}

@@ -354,7 +354,7 @@ class MainScreenController extends ChangeNotifier {
     final currentCategory =
         reviewedCategoryByTxId[tx.id] ??
         (tx.isIncome
-            ? 'Income'
+            ? tx.inflowLabel
             : CategoryService.instance.budgetBucketFor(
                 tx,
                 const <String, String>{},

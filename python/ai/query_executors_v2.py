@@ -218,6 +218,30 @@ def _income_vs_usual(summary, target):
     )
 
 
+def _card_payment_note(summary, rows, metric):
+    """One sentence on credit card payments, which are neither income nor spending: for
+    all accounts, income leaves out payments onto cards; for one bank account, spending
+    leaves out its payments to a card."""
+    rows = [r for r in rows if isinstance(r, dict)]
+    if not rows or credit_card_scope(summary):
+        return ""
+    if summary.get("scope") == "single_account":
+        paid = sum(float(r.get("card_payments_out", 0) or 0) for r in rows)
+        if paid >= 1 and metric in {"expenses", "net", "both"}:
+            return (
+                f" Payments to your credit card from this account (${paid:.0f}) aren't counted "
+                "as spending; those purchases count on the card."
+            )
+        return ""
+    paid = sum(float(r.get("card_payments_in", 0) or 0) for r in rows)
+    if paid >= 1 and metric in {"income", "net", "both"}:
+        return (
+            f" Income leaves out ${paid:.0f} of credit card payments, which only move money "
+            "between your own accounts."
+        )
+    return ""
+
+
 def _missing_month_reply(target, month_index):
     """A month before the data starts or still in the future; None for anything else
     ("2026-13" is left to the invalid-period clarification)."""
@@ -269,7 +293,7 @@ def _exec_amount_month(query_spec, summary, scope_label):
             "reply": (
                 f"{words[0]} {target}, {scope_label} {words[1]} of about ${income:.0f} and "
                 f"expenses of about ${expenses:.0f}, so net cash flow {words[2]} "
-                f"{sign}${abs(net):.0f}."
+                f"{sign}${abs(net):.0f}.{_card_payment_note(summary, [row], 'both')}"
             ),
             "insights": ["Amounts derived directly from validated summary indexes."],
             "actions": ["Ask a follow-up for category or day-level breakdown if needed."],
@@ -296,6 +320,7 @@ def _exec_amount_month(query_spec, summary, scope_label):
             reply = f"{verdict} {reply}"
         elif query_spec.reason_mode == "earn_vs_spend":
             reply = f"{_earn_vs_spend_verdict(query_spec, net)} {reply}"
+        reply += _card_payment_note(summary, [row], "net")
         return {
             "reply": reply,
             "insights": ["Amount derived directly from validated summary indexes."],
@@ -332,6 +357,7 @@ def _exec_amount_month(query_spec, summary, scope_label):
         reply = f"For {target}, total income for {scope_label} is about ${amount:.0f}."
         if query_spec.reason_mode == "income_vs_usual":
             reply += _income_vs_usual(summary, target)
+    reply += _card_payment_note(summary, [row], metric)
 
     return {
         "reply": reply,
@@ -1568,6 +1594,11 @@ def _exec_year_amount(query_spec, summary, scope_label):
         return None
     rows = [row for key, row in month_index.items() if str(key).startswith(f"{year}-")]
     names = [n.strip() for n in (query_spec.category or "").split(",") if n.strip()]
+    if not rows and month_index and str(year) < min(month_index)[:4]:
+        return _pointer(
+            f"Your data starts in {min(month_index)}, so there's nothing recorded for {year}.",
+            f"Ask about any month from {min(month_index)} on.",
+        )
     if not rows:
         return None
     so_far = " so far" if int(year) == date_cls.today().year else ""
@@ -1607,6 +1638,7 @@ def _exec_year_amount(query_spec, summary, scope_label):
             )
         else:
             reply = f"In {year}{so_far}, expenses for {scope_label} are about ${expenses:.0f}."
+        reply += _card_payment_note(summary, rows, query_spec.metric)
         facts = [f"month_index.{query_spec.metric}"]
     return {
         "reply": reply,
@@ -1706,6 +1738,7 @@ def _exec_affordability(query_spec, summary, scope_label):
     return {
         "reply": (
             f"{verdict} This doesn't include savings or account balances, which chat can't see."
+            f"{_card_payments_caveat(summary, keys, month_index)}"
         ),
         "insights": ["Surplus = income minus spending, averaged over recent full months."],
         "actions": ["Ask what to cut to free up the difference."],
@@ -1778,6 +1811,20 @@ def _exec_budget_suggestion(query_spec, summary, scope_label):
         "facts_used": ["month_index.categories" if category else "month_index.expenses"],
         "period_resolved": span,
     }
+
+
+def _card_payments_caveat(summary, keys, month_index):
+    """One bank account's surplus leaves out what it pays to a credit card, so it
+    overstates what's free to spend."""
+    if summary.get("scope") != "single_account" or credit_card_scope(summary) or not keys:
+        return ""
+    paid = sum(float(month_index[k].get("card_payments_out", 0) or 0) for k in keys) / len(keys)
+    if paid < 1:
+        return ""
+    return (
+        f" This account also paid about ${paid:.0f} a month to your credit card, which isn't "
+        "counted here, so pick Overall (All Accounts) to see what you can really afford."
+    )
 
 
 def _average_surplus(summary):
@@ -2273,6 +2320,7 @@ def _exec_saving_target(query_spec, summary, scope_label):
         months = (int(target[:4]) - int(current[:4])) * 12 + int(target[5:]) - int(current[5:])
         months += left_now
         total = surplus * months
+        caveat = _card_payments_caveat(summary, keys, month_index)
         if surplus > 0:
             reply = (
                 f"At your recent pace (income beating spending by about ${surplus:.0f} a month, "
@@ -2286,7 +2334,7 @@ def _exec_saving_target(query_spec, summary, scope_label):
             )
         return {
             "reply": f"{reply} That doesn't count money you've already saved, which chat can't "
-            "see.",
+            f"see.{caveat}",
             "insights": ["Surplus = income minus spending, averaged over recent full months."],
             "actions": ["Ask which category to cut to save more."],
             "missing_fields": [],
@@ -2320,10 +2368,16 @@ def _exec_saving_target(query_spec, summary, scope_label):
         lead = ""
         if query_spec.reason_mode == "rule_of_thumb":
             lead = "A common rule of thumb is to save about 20% of your income. "
+        if surplus > 0:
+            compare = f"That {fits} your average surplus of about ${surplus:.0f} a month."
+        else:
+            compare = (
+                f"Recently you've spent about ${-surplus:.0f} a month more than you earned, so "
+                "this would need spending cuts first."
+            )
         reply = (
             f"{lead}{pct:g}% of your usual income (about ${income:.0f} a month, {span}) is about "
-            f"${monthly:.0f} a month, ${monthly * 12:.0f} a year. That {fits} your average "
-            f"surplus of about ${surplus:.0f} a month."
+            f"${monthly:.0f} a month, ${monthly * 12:.0f} a year. {compare}"
         )
     else:
         goal = float(query_spec.period_key)
@@ -2336,10 +2390,19 @@ def _exec_saving_target(query_spec, summary, scope_label):
             when = "in a year"
         needed = goal / months_left
         verdict = "doable" if needed <= surplus else "more than your usual surplus"
+        if surplus > 0:
+            pace = (
+                f"Your income has beaten your spending by about ${surplus:.0f} a month "
+                f"({span}), so that's {verdict}."
+            )
+        else:
+            pace = (
+                f"Recently ({span}) you've spent about ${-surplus:.0f} a month more than you "
+                "earned, so it would need spending cuts first."
+            )
         reply = (
             f"Saving ${goal:.0f} {when} means about ${needed:.0f} a month over {months_left} "
-            f"months. Your income has beaten your spending by about ${surplus:.0f} a month "
-            f"({span}), so that's {verdict}."
+            f"months. {pace}"
         )
     return {
         "reply": reply,
@@ -2963,10 +3026,39 @@ def _exec_data_pointer(query_spec, summary, scope_label):
             )
         return _pointer(reply, "Ask about a category this account spends on.")
     if mode == "card_income":
-        return _pointer(
+        month = query_spec.period_key
+        month_index = summary.get("month_index") or {}
+        # A year sums its months; a month is one row.
+        rows = [r for k, r in month_index.items() if str(k).startswith(f"{month}-")]
+        if "," in month:
+            keys = sorted(month.split(","))
+            rows = [month_index.get(k) for k in keys]
+            month = f"{keys[0]} to {keys[-1]}"
+        elif len(month) != 4:
+            rows = [month_index.get(month)]
+        rows = [r for r in rows if isinstance(r, dict)]
+        lead = (
             f"{scope_label} is a credit card, so the money coming into it is card payments and "
-            "refunds, not income. For income, savings or what you can afford, pick Overall (All "
-            "Accounts) or your bank account in the Account scope menu above the chat.",
+            "refunds, not income."
+        )
+        if rows and all("card_payments_in" in r for r in rows):
+            payments = sum(float(r.get("card_payments_in", 0) or 0) for r in rows)
+            other = sum(float(r.get("income", 0) or 0) for r in rows)
+            if payments >= 1:
+                credits = f" and ${other:.0f} in refunds and credits" if other >= 1 else ""
+                lead = (
+                    f"Money into {scope_label} in {month} was about ${payments + other:.0f}: "
+                    f"${payments:.0f} in card payments{credits}. That's the card being paid off, "
+                    "not income."
+                )
+            elif other >= 1:
+                lead = (
+                    f"Money into {scope_label} in {month} was about ${other:.0f} in refunds and "
+                    "credits. On a credit card that isn't income."
+                )
+        return _pointer(
+            f"{lead} For income, savings or what you can afford, pick Overall (All Accounts) or "
+            "your bank account in the Account scope menu above the chat.",
             "Ask about this card's spending, or switch the account scope.",
         )
     if mode == "category_week":
@@ -3041,6 +3133,34 @@ def _exec_data_pointer(query_spec, summary, scope_label):
             "I can't change how I work or share my setup. I can answer questions about your own "
             "spending and income, for example: How much did I spend this month?",
             "Ask about your spending, income or categories.",
+        )
+    if mode == "card_payments":
+        period = query_spec.period_key
+        month_index = summary.get("month_index") or {}
+        if query_spec.period_type == "year":
+            rows = [r for k, r in month_index.items() if str(k).startswith(f"{period}-")]
+        else:
+            rows = [month_index.get(period)]
+        rows = [r for r in rows if isinstance(r, dict)]
+        card = credit_card_scope(summary)
+        key = "card_payments_in" if card else "card_payments_out"
+        if not rows or not all(key in r for r in rows):
+            return _pointer(
+                "This version of the app doesn't send credit card payment totals to chat. "
+                "Search Activity for 'payment' to see them.",
+                "Search Activity for payment.",
+            )
+        paid = sum(float(r.get(key, 0) or 0) for r in rows)
+        if paid < 1:
+            reply = f"I don't see any credit card payments for {scope_label} in {period}."
+        elif card:
+            reply = f"In {period}, {scope_label} received about ${paid:.0f} in payments."
+        else:
+            reply = f"In {period}, {scope_label} paid about ${paid:.0f} toward credit cards."
+        return _pointer(
+            f"{reply} Card payments aren't counted as income or spending; the purchases on the "
+            "card count as spending instead.",
+            "Ask how much you spent on the card.",
         )
     if mode == "trip":
         event = (query_spec.category or "trip").strip()
@@ -3456,7 +3576,7 @@ def _exec_month_overview(query_spec, summary, scope_label):
     else:
         parts = [
             f"{opening} income of ${income:.0f}, expenses of ${expenses:.0f} and net cash flow "
-            f"of {sign}${abs(net):.0f}."
+            f"of {sign}${abs(net):.0f}.{_card_payment_note(summary, [row], 'both')}"
         ]
     top = row.get("top_category") if isinstance(row.get("top_category"), dict) else {}
     top_name = str(top.get("name", "") or "").strip()

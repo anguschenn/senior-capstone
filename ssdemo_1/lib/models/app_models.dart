@@ -79,7 +79,32 @@ class AppTransaction {
   double get expenseAmount =>
       isExpense && !isCreditCardPayment ? displayAmount : 0;
 
-  double get incomeAmount => isIncome ? displayAmount : 0;
+  /// The card side of paying off a credit card ("Payment Thank You"): money
+  /// moving between the user's own accounts, so it isn't income. Refunds on
+  /// the card still count.
+  bool get isCardPaymentCredit {
+    if (!isIncome) return false;
+    if (isCreditCardPayment) return true;
+    final text = '${name.toLowerCase()} ${description.toLowerCase()}';
+    final type = accountType.toLowerCase().trim();
+    if (type.isEmpty) return text.contains('payment thank you');
+    if (type != 'credit' || isRefundIncome) return false;
+    final pfc = '$rawPfcPrimary $rawPfcDetailed'.toUpperCase();
+    return pfc.contains('LOAN_DISBURSEMENTS') ||
+        pfc.contains('LOAN_PAYMENTS') ||
+        pfc.contains('TRANSFER_IN') ||
+        text.contains('payment') ||
+        text.contains('autopay');
+  }
+
+  double get incomeAmount =>
+      isIncome && !isCardPaymentCredit ? displayAmount : 0;
+
+  /// Money paid onto a credit card, seen from the card's side.
+  double get cardPaymentAmount => isCardPaymentCredit ? displayAmount : 0;
+
+  /// Label for money coming in: a card payment is a transfer, not income.
+  String get inflowLabel => isCardPaymentCredit ? 'Fees & Transfers' : 'Income';
 
   double get nonIncomeInflowAmount => isNonIncomeInflow ? displayAmount : 0;
 

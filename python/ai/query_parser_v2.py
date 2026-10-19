@@ -1405,7 +1405,25 @@ def _scope_guard(spec, summary):
         or spec.task_type in _INCOME_TASKS
         or spec.reason_mode in {"savings_rate", "share_of_income", "rule_of_thumb", "capacity"}
     ):
-        return QuerySpec(task_type="data_pointer", scope=spec.scope, reason_mode="card_income")
+        # Keep the period asked about, so the reply can say how much of it was payments.
+        key = spec.period_key or ""
+        if re.match(r"^20\d{2}-\d{2}(,20\d{2}-\d{2})+$", key):
+            # "so far this quarter": only the months that have happened
+            now = date_cls.today().strftime("%Y-%m")
+            key = ",".join(k for k in key.split(",") if k <= now) or key
+        if re.match(r"^20\d{2}-\d{2}(,20\d{2}-\d{2})*$", key) or (
+            spec.period_type == "year" and re.match(r"^20\d{2}$", key)
+        ):
+            period = key
+        else:
+            period = selected_month_key(summary)
+        return QuerySpec(
+            task_type="data_pointer",
+            period_type="year" if len(period) == 4 else "month",
+            period_key=period,
+            scope=spec.scope,
+            reason_mode="card_income",
+        )
     return spec
 
 
@@ -3912,6 +3930,10 @@ _ACTION_RE = re.compile(
 )
 
 
+_CARD_PAYMENT_RE = re.compile(
+    r"\b(pay|paid|paying|payment|payments)\b.{0,30}\b(credit card|card|cards)\b|"
+    r"\bcard payments?\b"
+)
 _INJECTION_RE = re.compile(
     r"\b(ignore|disregard|forget|override) (all |your |the |any |previous |prior |above )*"
     r"(rules|instructions|prompt|prompts|guidelines)\b|\bsystem prompt\b|\bapi key\b|"
@@ -3920,7 +3942,7 @@ _INJECTION_RE = re.compile(
 
 
 def _special_asks_spec(text, summary, scope):
-    """Why income moved, and attempts to change the assistant's rules."""
+    """Card payments, why income moved, and attempts to change the assistant's rules."""
     what_on = re.match(
         r"^what did i (spend( my)?( money)? on|buy|purchase)( on)? (yesterday|today)$", text
     )
@@ -4026,6 +4048,15 @@ def _special_asks_spec(text, summary, scope):
             return QuerySpec(
                 task_type="data_pointer", scope=scope, reason_mode="merchant", category=name
             )
+    if _CARD_PAYMENT_RE.search(text) and _AMOUNT_ASK_RE.search(text):
+        year = re.search(r"\b(this year|so far this year)\b", text)
+        return QuerySpec(
+            task_type="data_pointer",
+            period_type="year" if year else "month",
+            period_key=str(_selected_year(summary)) if year else _period_for(text, summary),
+            scope=scope,
+            reason_mode="card_payments",
+        )
     if (
         re.search(r"\b(saving|saved|savings)\b", text)
         and re.search(

@@ -62,6 +62,8 @@ class AiSummaryService {
   Map<String, dynamic> _emptyMonthBucket() => {
     'income': 0.0,
     'expenses': 0.0,
+    'card_payments_in': 0.0,
+    'card_payments_out': 0.0,
     'tx_count': 0,
     'expense_tx_count': 0,
   };
@@ -270,6 +272,9 @@ class AiSummaryService {
         if (_isTransferLikeIncome(tx, effectiveCategory)) {
           continue;
         }
+        // Card payments aren't income; keep their total so chat can say so.
+        monthBucket['card_payments_in'] =
+            (monthBucket['card_payments_in'] as double) + tx.cardPaymentAmount;
         final income = tx.incomeAmount;
         monthBucket['income'] = (monthBucket['income'] as double) + income;
         dayBucket['income'] = (dayBucket['income'] as double) + income;
@@ -306,6 +311,10 @@ class AiSummaryService {
           effectiveCategory,
         );
         expenseTxCountAll += 1;
+        if (tx.isCreditCardPayment) {
+          monthBucket['card_payments_out'] =
+              (monthBucket['card_payments_out'] as double) + tx.displayAmount;
+        }
 
         if (isTransferLikeForAnalysis) {
           transferLikeExpenseTxCount += 1;
@@ -433,6 +442,10 @@ class AiSummaryService {
       monthIndex[month] = {
         'income': bucket['income'],
         'expenses': bucket['expenses'],
+        // Credit card payments: onto a card (in) and from a bank account (out).
+        // Neither is income or spending.
+        'card_payments_in': bucket['card_payments_in'],
+        'card_payments_out': bucket['card_payments_out'],
         'tx_count': bucket['tx_count'],
         'expense_tx_count': bucket['expense_tx_count'],
         'top_category': top == null

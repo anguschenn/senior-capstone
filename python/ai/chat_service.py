@@ -2158,6 +2158,12 @@ class ChatService:
         re.IGNORECASE,
     )
 
+    _CARD_PAYMENT_ASK_RE = re.compile(
+        r"\b(pay|paid|paying|payment|payments)\b.{0,30}\b(credit card|card|cards)\b|"
+        r"\bcard payments?\b",
+        re.IGNORECASE,
+    )
+
     def _account_scope_note(self, prompt, summary):
         """(question without the account words, note) when the question names an account.
         The note says which account the answer covers and how to switch."""
@@ -2176,7 +2182,8 @@ class ChatService:
             re.IGNORECASE,
         ):
             return prompt, ""  # a request to move money: the refusal covers every account
-        if not match:
+        if not match or self._CARD_PAYMENT_ASK_RE.search(prompt or ""):
+            # "how much did I pay toward my credit card" is about the payments themselves.
             return prompt, ""
         named = (match.group(2) or f"account ending {match.group(3)}").lower()
         # Keep "my" when nothing came before it: "what's my card spending" -> "what's my spending".
