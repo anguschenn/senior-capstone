@@ -1,4 +1,7 @@
+import contextlib
+import contextvars
 import json
+import ssl
 import time
 import urllib.error
 import urllib.request
@@ -16,11 +19,39 @@ from config import (
 )
 
 _DEFAULT_TIMEOUT_SECONDS = 60
+
+
+def _https_context():
+    """Verify HTTPS with certifi's CA bundle when it's installed: python.org builds of
+    Python on macOS ship without system certificates, so OpenRouter calls failed there."""
+    try:
+        import certifi
+
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        return ssl.create_default_context()
+
+
+_HTTPS_CONTEXT = _https_context()
 _OPENROUTER_MAX_RETRIES = 2
 
 
+# Set per request by use_provider() when the model switch is on (local testing only).
+_provider_override = contextvars.ContextVar("provider_override", default="")
+
+
+@contextlib.contextmanager
+def use_provider(provider):
+    """Use this provider ("ollama" or "openrouter") for model calls inside the block."""
+    token = _provider_override.set(provider)
+    try:
+        yield
+    finally:
+        _provider_override.reset(token)
+
+
 def _provider_name():
-    provider = (AI_PROVIDER or "ollama").strip().lower()
+    provider = (_provider_override.get() or AI_PROVIDER or "ollama").strip().lower()
     if provider not in {"ollama", "openrouter"}:
         raise RuntimeError(f"Unsupported AI_PROVIDER: {provider}")
     return provider
@@ -138,7 +169,9 @@ def _generate_openrouter_reply(prompt, generation_config=None):
             method="POST",
         )
         try:
-            with urllib.request.urlopen(req, timeout=_DEFAULT_TIMEOUT_SECONDS) as response:
+            with urllib.request.urlopen(
+                req, timeout=_DEFAULT_TIMEOUT_SECONDS, context=_HTTPS_CONTEXT
+            ) as response:
                 raw = response.read().decode("utf-8")
                 parsed = json.loads(raw)
             break

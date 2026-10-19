@@ -13,7 +13,7 @@ from ai.question_log import store_question
 from ai.rewrite_cache import SupabaseRewriteCache
 from ai.snapshot_service import SpendingSnapshotService
 from auth import require_api_key
-from config import ALLOWED_ORIGINS
+from config import AI_MODEL_SWITCH_ENABLED, ALLOWED_ORIGINS
 from routes.ai_routes import ai_bp
 from routes.budget_routes import budget_bp
 from routes.plaid_routes import plaid_bp
@@ -48,6 +48,7 @@ def create_app() -> Flask:
     )
     app.config["predict_service"] = PredictService(generate_reply=generate_llm_reply)
     app.config["question_log"] = store_question
+    app.config["model_switch_enabled"] = AI_MODEL_SWITCH_ENABLED
 
     app.register_blueprint(plaid_bp)
     app.register_blueprint(ai_bp)
