@@ -40,5 +40,16 @@ def plaid_error_response(error: plaid.ApiException):
     return jsonify(formatted), status_code
 
 
+_LOG_MESSAGE_MAX_CHARS = 200
+
+
 def log_route_error(route_name: str, error: Exception) -> None:
-    print(f"{route_name} error: {type(error).__name__}: {error}")
+    """Log the error type and a short, single-line excerpt of its message.
+
+    Enough to debug from the Render log, without dumping whole exceptions: a Plaid
+    ApiException, for example, renders its response headers and full body.
+    """
+    message = " ".join(str(error).split())
+    if len(message) > _LOG_MESSAGE_MAX_CHARS:
+        message = message[:_LOG_MESSAGE_MAX_CHARS] + "..."
+    print(f"{route_name} error: {type(error).__name__}: {message}")
