@@ -290,6 +290,10 @@ class _BudgetPageState extends State<BudgetPage> {
                 for (final c in flagged)
                   if (!c.isOverBudget) c.title,
               ],
+              details: [
+                ...flagged.where((c) => c.isOverBudget),
+                ...flagged.where((c) => !c.isOverBudget),
+              ],
               onCategoryTap: (title) {
                 final id = byTitle[title];
                 if (id != null) _scrollToBudgetCategory(id);
