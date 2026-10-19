@@ -97,7 +97,9 @@ class BudgetPaceChartCard extends StatelessWidget {
                     painter: _BudgetPaceChartPainter(snapshot: snapshot),
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 6),
+                const _ChartLegend(),
+                const SizedBox(height: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
@@ -130,6 +132,95 @@ class BudgetPaceChartCard extends StatelessWidget {
     }
     return buf.toString();
   }
+}
+
+/// Explains the two lines: the dashed even-pace line and the solid spend line.
+class _ChartLegend extends StatelessWidget {
+  const _ChartLegend();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Wrap(
+      alignment: WrapAlignment.center,
+      spacing: 16,
+      runSpacing: 4,
+      children: [
+        _LegendItem(dashed: true, label: 'Even pace to budget'),
+        _LegendItem(dashed: false, label: 'Your spending so far'),
+      ],
+    );
+  }
+}
+
+class _LegendItem extends StatelessWidget {
+  const _LegendItem({required this.dashed, required this.label});
+
+  final bool dashed;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 26,
+          height: 10,
+          child: CustomPaint(painter: _LegendSwatchPainter(dashed: dashed)),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12, color: Color(0xFF5F5F5F)),
+        ),
+      ],
+    );
+  }
+}
+
+/// Mini sample of each chart line, drawn with the same strokes as the chart.
+class _LegendSwatchPainter extends CustomPainter {
+  _LegendSwatchPainter({required this.dashed});
+
+  final bool dashed;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final y = size.height / 2;
+    final a = Offset(2, y);
+    final b = Offset(size.width - 2, y);
+    if (dashed) {
+      final paint = Paint()
+        ..color = const Color(0xFF1B5E20)
+        ..strokeWidth = 3
+        ..strokeCap = StrokeCap.round;
+      canvas.drawLine(a, Offset(a.dx + 8, y), paint);
+      canvas.drawLine(Offset(b.dx - 8, y), b, paint);
+    } else {
+      // Green-to-red, as the spend line changes colour against the pace line.
+      canvas.drawLine(
+        a,
+        b,
+        Paint()
+          ..strokeWidth = 4
+          ..strokeCap = StrokeCap.round
+          ..shader = ui.Gradient.linear(
+            a,
+            b,
+            [
+              BudgetPaceChartCard.paceColor(-0.10),
+              BudgetPaceChartCard.paceColor(0.0),
+              BudgetPaceChartCard.paceColor(0.08),
+            ],
+            [0.0, 0.5, 1.0],
+          ),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _LegendSwatchPainter oldDelegate) =>
+      oldDelegate.dashed != dashed;
 }
 
 class _BudgetPaceChartPainter extends CustomPainter {
