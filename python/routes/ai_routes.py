@@ -157,11 +157,8 @@ def ai_suggest_category():
         )
 
         # Get suggestion from LLM
-        reply = current_app.config["chat_service"].generate_reply(
-            prompt=prompt,
-            history=[],
-            spending_summary={},
-        )
+        # generate_reply is providers.generate_llm_reply(prompt, generation_config=None).
+        reply = current_app.config["chat_service"].generate_reply(prompt)
 
         suggested_category = reply.strip() if reply else ""
 
