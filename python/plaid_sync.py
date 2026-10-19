@@ -216,7 +216,7 @@ def _sync_transactions_unlocked(user_id: str, plaid_item_id: str, plaid_access_t
     for transaction in removed:
         supabase.table("transactions").delete().eq(
             "plaid_transaction_id", transaction.get("transaction_id")
-        ).execute()
+        ).eq("user_id", user_id).execute()
 
     supabase.table("plaid_items").update(
         {"cursor": cursor, "last_synced_at": dt.datetime.now().isoformat()}

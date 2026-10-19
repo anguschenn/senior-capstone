@@ -25,7 +25,7 @@ def _sync_page():
         "next_cursor": "cursor-2",
         "added": [],
         "modified": [MODIFIED],
-        "removed": [],
+        "removed": [{"transaction_id": "txn-gone"}],
         "has_more": False,
     }
     return SimpleNamespace(to_dict=lambda: page)
@@ -70,6 +70,19 @@ class ModifiedTransactionTests(unittest.TestCase):
         second = first.return_value.eq
         filters = {first.call_args.args, second.call_args.args}
         self.assertEqual(filters, {("plaid_transaction_id", "txn-1"), ("user_id", "user-1")})
+        second.return_value.execute.assert_called_once_with()
+
+
+class RemovedTransactionTests(unittest.TestCase):
+    def test_removed_delete_is_scoped_to_the_user(self):
+        stats, tables = _run_sync()
+        self.assertEqual(stats["removed"], 1)
+        first = tables["transactions"].delete.return_value.eq
+        second = first.return_value.eq
+        self.assertEqual(
+            {first.call_args.args, second.call_args.args if second.call_args else None},
+            {("plaid_transaction_id", "txn-gone"), ("user_id", "user-1")},
+        )
         second.return_value.execute.assert_called_once_with()
 
 
