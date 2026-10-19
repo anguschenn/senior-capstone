@@ -1,7 +1,6 @@
-import 'dart:convert';
-
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/config/supabase_client.dart';
 import '../models/ai/ai_models.dart';
 
 /// One answered question in the AI chat.
@@ -16,13 +15,16 @@ class SavedChatTurn {
   final AiChatResponse response;
   final DateTime askedAt;
 
-  Map<String, dynamic> toJson() => {
+  /// An `ai_chat_messages` row for [userId] and [accountScope].
+  Map<String, dynamic> toRow(String userId, String accountScope) => {
+    'user_id': userId,
+    'account_scope': accountScope,
     'prompt': prompt,
     'response': response.toJson(),
-    'asked_at': askedAt.toIso8601String(),
+    'asked_at': askedAt.toUtc().toIso8601String(),
   };
 
-  static SavedChatTurn? fromJson(Object? raw) {
+  static SavedChatTurn? fromRow(Object? raw) {
     if (raw is! Map) return null;
     final prompt = raw['prompt'];
     final response = raw['response'];
@@ -31,70 +33,77 @@ class SavedChatTurn {
     return SavedChatTurn(
       prompt: prompt,
       response: AiChatResponse.fromJson(Map<String, dynamic>.from(response)),
-      askedAt: askedAt,
+      askedAt: askedAt.toLocal(),
     );
   }
 }
 
-/// On-device copy of the AI chat, so it is still there after closing the
-/// panel or reloading the app.
+/// The AI chat history in Supabase (`ai_chat_messages`, see
+/// db/migrations/013_ai_chat_messages.sql), so a conversation is still there
+/// after a reload or on another device.
 ///
-/// Kept per user and account scope, newest [maxTurns] questions only, and
-/// cleared on sign-out. Every method is best-effort: a storage failure must
-/// never break the chat.
+/// Kept per user and account scope; the table keeps the newest [maxTurns]
+/// questions. RLS limits every user to their own rows. Every method is
+/// best-effort: a storage failure must never break the chat.
 class ChatHistoryStore {
   const ChatHistoryStore._();
   static const instance = ChatHistoryStore._();
 
-  /// Questions kept per account scope; older ones drop off.
+  /// Questions kept per account scope; the table trims older ones.
   static const maxTurns = 30;
-  static const _prefix = 'smartspend.ai_chat.';
+  static const _table = 'ai_chat_messages';
 
-  String _key(String userId, String accountId) => '$_prefix$userId|$accountId';
-
-  Future<List<SavedChatTurn>> load(String userId, String accountId) async {
+  Future<List<SavedChatTurn>> load(String userId, String accountScope) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_key(userId, accountId));
-      if (raw == null) return const [];
-      final decoded = jsonDecode(raw);
-      if (decoded is! List) return const [];
-      return [for (final item in decoded) ?SavedChatTurn.fromJson(item)];
+      final rows = await AppSupabase.client
+          .from(_table)
+          .select('prompt,response,asked_at')
+          .eq('user_id', userId)
+          .eq('account_scope', accountScope)
+          .order('asked_at', ascending: false)
+          .limit(maxTurns);
+      return [
+        for (final row in (rows as List).reversed) ?SavedChatTurn.fromRow(row),
+      ];
     } catch (_) {
       return const [];
     }
   }
 
-  Future<void> save(
+  Future<void> add(
     String userId,
-    String accountId,
-    List<SavedChatTurn> turns,
+    String accountScope,
+    SavedChatTurn turn,
   ) async {
     try {
-      final kept = turns.length > maxTurns
-          ? turns.sublist(turns.length - maxTurns)
-          : turns;
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
-        _key(userId, accountId),
-        jsonEncode([for (final turn in kept) turn.toJson()]),
-      );
+      await AppSupabase.client
+          .from(_table)
+          .insert(turn.toRow(userId, accountScope));
     } catch (_) {}
   }
 
-  /// Removes one scope's chat, or every saved chat when no user is given
-  /// (used on sign-out).
-  Future<void> clear({String? userId, String? accountId}) async {
+  /// Deletes chats an earlier version kept on the device, now that they
+  /// live in Supabase.
+  Future<void> removeDeviceCopies() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      if (userId != null && accountId != null) {
-        await prefs.remove(_key(userId, accountId));
-        return;
-      }
-      final keys = prefs.getKeys().where((k) => k.startsWith(_prefix)).toList();
-      for (final key in keys) {
+      final keys = prefs.getKeys().where((k) => k.startsWith(_devicePrefix));
+      for (final key in keys.toList()) {
         await prefs.remove(key);
       }
+    } catch (_) {}
+  }
+
+  static const _devicePrefix = 'smartspend.ai_chat.';
+
+  /// Removes one account scope's chat.
+  Future<void> clear(String userId, String accountScope) async {
+    try {
+      await AppSupabase.client
+          .from(_table)
+          .delete()
+          .eq('user_id', userId)
+          .eq('account_scope', accountScope);
     } catch (_) {}
   }
 }
