@@ -18,6 +18,7 @@ from .time_parsing import (
     extract_month_range_keys,
     extract_specific_date_key,
     extract_specific_month_key,
+    month_mentions,
     previous_month_key,
     previous_year_key,
 )
@@ -1624,10 +1625,7 @@ class ChatService:
         years = re.findall(r"\b20\d{2}\b", text)
         if len(years) >= 2:
             return years[0], years[1]
-        month_names = []
-        for name, num in MONTH_NAME_TO_NUM.items():
-            if re.search(rf"\b{re.escape(name)}\b", text):
-                month_names.append(num)
+        month_names = sorted({num for _, num in month_mentions(text)})
         year = re.search(r"\b20\d{2}\b", text)
         if len(month_names) >= 2 and year:
             y = int(year.group(0))
