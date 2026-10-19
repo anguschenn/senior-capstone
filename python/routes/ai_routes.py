@@ -12,11 +12,11 @@ ai_bp = Blueprint("ai", __name__)
 
 @ai_bp.route("/api/ai/chat", methods=["POST"])
 def ai_chat():
-    if is_rate_limited_for_ai():
-        return jsonify({"error": "Rate limit exceeded"}), 429
     body = request.get_json(silent=True) or {}
     try:
         user_id = require_supabase_user_id()
+        if is_rate_limited_for_ai(user_id):
+            return jsonify({"error": "Rate limit exceeded"}), 429
         response = current_app.config["chat_service"].handle_chat(body, user_id=user_id)
         return jsonify(response)
     except UserAuthError as error:
@@ -103,11 +103,11 @@ def ai_budget_suggest():
 
 @ai_bp.route("/api/ai/predict", methods=["POST"])
 def ai_predict():
-    if is_rate_limited_for_ai():
-        return jsonify({"error": "Rate limit exceeded"}), 429
     body = request.get_json(silent=True) or {}
     try:
-        require_supabase_user_id()
+        user_id = require_supabase_user_id()
+        if is_rate_limited_for_ai(user_id):
+            return jsonify({"error": "Rate limit exceeded"}), 429
         response = current_app.config["predict_service"].handle_predict(body)
         return jsonify(response)
     except UserAuthError as error:
@@ -132,13 +132,13 @@ def ai_predict():
 
 @ai_bp.route("/api/ai/suggest_category", methods=["POST"])
 def ai_suggest_category():
-    if is_rate_limited_for_ai():
-        return jsonify({"error": "Rate limit exceeded"}), 429
     body = request.get_json(silent=True) or {}
     try:
-        # Raises UserAuthError -> 401 for unauthenticated callers. The id itself is
-        # unused here; the suggestion is derived only from the posted transaction.
-        require_supabase_user_id()
+        # Raises UserAuthError -> 401 for unauthenticated callers. The id only keys the
+        # rate limit; the suggestion is derived only from the posted transaction.
+        user_id = require_supabase_user_id()
+        if is_rate_limited_for_ai(user_id):
+            return jsonify({"error": "Rate limit exceeded"}), 429
         merchant_name = clamp_str(body.get("merchant_name", ""), 256) or ""
         transaction_name = clamp_str(body.get("transaction_name", ""), 256) or ""
         pfc_primary = clamp_str(body.get("pfc_primary", ""), 128) or ""
