@@ -2,6 +2,8 @@
 
 import re
 
+from .response_utils import describe_plaid_amount
+
 
 def execute_plan_v2(plan, query_spec, summary, scope_label):
     if plan is None or query_spec is None or not isinstance(summary, dict):
@@ -254,8 +256,7 @@ def _exec_recent_transactions(summary, scope_label):
         a = float(item.get("amount", 0) or 0)
         if not d:
             continue
-        sign = "-" if a < 0 else "+"
-        rows.append(f"{d} {n} {sign}${abs(a):.0f}")
+        rows.append(f"{d} {n} {describe_plaid_amount(a)}")
     if not rows:
         return None
     return {

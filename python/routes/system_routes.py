@@ -3,6 +3,8 @@
 from flask import Blueprint, jsonify
 
 from ai.providers import current_llm_info, ping_llm
+from api.http_helpers import log_route_error
+from auth import UserAuthError, is_rate_limited_for_ai, require_supabase_user_id
 from config import APP_VERSION, GIT_SHA
 
 system_bp = Blueprint("system", __name__)
@@ -10,17 +12,25 @@ system_bp = Blueprint("system", __name__)
 
 @system_bp.route("/api/ai/ping", methods=["GET"])
 def ai_ping():
+    """Round-trip the LLM. Costs a model call, so it needs a signed-in user and is
+    rate-limited with the other AI endpoints."""
     llm_info = current_llm_info()
     try:
+        user_id = require_supabase_user_id()
+        if is_rate_limited_for_ai(user_id):
+            return jsonify({"error": "Rate limit exceeded"}), 429
         return jsonify(ping_llm())
+    except UserAuthError as error:
+        return jsonify({"error": str(error)}), 401
     except Exception as error:
+        # Provider errors can carry hosts, URLs or upstream bodies: log, never return.
+        log_route_error("/api/ai/ping", error)
         return jsonify(
             {
                 "ok": False,
                 "model": llm_info["model"],
                 "provider": llm_info["provider"],
                 "error_type": "server_error",
-                "detail": str(error),
             }
         ), 500
 

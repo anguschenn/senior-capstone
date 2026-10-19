@@ -10,13 +10,14 @@ from .parsers import extract_json_object
 from .query_executors_v2 import execute_plan_v2
 from .query_parser_v2 import parse_query_v2
 from .query_planner_v2 import build_execution_plan_v2
+from .response_utils import describe_plaid_amount
 from .response_validator_v2 import validate_v2_response
 from .schemas import build_chat_response
 from .time_parsing import (
-    MONTH_NAME_TO_NUM,
     extract_month_range_keys,
     extract_specific_date_key,
     extract_specific_month_key,
+    month_mentions,
     previous_month_key,
     previous_year_key,
 )
@@ -61,7 +62,7 @@ class ChatService:
         )
         recent_text = (
             ", ".join(
-                f"{t.get('date')} {t.get('name')} ${float(t.get('amount', 0)):.0f}"
+                f"{t.get('date')} {t.get('name')} {describe_plaid_amount(t.get('amount'))}"
                 for t in recent[:5]
             )
             or "none"
@@ -552,7 +553,7 @@ class ChatService:
         if re.search(r"\bspend(ing)?\b", text) and (
             re.search(r"\b20\d{2}-\d{2}\b", text)
             or re.search(r"\b(20\d{2})\b", text)
-            or any(name in text for name in MONTH_NAME_TO_NUM)
+            or month_mentions(text)
         ):
             return True
         return False
@@ -823,19 +824,20 @@ class ChatService:
         text = clamp_str(message or "", 4000).lower()
         if not text:
             return "unknown"
-        if "today" in text or "yesterday" in text:
+        # Whole words only: "yearbook", "monthsary" or "todayish" are not time windows.
+        if re.search(r"\b(today|yesterday)\b", text):
             return "specific_day"
         if "last 30 days" in text or "30 days" in text or "30d" in text:
             return "rolling_30d"
-        if "which month" in text or "which months" in text or "months" in text:
+        if re.search(r"\bwhich months?\b|\bmonths\b", text):
             return "annual_year"
-        if "this month" in text:
+        if re.search(r"\bthis month\b", text):
             return "selected_month"
-        if "month" in text:
+        if re.search(r"\bmonth(ly)?\b", text):
             return "rolling_30d"
-        if "this year" in text or "year" in text:
+        if re.search(r"\byears?\b|\byearly\b", text):
             return "annual_year"
-        if any(name in text for name in MONTH_NAME_TO_NUM):
+        if month_mentions(text):
             return "annual_year"
         if re.search(r"\b20\d{2}-\d{2}\b", text):
             return "annual_year"
@@ -1093,12 +1095,7 @@ class ChatService:
         if not rows:
             return ""
 
-        def _fmt_amount(value):
-            abs_value = abs(float(value or 0))
-            sign = "-" if value < 0 else "+"
-            return f"{sign}${abs_value:.0f}"
-
-        text = "; ".join(f"{d} {n} {_fmt_amount(a)}" for d, n, a in rows)
+        text = "; ".join(f"{d} {n} {describe_plaid_amount(a)}" for d, n, a in rows)
         return f"Most recent transactions for {self._scope_label(summary)}: {text}."
 
     def _build_clarification_question(self, intent, query_spec):
@@ -1628,10 +1625,7 @@ class ChatService:
         years = re.findall(r"\b20\d{2}\b", text)
         if len(years) >= 2:
             return years[0], years[1]
-        month_names = []
-        for name, num in MONTH_NAME_TO_NUM.items():
-            if re.search(rf"\b{re.escape(name)}\b", text):
-                month_names.append(num)
+        month_names = sorted({num for _, num in month_mentions(text)})
         year = re.search(r"\b20\d{2}\b", text)
         if len(month_names) >= 2 and year:
             y = int(year.group(0))

@@ -84,9 +84,8 @@ def get_stored_item_credentials(user_id: str, plaid_item_id: str) -> tuple[str, 
 def save_accounts_to_supabase(user_id: str, plaid_item_id: str, plaid_access_token: str) -> int:
     response = client.accounts_get(AccountsGetRequest(access_token=plaid_access_token)).to_dict()
     accounts = response.get("accounts", [])
-    print(
-        f"[plaid] accounts_get returned {len(accounts)} account(s): {[(a.get('name'), str(a.get('type')), str(a.get('subtype'))) for a in accounts]}"
-    )
+    # Count only: account names/types are bank data and do not belong in server logs.
+    print(f"[plaid] accounts_get returned {len(accounts)} account(s)")
 
     rows = []
     for account in accounts:
@@ -196,20 +195,27 @@ def _sync_transactions_unlocked(user_id: str, plaid_item_id: str, plaid_access_t
         supabase.table("transactions").upsert(rows, on_conflict="plaid_transaction_id").execute()
 
     for transaction in modified:
+        # A "modified" entry is the full current transaction; Plaid can correct the date,
+        # name or merchant as well as the amount, so refresh all of them.
         pfc = transaction.get("personal_finance_category") or {}
         supabase.table("transactions").update(
             {
                 "amount": transaction.get("amount"),
+                "date": str(transaction.get("date")),
+                "name": transaction.get("name"),
+                "merchant_name": transaction.get("merchant_name"),
                 "pending": transaction.get("pending"),
                 "pfc_primary": pfc.get("primary"),
                 "pfc_detailed": pfc.get("detailed"),
             }
-        ).eq("plaid_transaction_id", transaction.get("transaction_id")).execute()
+        ).eq("plaid_transaction_id", transaction.get("transaction_id")).eq(
+            "user_id", user_id
+        ).execute()
 
     for transaction in removed:
         supabase.table("transactions").delete().eq(
             "plaid_transaction_id", transaction.get("transaction_id")
-        ).execute()
+        ).eq("user_id", user_id).execute()
 
     supabase.table("plaid_items").update(
         {"cursor": cursor, "last_synced_at": dt.datetime.now().isoformat()}
@@ -241,7 +247,3 @@ def format_error(error):
             "error_type": response.get("error_type", "API_ERROR"),
         }
     }
-
-
-def pretty_print_response(response):
-    print(json.dumps(response, indent=2, sort_keys=True, default=str))
