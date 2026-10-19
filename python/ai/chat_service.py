@@ -824,17 +824,18 @@ class ChatService:
         text = clamp_str(message or "", 4000).lower()
         if not text:
             return "unknown"
-        if "today" in text or "yesterday" in text:
+        # Whole words only: "yearbook", "monthsary" or "todayish" are not time windows.
+        if re.search(r"\b(today|yesterday)\b", text):
             return "specific_day"
         if "last 30 days" in text or "30 days" in text or "30d" in text:
             return "rolling_30d"
-        if "which month" in text or "which months" in text or "months" in text:
+        if re.search(r"\bwhich months?\b|\bmonths\b", text):
             return "annual_year"
-        if "this month" in text:
+        if re.search(r"\bthis month\b", text):
             return "selected_month"
-        if "month" in text:
+        if re.search(r"\bmonth(ly)?\b", text):
             return "rolling_30d"
-        if "this year" in text or "year" in text:
+        if re.search(r"\byears?\b|\byearly\b", text):
             return "annual_year"
         if month_mentions(text):
             return "annual_year"

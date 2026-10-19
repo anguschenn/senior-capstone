@@ -29,6 +29,34 @@ class MonthSubstringTests(unittest.TestCase):
             with self.subTest(text):
                 self.assertEqual(_service()._timeframe_mode(text), "annual_year")
 
+    def test_time_words_inside_other_words_do_not_set_a_window(self):
+        # "year" in "yearbook", "month" in "monthsary", "today" in "todayish".
+        for text in (
+            "how much did I spend at the yearbook fair",
+            "how much did I spend on our monthsary dinner",
+            "what did I spend todayish",
+        ):
+            with self.subTest(text):
+                self.assertEqual(_service()._timeframe_mode(text), "unknown")
+
+    def test_whole_time_words_still_set_the_window(self):
+        cases = {
+            "how much did I spend this year": "annual_year",
+            "what is my yearly spending": "annual_year",
+            "how much did I spend over the years": "annual_year",
+            "which months were highest": "annual_year",
+            "which month did I spend the most": "annual_year",
+            "how much did I spend this month": "selected_month",
+            "what is my monthly spending": "rolling_30d",
+            "how much did I spend in the last month": "rolling_30d",
+            "what did I spend today": "specific_day",
+            "what did I spend yesterday": "specific_day",
+            "what did I spend in the last 30 days": "rolling_30d",
+        }
+        for text, expected in cases.items():
+            with self.subTest(text):
+                self.assertEqual(_service()._timeframe_mode(text), expected)
+
     def test_asks_amount_ignores_month_substrings(self):
         service = _service()
         self.assertFalse(service._asks_amount("should I spend less at the market"))
