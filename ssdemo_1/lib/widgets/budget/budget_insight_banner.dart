@@ -1,16 +1,24 @@
 import 'package:flutter/material.dart';
 
+import '../../models/app_models.dart';
+import 'budget_alert_toasts.dart';
+
 /// Summary strip above the budget cards. Light red when any category is already
 /// over budget, orange when categories are only on pace to overspend. Category
-/// names are tappable links to their cards.
-class BudgetInsightBanner extends StatelessWidget {
+/// names are tappable links to their cards. [details] repeats each alert's
+/// numbers underneath, so they stay visible after the pop-ups are dismissed.
+class BudgetInsightBanner extends StatefulWidget {
   const BudgetInsightBanner({
     super.key,
     required this.message,
     this.overCategories = const [],
     this.atRiskCategories = const [],
+    this.details = const [],
     this.onCategoryTap,
   });
+
+  /// Flagged categories whose used %, amounts and pace are listed below.
+  final List<BudgetCategoryProgress> details;
 
   /// Fallback / status when there are no tappable categories.
   final String message;
@@ -23,6 +31,18 @@ class BudgetInsightBanner extends StatelessWidget {
 
   /// Called with the category title when a name is tapped.
   final ValueChanged<String>? onCategoryTap;
+
+  @override
+  State<BudgetInsightBanner> createState() => _BudgetInsightBannerState();
+}
+
+class _BudgetInsightBannerState extends State<BudgetInsightBanner> {
+  bool _expanded = false;
+
+  List<String> get overCategories => widget.overCategories;
+  List<String> get atRiskCategories => widget.atRiskCategories;
+  List<BudgetCategoryProgress> get details => widget.details;
+  ValueChanged<String>? get onCategoryTap => widget.onCategoryTap;
 
   @override
   Widget build(BuildContext context) {
@@ -51,7 +71,7 @@ class BudgetInsightBanner extends StatelessWidget {
           Expanded(
             child: !hasCategories
                 ? Text(
-                    message,
+                    widget.message,
                     style: const TextStyle(fontWeight: FontWeight.w500),
                   )
                 : Column(
@@ -72,8 +92,91 @@ class BudgetInsightBanner extends StatelessWidget {
                           atRiskCategories,
                           Colors.orange.shade800,
                         ),
+                      if (details.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        _detailsToggle(),
+                        // Drops down the same numbers the pop-up alerts show.
+                        AnimatedSize(
+                          duration: const Duration(milliseconds: 220),
+                          curve: Curves.easeOut,
+                          alignment: Alignment.topLeft,
+                          child: !_expanded
+                              ? const SizedBox(width: double.infinity)
+                              // Side by side, wrapping onto a new row when
+                              // the screen is too narrow.
+                              : Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Wrap(
+                                    spacing: 32,
+                                    runSpacing: 10,
+                                    children: [
+                                      for (final item in details) _detail(item),
+                                    ],
+                                  ),
+                                ),
+                        ),
+                      ],
                     ],
                   ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _detailsToggle() {
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: () => setState(() => _expanded = !_expanded),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _expanded ? 'Hide details' : 'Show details',
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Colors.black54,
+              ),
+            ),
+            AnimatedRotation(
+              turns: _expanded ? 0.5 : 0,
+              duration: const Duration(milliseconds: 220),
+              child: const Icon(
+                Icons.expand_more,
+                size: 18,
+                color: Colors.black54,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// One category's numbers, matching what its pop-up alert says.
+  Widget _detail(BudgetCategoryProgress item) {
+    final color = item.isOverBudget
+        ? Colors.red.shade800
+        : Colors.orange.shade900;
+    return GestureDetector(
+      onTap: onCategoryTap == null ? null : () => onCategoryTap!(item.title),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            item.title,
+            style: TextStyle(fontWeight: FontWeight.w700, color: color),
+          ),
+          Text(
+            budgetAlertUsageText(item),
+            style: TextStyle(fontSize: 12, color: color),
+          ),
+          Text(
+            budgetAlertPaceText(item),
+            style: TextStyle(fontSize: 12, color: color),
           ),
         ],
       ),

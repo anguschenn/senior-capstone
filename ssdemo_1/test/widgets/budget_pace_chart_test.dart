@@ -57,11 +57,15 @@ void main() {
         ),
       ),
     );
-    final chart = find.descendant(
-      of: find.byType(BudgetPaceChartCard),
-      matching: find.byType(CustomPaint),
+    // The legend swatches are CustomPaints too, so match the chart's painter.
+    final chart = find.byWidgetPredicate(
+      (w) =>
+          w is CustomPaint &&
+          w.painter.runtimeType.toString() == '_BudgetPaceChartPainter',
     );
-    expect(tester.getSize(chart.last).height, 200);
+    expect(tester.getSize(chart).height, 200);
+    expect(find.text('Even pace to budget'), findsOneWidget);
+    expect(find.text('Your spending so far'), findsOneWidget);
     expect(find.textContaining('over pace'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

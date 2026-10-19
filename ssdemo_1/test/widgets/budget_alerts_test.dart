@@ -85,6 +85,28 @@ void main() {
     expect(tapped, ['Entertainment']);
   });
 
+  testWidgets('banner drops down each alert\'s numbers', (tester) async {
+    final tapped = <String>[];
+    final food = _budget('Food', 789.33, 1000);
+    await tester.pumpWidget(
+      _host(
+        BudgetInsightBanner(
+          message: 'All good',
+          atRiskCategories: const ['Food'],
+          details: [food],
+          onCategoryTap: tapped.add,
+        ),
+      ),
+    );
+    expect(find.textContaining('79% used'), findsNothing);
+    await tester.tap(find.text('Show details'));
+    await tester.pumpAndSettle();
+    expect(find.text('79% used · \$789.33 of \$1000.00'), findsOneWidget);
+    expect(find.text(budgetAlertPaceText(food)), findsOneWidget);
+    await tester.tap(find.text('79% used · \$789.33 of \$1000.00'));
+    expect(tapped, ['Food']);
+  });
+
   testWidgets('banner falls back to the message with nothing flagged', (
     tester,
   ) async {
