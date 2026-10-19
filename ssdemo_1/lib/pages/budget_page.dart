@@ -554,9 +554,19 @@ class _BudgetPageState extends State<BudgetPage> {
 
   // Short status sentence shown in the warning card near the top of the page.
   String _budgetInsight() {
+    final unbudgeted = [
+      for (final item in activeBudgetProgress)
+        if (item.isUnbudgetedSpend) item.title,
+    ];
+    final unbudgetedNote = unbudgeted.isEmpty
+        ? ''
+        : ' No budget set for ${unbudgeted.join(', ')}.';
     final lead = _topCategory();
-    if (lead == null) return 'Budget Insight: no spending data yet.';
-    if (lead.spent <= 0 || lead.ratio <= 0) {
+    if (lead == null || lead.spent <= 0 || lead.ratio <= 0) {
+      if (unbudgeted.isNotEmpty) {
+        return 'Budget Insight: spending in categories without a budget.'
+            '$unbudgetedNote';
+      }
       return 'Budget Insight: no spending data yet.';
     }
 
@@ -589,6 +599,10 @@ class _BudgetPageState extends State<BudgetPage> {
     }
     if (lead.ratio >= 0.8) {
       return 'Budget Insight: ${lead.title} is close to limit for selected month.';
+    }
+    if (unbudgeted.isNotEmpty) {
+      return 'Budget Insight: budgeted categories are within limits.'
+          '$unbudgetedNote';
     }
     return 'Budget Insight: all categories are currently within limits.';
   }

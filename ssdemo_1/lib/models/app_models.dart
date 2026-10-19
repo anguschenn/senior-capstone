@@ -359,6 +359,12 @@ class BudgetCategoryProgress {
 
   bool get isOverBudget => limit > 0 && spent > limit;
 
+  /// A limit of 0 means the user hasn't set a budget for this category yet.
+  bool get hasLimit => limit > 0 && limit.isFinite;
+
+  /// Money spent in a category that has no budget to measure it against.
+  bool get isUnbudgetedSpend => !hasLimit && spent > 0;
+
   /// Days elapsed in the current calendar month (at least 1).
   static int get daysElapsedThisMonth {
     final now = DateTime.now();
