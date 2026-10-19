@@ -199,6 +199,9 @@ class IntentRouter:
             return True
         if "what did i spend" in text or "what was spent" in text:
             return True
+        # "what have I spent", "what may/might/could I have spent" are the same ask.
+        if re.search(r"\bwhat\s+(have|may|might|could)\s+i\s+(have\s+)?spent\b", text):
+            return True
         if "total spending" in text or "total expenses" in text:
             return True
         if re.search(r"\b(spent|spending|expenses?)\s+(this|last)\s+(month|year|week)\b", text):
