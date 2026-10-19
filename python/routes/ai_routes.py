@@ -2,12 +2,23 @@
 
 from flask import Blueprint, current_app, jsonify, request
 
+from ai.providers import current_llm_info, use_provider
 from ai.response_utils import confidence_label, short_copy
 from ai.validators import clamp_str
 from api.http_helpers import log_route_error
 from auth import UserAuthError, is_rate_limited_for_ai, require_supabase_user_id
 
 ai_bp = Blueprint("ai", __name__)
+
+
+_MODEL_SOURCES = {"local": "ollama", "online": "openrouter"}
+
+
+def _switched_provider(body):
+    """The provider the app's model switch asks for, when the switch is turned on."""
+    if not current_app.config.get("model_switch_enabled") or not isinstance(body, dict):
+        return ""
+    return _MODEL_SOURCES.get(str(body.get("model_source") or "").lower(), "")
 
 
 def _record_question(body, response):
@@ -24,7 +35,13 @@ def ai_chat():
         user_id = require_supabase_user_id()
         if is_rate_limited_for_ai(user_id):
             return jsonify({"error": "Rate limit exceeded"}), 429
-        response = current_app.config["chat_service"].handle_chat(body, user_id=user_id)
+        provider = _switched_provider(body)
+        if provider:
+            with use_provider(provider):
+                response = current_app.config["chat_service"].handle_chat(body, user_id=user_id)
+                response["model_used"] = current_llm_info()
+        else:
+            response = current_app.config["chat_service"].handle_chat(body, user_id=user_id)
         _record_question(body, response)
         return jsonify(response)
     except UserAuthError as error:

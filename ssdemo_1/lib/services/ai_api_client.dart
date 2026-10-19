@@ -25,6 +25,7 @@ class AiApiClient {
     required String prompt,
     required List<AiChatMessage> history,
     required Map<String, dynamic> spendingSummary,
+    String? modelSource,
   }) async {
     final parsed = await _postJson(
       uri: uri,
@@ -34,6 +35,9 @@ class AiApiClient {
         'prompt': prompt,
         'history': history.map((item) => item.toJson()).toList(),
         'spending_summary': spendingSummary,
+        // "local" or "online"; the backend only honours it when
+        // AI_MODEL_SWITCH_ENABLED=1 (local testing).
+        'model_source': ?modelSource,
       },
     );
     return AiChatResponse.fromJson(parsed);

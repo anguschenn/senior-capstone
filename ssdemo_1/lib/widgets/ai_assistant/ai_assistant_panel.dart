@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -50,6 +51,10 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
   static const Duration _followUpWindow = Duration(minutes: 20);
   static const _client = AiApiClient();
   static const _store = ChatHistoryStore.instance;
+
+  /// Debug builds only: which model answers, "local" (Ollama) or "online"
+  /// (OpenRouter). Kept across panel openings while the app runs.
+  static String _modelSource = 'local';
 
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -187,6 +192,7 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
         prompt: prompt,
         history: historyPayload,
         spendingSummary: _activeSummary,
+        modelSource: kDebugMode ? _modelSource : null,
       );
       setState(() {
         _turns[_turns.length - 1] = _ChatTurn(
@@ -320,6 +326,29 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
                     ),
                   ],
                 ),
+                if (kDebugMode) ...[
+                  const SizedBox(height: 12),
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(
+                        value: 'local',
+                        icon: Icon(Icons.computer_outlined),
+                        label: Text('Local model'),
+                      ),
+                      ButtonSegment(
+                        value: 'online',
+                        icon: Icon(Icons.cloud_outlined),
+                        label: Text('Online model'),
+                      ),
+                    ],
+                    selected: {_modelSource},
+                    showSelectedIcon: false,
+                    onSelectionChanged: _sending
+                        ? null
+                        : (selection) =>
+                              setState(() => _modelSource = selection.first),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 Text(
                   'Choose an account scope first, then ask your question.',

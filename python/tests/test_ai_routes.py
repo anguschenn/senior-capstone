@@ -4,6 +4,7 @@ from unittest import mock
 from route_helpers import VALID_TOKEN, app_client, headers
 
 import app_factory
+from ai import providers
 
 
 class SuggestCategoryTests(unittest.TestCase):
@@ -42,6 +43,41 @@ class ChatQuestionLogTests(unittest.TestCase):
         self.assertEqual(len(recorded), 1)
         self.assertEqual(recorded[0][0], "hello")
         self.assertEqual(recorded[0][1]["reply"], response.get_json()["reply"])
+
+
+class ModelSwitchTests(unittest.TestCase):
+    def _ask(self, switch_enabled, model_source):
+        seen = []
+
+        def provider(prompt, generation_config=None):
+            seen.append(providers.current_llm_info()["provider"])
+            return "Cook at home more often."
+
+        with app_client(generate_reply=provider) as client:
+            client.application.config["model_switch_enabled"] = switch_enabled
+            response = client.post(
+                "/api/ai/chat",
+                json={
+                    "prompt": "How can I spend less on food?",
+                    "history": [],
+                    "spending_summary": {},
+                    "model_source": model_source,
+                },
+                headers=headers(VALID_TOKEN),
+            )
+        return response.get_json(), seen
+
+    def test_switch_picks_the_provider_per_request(self):
+        for source, provider in (("local", "ollama"), ("online", "openrouter")):
+            with self.subTest(source=source):
+                body, seen = self._ask(True, source)
+                self.assertTrue(seen)
+                self.assertEqual(set(seen), {provider})
+                self.assertEqual(body["model_used"]["provider"], provider)
+
+    def test_switch_is_ignored_unless_enabled(self):
+        body, _ = self._ask(False, "online")
+        self.assertNotIn("model_used", body)
 
 
 if __name__ == "__main__":
