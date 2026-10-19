@@ -2,7 +2,10 @@ import json
 import re
 from datetime import date as date_cls
 
+from .parsers import extract_json_object
+from .query_parser_v2 import asks_transaction_list
 from .time_parsing import extract_period
+from .typo_fix import fix_typos
 
 
 class IntentRouter:
@@ -56,7 +59,27 @@ class IntentRouter:
     EXPLAIN_KEYWORDS = ("why", "explain", "reason", "because")
     COMPARE_KEYWORDS = ("compare", "difference", "vs", "versus")
     WHAT_IF_KEYWORDS = ("what if", "if i", "scenario", "simulate")
-    PLANNING_KEYWORDS = ("should", "save", "plan", "goal", "roadmap", "improve")
+    PLANNING_KEYWORDS = (
+        "should",
+        "save",
+        "plan",
+        "goal",
+        "roadmap",
+        "improve",
+        "how can i",
+        "how do i",
+        "tips",
+        "ways to",
+        "spend less",
+        "help me",
+        "cut costs",
+        "cut back",
+        "cut down",
+        "where can i",
+        "advice",
+        "any tips",
+        "suggestions",
+    )
     GENERAL_ADVISORY_KEYWORDS = ("advice", "how am i doing", "help me")
     TOP_CATEGORY_KEYWORDS = (
         "top category",
@@ -91,6 +114,13 @@ class IntentRouter:
         "improve",
         "plan",
         "what if",
+        "cut",
+        "how can i",
+        "how do i",
+        "tips",
+        "ways to",
+        "spend less",
+        "help me",
     )
 
     def __init__(self, classify_with_llm=None):
@@ -100,7 +130,7 @@ class IntentRouter:
         """Apply lightweight typo/abbreviation normalization for routing only."""
         if not isinstance(text, str):
             return ""
-        normalized = text.lower().strip()
+        normalized = fix_typos(text).strip()
         replacements = [
             (r"\bspeend\b", "spend"),
             (r"\bspnd\b", "spend"),
@@ -116,6 +146,7 @@ class IntentRouter:
             (r"\bcategry\b", "category"),
             (r"\bcatgeory\b", "category"),
             (r"\blst\b", "last"),
+            (r"\b(mnth|mth)\b", "month"),
             (r"\banalyst\b", "analyze"),
             (r"\banlyze\b", "analyze"),
             (r"\banalyis\b", "analysis"),
@@ -249,6 +280,8 @@ class IntentRouter:
                 "save",
                 "saving",
                 "savings",
+                "cut",
+                "money",
             )
         )
 
@@ -385,6 +418,7 @@ class IntentRouter:
             (
                 any(k in text for k in self.RECENT_TX_KEYWORDS)
                 or "what did i spend on recently" in text
+                or asks_transaction_list(text)
             )
             and not has_advice_or_reason
             and not has_multiple_clauses
@@ -510,7 +544,9 @@ class IntentRouter:
                 "responseMimeType": "application/json",
             },
         )
-        return json.loads(raw or "{}")
+        # Models often wrap JSON in prose or code fences; the chat reply path
+        # tolerates that (extract_json_object), so the classifier should too.
+        return extract_json_object(raw or "")
 
     def _task_type_to_intent(self, task_type, entities):
         metric = (entities or {}).get("metric", "unknown")
@@ -656,6 +692,22 @@ class IntentRouter:
             },
             "clarification_question": (parsed.get("clarification_question") or "").strip()[:180],
             "response_mode": parsed.get("response_mode", "llm"),
+        }
+
+    def classify_without_llm(self, message):
+        """Rules only, for callers that already have a deterministic answer."""
+        rule_result = self._rule_classify(message)
+        if rule_result is not None:
+            return rule_result
+        return {
+            "intent": "general",
+            "intent_confidence": 0.0,
+            "intent_candidates": ["general"],
+            "intent_source": "rule",
+            "needs_clarification": False,
+            "entities": self._base_entities(),
+            "clarification_question": "",
+            "response_mode": "",
         }
 
     def classify(self, message, history=None):

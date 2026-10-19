@@ -10,6 +10,13 @@ from auth import UserAuthError, is_rate_limited_for_ai, require_supabase_user_id
 ai_bp = Blueprint("ai", __name__)
 
 
+def _record_question(body, response):
+    """Keep the masked wording of the question and whether chat answered it."""
+    record = current_app.config.get("question_log")
+    if record and isinstance(body, dict):
+        record(body.get("prompt") or body.get("message") or "", response)
+
+
 @ai_bp.route("/api/ai/chat", methods=["POST"])
 def ai_chat():
     body = request.get_json(silent=True) or {}
@@ -18,6 +25,7 @@ def ai_chat():
         if is_rate_limited_for_ai(user_id):
             return jsonify({"error": "Rate limit exceeded"}), 429
         response = current_app.config["chat_service"].handle_chat(body, user_id=user_id)
+        _record_question(body, response)
         return jsonify(response)
     except UserAuthError as error:
         return jsonify({"error": str(error)}), 401
@@ -25,6 +33,7 @@ def ai_chat():
         return jsonify({"error": str(error)}), 400
     except Exception as error:
         log_route_error("/api/ai/chat", error)
+        _record_question(body, {"context_source": "rule_fallback"})
         return jsonify(
             {
                 "reply": "I cannot process this request right now. Please try again.",

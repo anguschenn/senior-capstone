@@ -597,6 +597,54 @@ class TestChatServiceContract(unittest.TestCase):
         )
         self.assertTrue(any("Food And Drink Fast Food" in action for action in response["actions"]))
 
+    def test_savings_action_matches_its_percent_label(self):
+        service = self._service_with_reply("{}")
+        summary = {"top_expense_categories": [{"category": "Food", "amount": 1000}]}
+        actions = service._enforce_action_quality(["Review spending"], summary, intent="planning")
+        self.assertIn("Cut Food by 15-20% this month to save about $150-$200", actions[-1])
+
+    def test_savings_action_targets_the_category_asked_about(self):
+        service = self._service_with_reply("{}")
+        summary = {
+            "top_expense_categories": [
+                {"category": "Food", "amount": 1000},
+                {"category": "Transport", "amount": 300},
+            ]
+        }
+        actions = service._enforce_action_quality(
+            ["Carpool next week"], summary, intent="planning", message="tips to cut my transport"
+        )
+        self.assertIn("Carpool next week", actions)
+        actions = service._enforce_action_quality(
+            ["Use public transit"], summary, intent="planning", message="tips to cut my transport"
+        )
+        self.assertTrue(all("Food" not in a for a in actions))
+
+    def test_savings_action_not_added_to_general_answers(self):
+        service = self._service_with_reply("{}")
+        summary = {"top_expense_categories": [{"category": "Food", "amount": 1000}]}
+        actions = service._enforce_action_quality(
+            ["Check a weather site for tomorrow's forecast"], summary, intent="general"
+        )
+        self.assertEqual(actions, ["Check a weather site for tomorrow's forecast"])
+
+    def test_model_amounts_not_in_the_data_are_dropped(self):
+        service = self._service_with_reply(
+            '{"reply":"Food was $516 this month. Cutting $100 each could save you $208.",'
+            '"insights":["Food is $516"],"actions":["Save $500 next week","Cook at home"]}'
+        )
+        allowed = service._allowed_amounts("Food $516; Transport $310; 2026-10-18", "")
+        self.assertFalse(service._amounts_grounded("save $18", allowed))
+        self.assertEqual(
+            service._drop_ungrounded_sentences(
+                "Food was $516 this month. Cutting $100 each could save you $208.", allowed
+            ),
+            "Food was $516 this month.",
+        )
+        self.assertTrue(service._amounts_grounded("Food is $516", allowed))
+        self.assertFalse(service._amounts_grounded("Save $500 next week", allowed))
+        self.assertTrue(service._amounts_grounded("Cook at home", allowed))
+
     def test_chat_fallback_contract_on_exception(self):
         def generate_reply(_prompt, generation_config=None):
             _ = generation_config
@@ -1471,6 +1519,22 @@ class TestIntentRouterFallback(unittest.TestCase):
         result = router.classify("financial overview details", history=[])
         self.assertEqual(result["intent_source"], "llm")
         self.assertEqual(result["response_mode"], "clarification")
+
+    def test_llm_intent_json_wrapped_in_code_fence_is_parsed(self):
+        def classifier(_prompt, generation_config=None):
+            _ = generation_config
+            return (
+                "Here is the classification:\n```json\n"
+                '{"intent":"amount_lookup","task_type":"factual_query",'
+                '"entities":{"metric":"expenses","period_type":"month","period_key":"2026-03"},'
+                '"needs_clarification":false,"clarification_question":"","response_mode":"hybrid"}'
+                "\n```"
+            )
+
+        router = IntentRouter(classify_with_llm=classifier)
+        result = router.classify("monthly status details", history=[])
+        self.assertEqual(result["intent_source"], "llm")
+        self.assertEqual(result["intent"], "amount_lookup")
 
 
 if __name__ == "__main__":

@@ -147,6 +147,7 @@ class AiSummaryService {
     required DashboardStats stats,
     required String selectedAccountId,
     required String scopeLabel,
+    String accountType = '',
     Map<String, dynamic>? precomputedSummary,
     Map<String, String> reviewedCategoryByTxId = const <String, String>{},
     DateTime? focusMonth,
@@ -154,9 +155,16 @@ class AiSummaryService {
     final now = DateTime.now();
     final focus = focusMonth ?? now;
     final anchor = DateTime(focus.year, focus.month, 1);
-    final cutoff30d = anchor.subtract(const Duration(days: 30));
-    final cutoff7d = anchor.subtract(const Duration(days: 7));
-    final cutoff90d = anchor.subtract(const Duration(days: 90));
+    // Anchored windows are the N days ending with the selected month (today,
+    // for the current month). Without an end they ran from N days before the
+    // month started to now, so "30 days" in October held all of Sep + Oct.
+    final nextMonthStart = DateTime(focus.year, focus.month + 1, 1);
+    final anchorEnd = now.isBefore(nextMonthStart) ? now : nextMonthStart;
+    final cutoff30d = anchorEnd.subtract(const Duration(days: 30));
+    final cutoff7d = anchorEnd.subtract(const Duration(days: 7));
+    final cutoff90d = anchorEnd.subtract(const Duration(days: 90));
+    bool inAnchorWindow(DateTime date, DateTime start) =>
+        !date.isBefore(start) && date.isBefore(anchorEnd);
     final rollingCutoff30d = now.subtract(const Duration(days: 30));
     final rollingCutoff7d = now.subtract(const Duration(days: 7));
     final rollingCutoff90d = now.subtract(const Duration(days: 90));
@@ -239,19 +247,19 @@ class AiSummaryService {
       dayBucket['tx_count'] = (dayBucket['tx_count'] as int) + 1;
       yearlyBucket['tx_count'] = (yearlyBucket['tx_count'] as int) + 1;
 
-      if (!tx.date.isBefore(cutoff30d)) {
+      if (inAnchorWindow(tx.date, cutoff30d)) {
         txCount30d += 1;
       }
       if (!tx.date.isBefore(rollingCutoff30d)) {
         txCount30dRolling += 1;
       }
-      if (!tx.date.isBefore(cutoff7d)) {
+      if (inAnchorWindow(tx.date, cutoff7d)) {
         txCount7d += 1;
       }
       if (!tx.date.isBefore(rollingCutoff7d)) {
         txCount7dRolling += 1;
       }
-      if (!tx.date.isBefore(cutoff90d)) {
+      if (inAnchorWindow(tx.date, cutoff90d)) {
         txCount90d += 1;
       }
       if (!tx.date.isBefore(rollingCutoff90d)) {
@@ -266,19 +274,19 @@ class AiSummaryService {
         monthBucket['income'] = (monthBucket['income'] as double) + income;
         dayBucket['income'] = (dayBucket['income'] as double) + income;
         yearlyBucket['income'] = (yearlyBucket['income'] as double) + income;
-        if (!tx.date.isBefore(cutoff30d)) {
+        if (inAnchorWindow(tx.date, cutoff30d)) {
           income30d += income;
         }
         if (!tx.date.isBefore(rollingCutoff30d)) {
           income30dRolling += income;
         }
-        if (!tx.date.isBefore(cutoff7d)) {
+        if (inAnchorWindow(tx.date, cutoff7d)) {
           income7d += income;
         }
         if (!tx.date.isBefore(rollingCutoff7d)) {
           income7dRolling += income;
         }
-        if (!tx.date.isBefore(cutoff90d)) {
+        if (inAnchorWindow(tx.date, cutoff90d)) {
           income90d += income;
         }
         if (!tx.date.isBefore(rollingCutoff90d)) {
@@ -316,7 +324,7 @@ class AiSummaryService {
         yearlyBucket['expenses'] =
             (yearlyBucket['expenses'] as double) + expense;
 
-        if (!tx.date.isBefore(cutoff30d)) {
+        if (inAnchorWindow(tx.date, cutoff30d)) {
           expenses30d += expense;
           expenseTxCount30d += 1;
         }
@@ -324,13 +332,13 @@ class AiSummaryService {
           expenses30dRolling += expense;
           expenseTxCount30dRolling += 1;
         }
-        if (!tx.date.isBefore(cutoff7d)) {
+        if (inAnchorWindow(tx.date, cutoff7d)) {
           expenses7d += expense;
         }
         if (!tx.date.isBefore(rollingCutoff7d)) {
           expenses7dRolling += expense;
         }
-        if (!tx.date.isBefore(cutoff90d)) {
+        if (inAnchorWindow(tx.date, cutoff90d)) {
           expenses90d += expense;
         }
         if (!tx.date.isBefore(rollingCutoff90d)) {
@@ -356,7 +364,7 @@ class AiSummaryService {
           monthCategoryBucket[effectiveCategory] =
               (monthCategoryBucket[effectiveCategory] ?? 0) + expense;
 
-          if (!tx.date.isBefore(cutoff30d)) {
+          if (inAnchorWindow(tx.date, cutoff30d)) {
             categoryTotals30d[effectiveCategory] =
                 (categoryTotals30d[effectiveCategory] ?? 0) + expense;
           }
@@ -374,7 +382,7 @@ class AiSummaryService {
         if (byDate != 0) return byDate;
         return b.id.compareTo(a.id);
       });
-    for (final tx in sortedRecent.take(3)) {
+    for (final tx in sortedRecent.take(5)) {
       final effectiveCategory = effectiveCategoryFor(tx);
       recent.add({
         'id': tx.id,
@@ -430,6 +438,10 @@ class AiSummaryService {
         'top_category': top == null
             ? null
             : {'name': top.key, 'amount': top.value},
+        // Per-category spend for the month, so chat can answer "food in October".
+        'categories': {
+          for (final entry in ranked.take(12)) entry.key: entry.value,
+        },
       };
     }
 
@@ -617,6 +629,10 @@ class AiSummaryService {
           ? 'all_accounts'
           : 'single_account',
       'scope_label': scopeLabel,
+      // Plaid account type of a single selected account ("credit",
+      // "depository"); empty for all accounts. Money into a credit card is
+      // payments and refunds, so the chat must not call it income.
+      'account_type': accountType,
       'data_coverage': {
         'transaction_count_total': transactions.length,
         'range_start': earliestTxDate == null ? null : _dateKey(earliestTxDate),

@@ -42,6 +42,7 @@ def app_client(generate_reply=None):
         auth._rate_buckets.clear()
         app = create_app()
         app.testing = True
+        app.config["question_log"] = None  # never write to the real database from tests
         yield app.test_client()
         auth._rate_buckets.clear()
 

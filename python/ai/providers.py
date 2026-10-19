@@ -1,5 +1,6 @@
 import json
 import time
+import urllib.error
 import urllib.request
 from urllib.error import HTTPError
 
@@ -30,20 +31,7 @@ def _provider_model():
     return OPENROUTER_MODEL if provider == "openrouter" else OLLAMA_MODEL
 
 
-def _generate_ollama_reply(prompt, generation_config=None):
-    endpoint = f"{OLLAMA_HOST.rstrip('/')}/api/generate"
-    body = {
-        "model": OLLAMA_MODEL,
-        "prompt": prompt,
-        "stream": False,
-    }
-    if isinstance(generation_config, dict):
-        if "temperature" in generation_config:
-            body["temperature"] = float(generation_config.get("temperature") or 0.0)
-        max_tokens = generation_config.get("maxOutputTokens") or generation_config.get("max_tokens")
-        if max_tokens:
-            body["num_predict"] = int(max_tokens)
-
+def _post_ollama(endpoint, body):
     req = urllib.request.Request(
         endpoint,
         data=json.dumps(body).encode("utf-8"),
@@ -51,8 +39,42 @@ def _generate_ollama_reply(prompt, generation_config=None):
         method="POST",
     )
     with urllib.request.urlopen(req, timeout=_DEFAULT_TIMEOUT_SECONDS) as response:
-        raw = response.read().decode("utf-8")
-        parsed = json.loads(raw)
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _generate_ollama_reply(prompt, generation_config=None):
+    endpoint = f"{OLLAMA_HOST.rstrip('/')}/api/generate"
+    body = {
+        "model": OLLAMA_MODEL,
+        "prompt": prompt,
+        "stream": False,
+        # Thinking models (qwen3.5) otherwise reason for about a minute before a one-line
+        # answer; models without thinking ignore this.
+        "think": False,
+    }
+    # Ollama reads sampling settings only from "options"; top-level temperature and
+    # num_predict are ignored, which made the same question route differently each time.
+    options = {}
+    if isinstance(generation_config, dict):
+        if "temperature" in generation_config:
+            options["temperature"] = float(generation_config.get("temperature") or 0.0)
+        max_tokens = generation_config.get("maxOutputTokens") or generation_config.get("max_tokens")
+        if max_tokens:
+            options["num_predict"] = int(max_tokens)
+        if generation_config.get("responseMimeType") == "application/json":
+            body["format"] = "json"
+    if options:
+        body["options"] = options
+
+    try:
+        parsed = _post_ollama(endpoint, body)
+    except urllib.error.HTTPError as exc:
+        if exc.code != 501 or "format" not in body:
+            raise
+        # Some models (qwen3.5 on Ollama's MLX engine) can't do structured output; the
+        # prompt still asks for JSON and the callers parse it leniently.
+        body.pop("format")
+        parsed = _post_ollama(endpoint, body)
 
     text = (parsed or {}).get("response") or ""
     if not isinstance(text, str) or not text.strip():

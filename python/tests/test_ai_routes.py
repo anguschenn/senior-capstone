@@ -28,5 +28,21 @@ class SuggestCategoryTests(unittest.TestCase):
         self.assertIn("Description: STARBUCKS #123", prompt)
 
 
+class ChatQuestionLogTests(unittest.TestCase):
+    def test_chat_records_the_question_and_response(self):
+        recorded = []
+        with app_client() as client:
+            client.application.config["question_log"] = lambda p, r: recorded.append((p, r))
+            response = client.post(
+                "/api/ai/chat",
+                json={"prompt": "hello", "history": [], "spending_summary": {}},
+                headers=headers(VALID_TOKEN),
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(recorded), 1)
+        self.assertEqual(recorded[0][0], "hello")
+        self.assertEqual(recorded[0][1]["reply"], response.get_json()["reply"])
+
+
 if __name__ == "__main__":
     unittest.main()

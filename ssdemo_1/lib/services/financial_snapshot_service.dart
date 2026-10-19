@@ -96,11 +96,19 @@ class FinancialSnapshotService {
       netThisMonth: visibleIncome - visibleExpenses,
     );
 
+    final accountTypes = targetAccountId == kAllAccountsId
+        ? const <String>{}
+        : visibleTransactions
+              .map((tx) => tx.accountType.toLowerCase().trim())
+              .where((type) => type.isNotEmpty)
+              .toSet();
+
     final spendingSummary = AiSummaryService.instance.build(
       transactions: visibleTransactions,
       budgetProgress: visibleBudgetProgress,
       stats: stats,
       selectedAccountId: targetAccountId,
+      accountType: accountTypes.length == 1 ? accountTypes.first : '',
       precomputedSummary: precomputedSummary,
       reviewedCategoryByTxId: controller.reviewedCategoryByTxId,
       scopeLabel: targetAccountId == kAllAccountsId

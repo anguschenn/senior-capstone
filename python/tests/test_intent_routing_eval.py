@@ -61,6 +61,10 @@ class TestIntentRoutingEval(unittest.TestCase):
             ("What is my top category?", "top_category_lookup", False),
             ("What category did I spend most on last month?", "top_category_lookup", False),
             ("List my latest transactions", "recent_transactions", False),
+            ("list my last 5 transactions this month", "recent_transactions", False),
+            ("show my transactions in 2026-10", "recent_transactions", False),
+            ("How can I cut my food spending this month?", "planning", False),
+            ("Any tips to reduce my spending this month?", "planning", False),
             # mixed intent should avoid deterministic misroute
             ("Top category this month and how do I reduce it?", "general", True),
             ("Show latest transactions and give optimization advice", "general", True),
@@ -91,7 +95,8 @@ class TestIntentRoutingEval(unittest.TestCase):
             ("how much did i spend 2026-05", "amount_lookup", False),
             ("last 30 days spending", "amount_lookup", False),
             ("2026-05 total?", "general", True),
-            ("need advice cut costs", "general", True),
+            ("need advice cut costs", "planning", False),
+            ("what should I cut first?", "planning", False),
             ("last 365 days spend", "amount_lookup", False),
             ("last -2 days spend", "general", True),
         ]
