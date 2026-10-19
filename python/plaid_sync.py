@@ -196,15 +196,22 @@ def _sync_transactions_unlocked(user_id: str, plaid_item_id: str, plaid_access_t
         supabase.table("transactions").upsert(rows, on_conflict="plaid_transaction_id").execute()
 
     for transaction in modified:
+        # A "modified" entry is the full current transaction; Plaid can correct the date,
+        # name or merchant as well as the amount, so refresh all of them.
         pfc = transaction.get("personal_finance_category") or {}
         supabase.table("transactions").update(
             {
                 "amount": transaction.get("amount"),
+                "date": str(transaction.get("date")),
+                "name": transaction.get("name"),
+                "merchant_name": transaction.get("merchant_name"),
                 "pending": transaction.get("pending"),
                 "pfc_primary": pfc.get("primary"),
                 "pfc_detailed": pfc.get("detailed"),
             }
-        ).eq("plaid_transaction_id", transaction.get("transaction_id")).execute()
+        ).eq("plaid_transaction_id", transaction.get("transaction_id")).eq(
+            "user_id", user_id
+        ).execute()
 
     for transaction in removed:
         supabase.table("transactions").delete().eq(
