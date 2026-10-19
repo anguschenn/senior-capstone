@@ -14,7 +14,6 @@ from .response_utils import describe_plaid_amount
 from .response_validator_v2 import validate_v2_response
 from .schemas import build_chat_response
 from .time_parsing import (
-    MONTH_NAME_TO_NUM,
     extract_month_range_keys,
     extract_specific_date_key,
     extract_specific_month_key,
@@ -554,7 +553,7 @@ class ChatService:
         if re.search(r"\bspend(ing)?\b", text) and (
             re.search(r"\b20\d{2}-\d{2}\b", text)
             or re.search(r"\b(20\d{2})\b", text)
-            or any(name in text for name in MONTH_NAME_TO_NUM)
+            or month_mentions(text)
         ):
             return True
         return False
@@ -837,7 +836,7 @@ class ChatService:
             return "rolling_30d"
         if "this year" in text or "year" in text:
             return "annual_year"
-        if any(name in text for name in MONTH_NAME_TO_NUM):
+        if month_mentions(text):
             return "annual_year"
         if re.search(r"\b20\d{2}-\d{2}\b", text):
             return "annual_year"
