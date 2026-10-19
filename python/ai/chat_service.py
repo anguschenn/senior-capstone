@@ -10,6 +10,7 @@ from .parsers import extract_json_object
 from .query_executors_v2 import execute_plan_v2
 from .query_parser_v2 import parse_query_v2
 from .query_planner_v2 import build_execution_plan_v2
+from .response_utils import describe_plaid_amount
 from .response_validator_v2 import validate_v2_response
 from .schemas import build_chat_response
 from .time_parsing import (
@@ -61,7 +62,7 @@ class ChatService:
         )
         recent_text = (
             ", ".join(
-                f"{t.get('date')} {t.get('name')} ${float(t.get('amount', 0)):.0f}"
+                f"{t.get('date')} {t.get('name')} {describe_plaid_amount(t.get('amount'))}"
                 for t in recent[:5]
             )
             or "none"
@@ -1093,12 +1094,7 @@ class ChatService:
         if not rows:
             return ""
 
-        def _fmt_amount(value):
-            abs_value = abs(float(value or 0))
-            sign = "-" if value < 0 else "+"
-            return f"{sign}${abs_value:.0f}"
-
-        text = "; ".join(f"{d} {n} {_fmt_amount(a)}" for d, n, a in rows)
+        text = "; ".join(f"{d} {n} {describe_plaid_amount(a)}" for d, n, a in rows)
         return f"Most recent transactions for {self._scope_label(summary)}: {text}."
 
     def _build_clarification_question(self, intent, query_spec):
