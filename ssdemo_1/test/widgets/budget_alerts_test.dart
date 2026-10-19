@@ -102,9 +102,37 @@ void main() {
     await tester.tap(find.text('Show details'));
     await tester.pumpAndSettle();
     expect(find.text('79% used · \$789.33 of \$1000.00'), findsOneWidget);
-    expect(find.text(budgetAlertPaceText(food)), findsOneWidget);
+    expect(find.text(budgetAlertPaceText(food)!), findsOneWidget);
     await tester.tap(find.text('79% used · \$789.33 of \$1000.00'));
     expect(tapped, ['Food']);
+  });
+
+  test('a finished month has no month-end pace, only over or under', () {
+    final food = _budget('Food', 1349.02, 100).withoutPace();
+    expect(food.isOverBudget, isTrue);
+    expect(food.isBurnRateHigh, isFalse);
+    expect(food.isBurnRateApproaching, isFalse);
+    expect(food.projectedMonthEnd, 1349.02);
+    expect(budgetAlertPaceText(food), isNull);
+    final ok = _budget('Health', 20, 100).withoutPace();
+    expect(ok.isBurnRateHigh || ok.isBurnRateApproaching, isFalse);
+  });
+
+  testWidgets('a finished month\'s alert leaves out the pace line', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _host(
+        BudgetAlertToasts(
+          items: [_budget('Food', 1349.02, 100).withoutPace()],
+          onTap: (_) {},
+          onDismiss: (_) {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Food is over budget'), findsOneWidget);
+    expect(find.textContaining('Pace:'), findsNothing);
   });
 
   testWidgets('banner falls back to the message with nothing flagged', (

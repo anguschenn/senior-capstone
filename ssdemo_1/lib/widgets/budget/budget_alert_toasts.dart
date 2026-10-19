@@ -12,8 +12,10 @@ String budgetAlertUsageText(BudgetCategoryProgress item) {
 }
 
 /// "Pace: ~$1287.85 by month end" — shared by the alerts and the banner.
-String budgetAlertPaceText(BudgetCategoryProgress item) =>
-    'Pace: ~${formatMoney(item.projectedMonthEnd, signed: false)} by month end';
+/// Null for a month that is already over.
+String? budgetAlertPaceText(BudgetCategoryProgress item) => item.paceApplies
+    ? 'Pace: ~${formatMoney(item.projectedMonthEnd, signed: false)} by month end'
+    : null;
 
 /// Stack of small light-red alerts, one per category whose burn rate projects
 /// an overspend. Floats in the page corner; tap one to jump to its budget card,
@@ -135,13 +137,14 @@ class _BudgetAlertToast extends StatelessWidget {
                           color: Colors.red.shade800,
                         ),
                       ),
-                      Text(
-                        pace,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.red.shade800,
+                      if (pace != null)
+                        Text(
+                          pace,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.red.shade800,
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ),
