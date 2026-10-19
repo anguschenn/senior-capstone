@@ -29,6 +29,34 @@ MONTH_NAME_TO_NUM = {
 }
 
 
+_MONTH_NAME_RE = re.compile(
+    r"\b(jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august"
+    r"|sep|sept|september|oct|october|nov|november|dec|december)\b"
+)
+# "may" is also a modal verb ("what may I have spent in june"), so it only counts as the
+# month after a preposition/connector ("in may", "and may", "mid-may") or before a year or
+# day ("may 2026", "may 5th"). Other month names have no such ambiguity.
+_MAY_MONTH_BEFORE_RE = re.compile(
+    r"\b(in|of|during|for|since|until|till|from|to|through|thru|between|before|after"
+    r"|early|late|mid|last|this|next|and|or|vs|versus)[\s-]+$"
+)
+_MAY_MONTH_AFTER_RE = re.compile(r"^\s+(20\d{2}|\d{1,2}(st|nd|rd|th)?)\b")
+
+
+def month_mentions(text):
+    """Return [(position, month_number)] for month names in lowercased text, in order."""
+    mentions = []
+    for match in _MONTH_NAME_RE.finditer(text or ""):
+        name = match.group(1)
+        if name == "may" and not (
+            _MAY_MONTH_BEFORE_RE.search(text[: match.start()])
+            or _MAY_MONTH_AFTER_RE.match(text[match.end() :])
+        ):
+            continue
+        mentions.append((match.start(), MONTH_NAME_TO_NUM[name]))
+    return mentions
+
+
 def previous_month_key(today=None):
     current = today or date_cls.today()
     year = current.year
@@ -63,9 +91,9 @@ def extract_specific_month_key(message, default_year):
     year = int(year_match.group(1)) if year_match else int(default_year or 0)
     if year <= 0:
         return ""
-    for month_name, month_num in MONTH_NAME_TO_NUM.items():
-        if re.search(rf"\b{re.escape(month_name)}\b", text):
-            return f"{year}-{month_num:02d}"
+    month_nums = sorted({num for _, num in month_mentions(text)})
+    if month_nums:
+        return f"{year}-{month_nums[0]:02d}"
     return ""
 
 
@@ -198,14 +226,11 @@ def extract_period(text):
         return ("year", str(date_cls.today().year))
     if re.search(r"\b(last|previous|prior)\s+year\b", text):
         return ("year", previous_year_key())
-    month_name = re.search(
-        r"\b(jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\b",
-        text,
-    )
-    if month_name:
+    mentions = month_mentions(text)
+    if mentions:
         year_key = re.search(r"\b(20\d{2})\b", text)
         year = int(year_key.group(1)) if year_key else date_cls.today().year
-        month = MONTH_NAME_TO_NUM[month_name.group(1)]
+        month = mentions[0][1]
         return ("month", f"{year}-{month:02d}")
     year_key = re.search(r"\b(20\d{2})\b", text)
     if year_key:
