@@ -144,7 +144,9 @@ def create_link_token_update():
     """Create a Link token for update mode to re-authenticate an existing Item."""
     try:
         user_id = require_supabase_user_id()
-        body = request.get_json(silent=True) or {}
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict):
+            body = {}
         item_id = body.get("item_id")
 
         query = supabase.table("plaid_items").select("access_token").eq("user_id", user_id)
@@ -173,6 +175,9 @@ def create_link_token_update():
         return identity_error_response(error, "/api/create_link_token_update")
     except plaid.ApiException as error:
         return plaid_error_response(error)
+    except Exception as error:
+        log_route_error("/api/create_link_token_update unexpected", error)
+        return jsonify({"error": "Failed to create update link token"}), 500
 
 
 @plaid_bp.route("/api/set_access_token", methods=["POST"])

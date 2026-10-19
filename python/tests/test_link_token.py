@@ -94,5 +94,39 @@ class CreateLinkTokenUpdateTests(_PlaidPatches, unittest.TestCase):
         )
 
 
+class CreateLinkTokenUpdateBodyTests(_PlaidPatches, unittest.TestCase):
+    def _fake_db(self):
+        fake_db = mock.MagicMock()
+        query = fake_db.table.return_value.select.return_value.eq.return_value
+        query.limit.return_value.execute.return_value = SimpleNamespace(
+            data=[{"access_token": "access-sandbox-1"}]
+        )
+        return fake_db
+
+    def test_non_object_json_body_is_treated_as_empty(self):
+        for body in ([1], "item-1", 7, None):
+            with self.subTest(body=body):
+                with (
+                    app_client() as client,
+                    mock.patch.object(plaid_routes, "supabase", self._fake_db()),
+                ):
+                    response = client.post(
+                        "/api/create_link_token_update",
+                        json=body,
+                        headers=headers(VALID_TOKEN),
+                    )
+                self.assertEqual(response.status_code, 200)
+
+    def test_unexpected_error_returns_fixed_json_500(self):
+        self.link_token_create.side_effect = RuntimeError(SECRET_DETAIL)
+        with app_client() as client, mock.patch.object(plaid_routes, "supabase", self._fake_db()):
+            response = client.post(
+                "/api/create_link_token_update", json={}, headers=headers(VALID_TOKEN)
+            )
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.get_json(), {"error": "Failed to create update link token"})
+        self.assertNotIn(SECRET_DETAIL, response.get_data(as_text=True))
+
+
 if __name__ == "__main__":
     unittest.main()
