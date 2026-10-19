@@ -109,6 +109,9 @@ def _generate_openrouter_reply(prompt, generation_config=None):
     body = {
         "model": OPENROUTER_MODEL,
         "messages": [{"role": "user", "content": prompt}],
+        # Reasoning models (nemotron) otherwise spend the token budget thinking and
+        # return an empty answer, or put their reasoning in the reply.
+        "reasoning": {"enabled": False},
     }
     if isinstance(generation_config, dict):
         if "temperature" in generation_config:
@@ -140,6 +143,10 @@ def _generate_openrouter_reply(prompt, generation_config=None):
                 parsed = json.loads(raw)
             break
         except HTTPError as error:
+            if error.code == 400 and "reasoning" in body and attempt < _OPENROUTER_MAX_RETRIES:
+                # "Reasoning is mandatory for this endpoint": ask again with it left on
+                body.pop("reasoning")
+                continue
             if error.code == 429 and attempt < _OPENROUTER_MAX_RETRIES:
                 time.sleep(1.5 * (2**attempt))
                 continue

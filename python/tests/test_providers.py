@@ -69,5 +69,37 @@ class OllamaRequestTests(unittest.TestCase):
         self.assertEqual([("format" in body) for body in sent], [True, False])
 
 
+class OpenRouterRequestTests(unittest.TestCase):
+    def _run(self, fail_first_with=None):
+        sent = []
+
+        def fake_urlopen(req, timeout=None):
+            body = json.loads(req.data.decode("utf-8"))
+            sent.append(body)
+            if fail_first_with and len(sent) == 1:
+                raise providers.urllib.error.HTTPError(
+                    req.full_url, fail_first_with, "error", {}, None
+                )
+            return _Response({"choices": [{"message": {"content": "ok"}}]})
+
+        with (
+            mock.patch.object(providers, "OPENROUTER_API_KEY", "test-key"),
+            mock.patch.object(providers.urllib.request, "urlopen", fake_urlopen),
+        ):
+            reply = providers._generate_openrouter_reply("hi")
+        return reply, sent
+
+    def test_reasoning_is_turned_off(self):
+        reply, sent = self._run()
+        self.assertEqual(reply, "ok")
+        self.assertEqual(sent[0]["reasoning"], {"enabled": False})
+
+    def test_retries_with_reasoning_when_a_model_requires_it(self):
+        reply, sent = self._run(fail_first_with=400)
+        self.assertEqual(reply, "ok")
+        self.assertEqual(len(sent), 2)
+        self.assertNotIn("reasoning", sent[1])
+
+
 if __name__ == "__main__":
     unittest.main()
