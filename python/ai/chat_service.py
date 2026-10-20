@@ -232,7 +232,7 @@ class ChatService:
 
     @staticmethod
     def _trend_point(point):
-        """"2026-09 1880", or "2026-10 1017 so far (19 of 31 days, on pace for about 1659)"
+        """ "2026-09 1880", or "2026-10 1017 so far (19 of 31 days, on pace for about 1659)"
         so the model doesn't compare an unfinished month with full ones."""
         month = point.get("month")
         expenses = float(point.get("expenses", 0) or 0)

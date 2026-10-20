@@ -1072,7 +1072,9 @@ def _outside_summary_spec(text, summary, scope):
             # "what share of my budget did I use?" gets the overall usage, and "is my
             # food budget realistic?" weighs each limit against usual spending
             compare_to="realistic"
-            if re.search(r"\b(realistic|reasonable|enough|too (low|high|tight|much|little))\b", text)
+            if re.search(
+                r"\b(realistic|reasonable|enough|too (low|high|tight|much|little))\b", text
+            )
             else "share"
             if re.search(r"\b(portion|share|percent|percentage|how much of)\b", text)
             else "yes_no"

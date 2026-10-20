@@ -3537,7 +3537,7 @@ def _exec_data_pointer(query_spec, summary, scope_label):
 
 
 def _budget_vs_usual(items, asked, month, summary, answer):
-    """"is my food budget realistic?": each limit against the average of the recent full
+    """ "is my food budget realistic?": each limit against the average of the recent full
     months' spending in that category."""
     keys, month_index = _recent_full_months(summary)
     if not keys:
@@ -3551,7 +3551,9 @@ def _budget_vs_usual(items, asked, month, summary, answer):
     lines = []
     for item in chosen:
         values = [
-            float(((month_index.get(k) or {}).get("categories") or {}).get(item["category"], 0) or 0)
+            float(
+                ((month_index.get(k) or {}).get("categories") or {}).get(item["category"], 0) or 0
+            )
             for k in keys
         ]
         usual = sum(values) / len(values)
