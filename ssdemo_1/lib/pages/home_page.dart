@@ -249,19 +249,47 @@ class HomePage extends StatelessWidget {
           Section(
             key: const ValueKey('wallet-subscriptions'),
             onTap: onOpenSubscriptions,
-            child: InfoRow(
-              leading: const _RoundIcon(
-                icon: Icons.autorenew_rounded,
-                color: AppPalette.subscriptions,
-              ),
-              title: 'Upcoming subscriptions',
-              subtitle: subscriptions.isEmpty
-                  ? 'No recurring subscriptions detected yet'
-                  : 'Next: ${subscriptions.first.merchant} · ${shortDate(subscriptions.first.nextChargeDate)}',
-              trailing: Text(
-                '${formatMoney(monthlySubscriptionTotal, signed: false)}/mo',
-                style: TextStyle(color: c.muted, fontSize: 14),
-              ),
+            child: Column(
+              children: [
+                InfoRow(
+                  leading: const _RoundIcon(
+                    icon: Icons.autorenew_rounded,
+                    color: AppPalette.subscriptions,
+                  ),
+                  title: 'Upcoming subscriptions',
+                  subtitle: subscriptions.isEmpty
+                      ? 'No recurring subscriptions detected yet'
+                      : 'Monthly total: ${formatMoney(monthlySubscriptionTotal, signed: false)}',
+                ),
+                // The nearest few charges, as the old dashboard listed them.
+                for (final sub in subscriptions) ...[
+                  Divider(height: 16, thickness: 0.5, color: c.line),
+                  Row(
+                    children: [
+                      const SizedBox(width: 44),
+                      Expanded(
+                        child: Text(
+                          sub.merchant,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 14.5),
+                        ),
+                      ),
+                      Text(
+                        'Renews ${shortDate(sub.nextChargeDate)}',
+                        style: TextStyle(fontSize: 12.5, color: c.muted),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        formatMoney(sub.amount, signed: false),
+                        style: const TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
             ),
           ),
         ],
@@ -313,6 +341,7 @@ class WalletCardStack extends StatelessWidget {
 
   static const double _peek = 44;
   static const double _cardHeight = 172;
+  static const int _maxBehind = 4;
 
   @override
   Widget build(BuildContext context) {
@@ -321,7 +350,12 @@ class WalletCardStack extends StatelessWidget {
     final selected = ids.contains(selectedAccountId)
         ? selectedAccountId
         : kAllAccountsId;
-    final behind = ids.where((id) => id != selected).toList();
+    final others = ids.where((id) => id != selected).toList();
+    // Many accounts would make a very tall stack: show a few, and put the
+    // rest behind a "More accounts" strip that opens a list.
+    final overflow = others.length > _maxBehind;
+    final behind = overflow ? others.take(_maxBehind - 1).toList() : others;
+    final strips = behind.length + (overflow ? 1 : 0);
 
     Color colorFor(String id) {
       if (id == kAllAccountsId) return AppPalette.walletAll;
@@ -452,12 +486,59 @@ class WalletCardStack extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
         child: SizedBox(
-          height: behind.length * _peek + _cardHeight,
+          height: strips * _peek + _cardHeight,
           child: Stack(
             children: [
               for (final (i, id) in behind.indexed)
                 card(id, front: false, top: i * _peek),
-              card(selected, front: true, top: behind.length * _peek),
+              if (overflow)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: behind.length * _peek,
+                  child: GestureDetector(
+                    key: const ValueKey('wallet-more-accounts'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: !enabled
+                        ? null
+                        : () async {
+                            final picked = await showOptionSheet<String>(
+                              context: context,
+                              title: 'Accounts',
+                              values: ids,
+                              labelOf: (id) => id == kAllAccountsId
+                                  ? 'All Accounts'
+                                  : (optionFor(id)?.label ?? id),
+                              selected: selected,
+                            );
+                            if (picked != null) onAccountChanged(picked);
+                          },
+                    child: Container(
+                      height: _cardHeight,
+                      padding: const EdgeInsets.fromLTRB(18, 13, 18, 16),
+                      alignment: Alignment.topLeft,
+                      decoration: BoxDecoration(
+                        color: c.raised,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: c.cardShadow,
+                            blurRadius: 16,
+                            offset: const Offset(0, -6),
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        'More accounts (${others.length - behind.length})',
+                        style: const TextStyle(
+                          fontSize: 15.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              card(selected, front: true, top: strips * _peek),
             ],
           ),
         ),
