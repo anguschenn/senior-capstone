@@ -39,6 +39,28 @@ class TransactionsPage extends StatefulWidget {
 class _TransactionsPageState extends State<TransactionsPage> {
   String query = '';
   ActivityViewMode viewMode = ActivityViewMode.month;
+
+  /// Category filter; empty means all categories.
+  String categoryFilter = '';
+
+  /// Default: newest first, the order the list has always had.
+  ActivitySortKey sortKey = ActivitySortKey.date;
+  bool sortDescending = true;
+
+  /// Sorted by [sortKey] in the chosen direction. Ties keep their incoming
+  /// order (newest first), which a plain List.sort doesn't promise.
+  List<AppTransaction> _sorted(List<AppTransaction> txs) {
+    final indexed = txs.indexed.toList();
+    indexed.sort((a, b) {
+      final byKey = sortKey == ActivitySortKey.date
+          ? a.$2.date.compareTo(b.$2.date)
+          : a.$2.displayAmount.compareTo(b.$2.displayAmount);
+      if (byKey != 0) return sortDescending ? -byKey : byKey;
+      return a.$1.compareTo(b.$1);
+    });
+    return [for (final entry in indexed) entry.$2];
+  }
+
   DateTimeRange? customRange;
 
   List<int> get _yearOptions {
@@ -74,9 +96,19 @@ class _TransactionsPageState extends State<TransactionsPage> {
     return out;
   }
 
+  /// The label on a transaction's category tag; the category filter uses the
+  /// same label, so what the filter matches is exactly what the list shows.
+  String _categoryLabel(AppTransaction tx) => tx.isIncome
+      ? tx.inflowLabel
+      : (widget.reviewedCategoryByTxId[tx.id] ??
+            budgetCategoryFromPfc(
+              pfcDetailed: tx.category,
+              pfcPrimary: tx.primaryCategory,
+            ));
+
   @override
   Widget build(BuildContext context) {
-    // First filter by time range, then apply the text query.
+    // First filter by time range, then by category and the text query.
     final selectedMonth = normalizedMonthOption(widget.selectedMonth);
     final monthSelectionValue = _monthOnlyOptions.any((m) => m == selectedMonth)
         ? selectedMonth
@@ -110,15 +142,33 @@ class _TransactionsPageState extends State<TransactionsPage> {
       return true;
     }).toList();
 
-    final filtered = periodTransactions.where((tx) {
-      if (query.trim().isEmpty) return true;
-      final q = query.toLowerCase();
-      return tx.name.toLowerCase().contains(q) ||
-          tx.category.toLowerCase().contains(q) ||
-          tx.primaryCategory.toLowerCase().contains(q) ||
-          (widget.reviewedCategoryByTxId[tx.id]?.toLowerCase().contains(q) ??
-              false);
-    }).toList();
+    // Categories in the selected range, with counts, for the filter menu. A
+    // chosen category stays listed (at 0) after a range change empties it.
+    final categoryCounts = <String, int>{};
+    for (final tx in periodTransactions) {
+      final label = _categoryLabel(tx);
+      categoryCounts[label] = (categoryCounts[label] ?? 0) + 1;
+    }
+    if (categoryFilter.isNotEmpty) {
+      categoryCounts.putIfAbsent(categoryFilter, () => 0);
+    }
+    final categoryNames = categoryCounts.keys.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+    final filtered = _sorted(
+      periodTransactions.where((tx) {
+        if (categoryFilter.isNotEmpty && _categoryLabel(tx) != categoryFilter) {
+          return false;
+        }
+        if (query.trim().isEmpty) return true;
+        final q = query.toLowerCase();
+        return tx.name.toLowerCase().contains(q) ||
+            tx.category.toLowerCase().contains(q) ||
+            tx.primaryCategory.toLowerCase().contains(q) ||
+            (widget.reviewedCategoryByTxId[tx.id]?.toLowerCase().contains(q) ??
+                false);
+      }).toList(),
+    );
 
     return SafeArea(
       child: Column(
@@ -248,6 +298,63 @@ class _TransactionsPageState extends State<TransactionsPage> {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: LabeledSelectorField<String>(
+                    key: const ValueKey('tx-category-filter'),
+                    label: 'Category',
+                    value: categoryFilter,
+                    options: [
+                      SelectorOption(
+                        value: '',
+                        label: 'All categories (${periodTransactions.length})',
+                      ),
+                      for (final name in categoryNames)
+                        SelectorOption(
+                          value: name,
+                          label: '$name (${categoryCounts[name]})',
+                        ),
+                    ],
+                    onChanged: (value) =>
+                        setState(() => categoryFilter = value),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 2,
+                  child: LabeledSelectorField<ActivitySortKey>(
+                    key: const ValueKey('tx-sort-key'),
+                    label: 'Sort',
+                    value: sortKey,
+                    options: const [
+                      SelectorOption(
+                        value: ActivitySortKey.date,
+                        label: 'Date',
+                      ),
+                      SelectorOption(
+                        value: ActivitySortKey.amount,
+                        label: 'Amount',
+                      ),
+                    ],
+                    onChanged: (value) => setState(() => sortKey = value),
+                  ),
+                ),
+                IconButton(
+                  key: const ValueKey('tx-sort-direction'),
+                  tooltip: sortDescending ? 'Decreasing' : 'Increasing',
+                  onPressed: () =>
+                      setState(() => sortDescending = !sortDescending),
+                  icon: Icon(
+                    sortDescending ? Icons.arrow_downward : Icons.arrow_upward,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(
@@ -265,13 +372,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
                     itemCount: filtered.length,
                     itemBuilder: (context, i) {
                       final tx = filtered[i];
-                      final effectiveCategory = tx.isIncome
-                          ? tx.inflowLabel
-                          : (widget.reviewedCategoryByTxId[tx.id] ??
-                                budgetCategoryFromPfc(
-                                  pfcDetailed: tx.category,
-                                  pfcPrimary: tx.primaryCategory,
-                                ));
+                      final effectiveCategory = _categoryLabel(tx);
                       final colorKey =
                           widget.reviewedCategoryByTxId[tx.id] ??
                           effectiveCategory;
@@ -332,3 +433,6 @@ class _TransactionsPageState extends State<TransactionsPage> {
     );
   }
 }
+
+/// What the Activity list is ordered by; the direction is a separate toggle.
+enum ActivitySortKey { date, amount }
