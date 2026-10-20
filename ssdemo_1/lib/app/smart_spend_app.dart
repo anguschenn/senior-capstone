@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../pages/auth_page.dart';
 import '../core/config/env_config.dart';
 import '../services/auth_service.dart';
+import 'app_theme.dart';
 import 'main_screen.dart';
 
 class SmartSpendApp extends StatelessWidget {
@@ -10,14 +11,16 @@ class SmartSpendApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'SmartSpend',
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: AppearanceController.instance,
+      builder: (context, mode, _) => MaterialApp(
+        debugShowCheckedModeBanner: false,
+        title: 'SmartSpend',
+        theme: AppTheme.light(),
+        darkTheme: AppTheme.dark(),
+        themeMode: mode,
+        home: const _AuthGate(),
       ),
-      home: const _AuthGate(),
     );
   }
 }

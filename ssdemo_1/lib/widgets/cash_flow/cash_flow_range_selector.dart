@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../app/app_theme.dart';
 import '../../models/app_models.dart';
 import '../../utils/app_helpers.dart';
-import '../common/labeled_selector_field.dart';
+import '../common/ui.dart';
 
+/// Month / Year / All segmented control with the period line under it.
 class CashFlowRangeSelector extends StatelessWidget {
   const CashFlowRangeSelector({
     super.key,
@@ -32,6 +34,7 @@ class CashFlowRangeSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     final focusMonth = normalizedMonthOption(selectedMonth);
     final monthSelectionValue = monthOptions.any((m) => m == focusMonth)
         ? focusMonth
@@ -39,87 +42,88 @@ class CashFlowRangeSelector extends StatelessWidget {
               ? monthOptions.first
               : DateTime(focusMonth.year, focusMonth.month, 1));
 
+    final Widget scope = switch (viewMode) {
+      FlowViewMode.month => ScopeLine(
+        key: ValueKey(
+          'flow-month-${focusMonth.year}-${focusMonth.month}-${focusMonth.day}',
+        ),
+        label: monthOptionLabel(monthSelectionValue),
+        onTap: () async {
+          final picked = await showOptionSheet<DateTime>(
+            context: context,
+            title: 'Month',
+            values: monthOptions.map(normalizedMonthOption).toList(),
+            labelOf: monthOptionLabel,
+            selected: monthSelectionValue,
+          );
+          if (picked != null) onMonthChanged(picked);
+        },
+      ),
+      FlowViewMode.year => ScopeLine(
+        label: '${focusMonth.year}',
+        onTap: () async {
+          final picked = await showOptionSheet<int>(
+            context: context,
+            title: 'Year',
+            values: yearOptions,
+            labelOf: (y) => '$y',
+            selected: focusMonth.year,
+          );
+          if (picked != null) onYearChanged(picked);
+        },
+      ),
+      FlowViewMode.all => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 4, 12, 6),
+        child: Row(
+          children: [
+            Expanded(
+              child: InkWell(
+                onTap: onPickCustomRange,
+                child: Row(
+                  children: [
+                    Icon(Icons.date_range_rounded, size: 17, color: c.muted),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        customRange == null
+                            ? 'All time · pick a date range'
+                            : '${shortDate(customRange!.start, alwaysShowYear: true)} - ${shortDate(customRange!.end, alwaysShowYear: true)}',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: c.muted,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (customRange != null)
+              IconButton(
+                tooltip: 'Clear custom range',
+                onPressed: onClearCustomRange,
+                icon: Icon(Icons.close_rounded, size: 18, color: c.muted),
+              ),
+          ],
+        ),
+      ),
+    };
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: LabeledSelectorField<FlowViewMode>(
-                label: 'Range',
-                value: viewMode,
-                options: const [
-                  SelectorOption(value: FlowViewMode.month, label: 'By Month'),
-                  SelectorOption(value: FlowViewMode.year, label: 'By Year'),
-                  SelectorOption(
-                    value: FlowViewMode.all,
-                    label: 'All Time / Custom',
-                  ),
-                ],
-                onChanged: onViewModeChanged,
-              ),
-            ),
-            if (viewMode == FlowViewMode.month ||
-                viewMode == FlowViewMode.year) ...[
-              const SizedBox(width: 10),
-              Expanded(
-                child: viewMode == FlowViewMode.month
-                    ? LabeledSelectorField<DateTime>(
-                        key: ValueKey(
-                          'flow-month-${focusMonth.year}-${focusMonth.month}-${focusMonth.day}',
-                        ),
-                        label: 'Month',
-                        value: monthSelectionValue,
-                        options: monthOptions
-                            .map(
-                              (m) => SelectorOption<DateTime>(
-                                value: normalizedMonthOption(m),
-                                label: monthOptionLabel(m),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: onMonthChanged,
-                      )
-                    : LabeledSelectorField<int>(
-                        label: 'Year',
-                        value: focusMonth.year,
-                        options: yearOptions
-                            .map(
-                              (y) => SelectorOption<int>(value: y, label: '$y'),
-                            )
-                            .toList(),
-                        onChanged: onYearChanged,
-                      ),
-              ),
-            ],
-          ],
+        SegmentedTabs<FlowViewMode>(
+          value: viewMode,
+          segments: const {
+            FlowViewMode.month: 'Month',
+            FlowViewMode.year: 'Year',
+            FlowViewMode.all: 'All Time',
+          },
+          onChanged: onViewModeChanged,
         ),
-        if (viewMode == FlowViewMode.all) ...[
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: onPickCustomRange,
-                  icon: const Icon(Icons.date_range),
-                  label: Text(
-                    customRange == null
-                        ? 'Pick Custom Date Range (Optional)'
-                        : '${shortDate(customRange!.start, alwaysShowYear: true)} - ${shortDate(customRange!.end, alwaysShowYear: true)}',
-                  ),
-                ),
-              ),
-              if (customRange != null) ...[
-                const SizedBox(width: 8),
-                IconButton(
-                  tooltip: 'Clear custom range',
-                  onPressed: onClearCustomRange,
-                  icon: const Icon(Icons.clear),
-                ),
-              ],
-            ],
-          ),
-        ],
+        scope,
       ],
     );
   }

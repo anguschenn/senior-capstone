@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../app/app_theme.dart';
 import '../../services/auth_service.dart';
 import '../../services/budget_suggestion_service.dart';
 import '../../utils/formatters.dart';
+import '../common/ui.dart';
 
 /// Suggested limits for this month, each to accept, edit or dismiss. A limit
 /// never changes without the user's choice here (product rule).
@@ -13,6 +15,7 @@ class BudgetSuggestionsCard extends StatefulWidget {
     required this.onUpdateBudgetLimit,
     this.service = BudgetSuggestionService.instance,
     this.userId,
+    this.onAskWhy,
   });
 
   final DateTime month;
@@ -22,6 +25,9 @@ class BudgetSuggestionsCard extends StatefulWidget {
 
   /// Defaults to the signed-in user.
   final String? userId;
+
+  /// ✦ "Why?" next to a suggestion; gets the category name.
+  final ValueChanged<String>? onAskWhy;
 
   @override
   State<BudgetSuggestionsCard> createState() => _BudgetSuggestionsCardState();
@@ -120,36 +126,27 @@ class _BudgetSuggestionsCardState extends State<BudgetSuggestionsCard> {
   @override
   Widget build(BuildContext context) {
     if (_items.isEmpty) return const SizedBox.shrink();
+    final c = context.colors;
     return Container(
-      margin: const EdgeInsets.only(bottom: 18),
+      margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.blue.withValues(alpha: 0.06),
+        color: c.card,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
-            children: [
-              Icon(Icons.tune, size: 18, color: Colors.blue),
-              SizedBox(width: 8),
-              Text(
-                'Suggested limits',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ],
+          const Text(
+            'Suggested limits',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 4),
           Text(
             'This limit is below what you usually spend. Your usual month '
             'leaves out your highest and lowest. Nothing changes unless you '
             'accept.',
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.black.withValues(alpha: 0.6),
-            ),
+            style: TextStyle(fontSize: 12, color: c.muted),
           ),
           for (final item in _items) _row(item),
         ],
@@ -158,6 +155,7 @@ class _BudgetSuggestionsCardState extends State<BudgetSuggestionsCard> {
   }
 
   Widget _row(BudgetSuggestion item) {
+    final c = context.colors;
     final busy = _busy.contains(item.id);
     final current = item.currentLimit > 0
         ? formatMoney(item.currentLimit, signed: false)
@@ -179,13 +177,11 @@ class _BudgetSuggestionsCardState extends State<BudgetSuggestionsCard> {
                         'the last ${item.months.length} months'
                   : 'Your usual month, from ${item.months.length} months '
                         'of spending',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.black.withValues(alpha: 0.55),
-              ),
+              style: TextStyle(fontSize: 12, color: c.muted),
             ),
           Wrap(
             spacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               TextButton(
                 onPressed: busy
@@ -200,8 +196,16 @@ class _BudgetSuggestionsCardState extends State<BudgetSuggestionsCard> {
               ),
               TextButton(
                 onPressed: busy ? null : () => _decide(item, 'dismissed'),
-                child: const Text('Dismiss'),
+                child: Text('Dismiss', style: TextStyle(color: c.muted)),
               ),
+              if (widget.onAskWhy != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: AskChip(
+                    label: 'Why?',
+                    onTap: () => widget.onAskWhy!(item.category),
+                  ),
+                ),
             ],
           ),
         ],

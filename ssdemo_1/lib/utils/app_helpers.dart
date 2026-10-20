@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../app/app_theme.dart';
 import '../constants/app_constants.dart';
 import '../models/app_models.dart';
 import '../services/ai_api_client.dart';
@@ -37,27 +38,26 @@ IconData iconForTransaction(String category, String merchant) {
 
 Color colorForDetailedCategory(String detailedCategory) {
   final key = detailedCategory.toLowerCase().trim();
-  if (key.contains('food') ||
-      key.contains('drink') ||
-      key.contains('restaurant')) {
-    return Colors.orange;
+  bool has(List<String> words) => words.any(key.contains);
+  if (has(['food', 'drink', 'restaurant', 'grocer', 'dining', 'coffee'])) {
+    return AppPalette.food;
   }
-  if (key.contains('transportation') ||
-      key.contains('transport') ||
-      key.contains('transit')) {
-    return Colors.blue;
+  if (has(['transport', 'transit', 'travel', 'gas', 'taxi', 'uber'])) {
+    return AppPalette.transport;
   }
-  if (key.contains('entertainment') ||
-      key.contains('streaming') ||
-      key.contains('music')) {
-    return Colors.purple;
+  if (has(['shopping', 'retail', 'merchandise'])) {
+    return AppPalette.shopping;
   }
-  if (key.contains('shopping') ||
-      key.contains('retail') ||
-      key.contains('merchandise')) {
-    return Colors.green;
+  if (has(['subscription', 'entertainment', 'streaming', 'music'])) {
+    return AppPalette.subscriptions;
   }
-  return Colors.blueGrey;
+  if (has(['bill', 'utilit'])) return AppPalette.bills;
+  if (has(['housing', 'rent', 'mortgage'])) return AppPalette.housing;
+  if (has(['health', 'medical', 'pharmac'])) return AppPalette.health;
+  if (has(['income', 'payroll', 'salary', 'deposit', 'refund'])) {
+    return AppPalette.income;
+  }
+  return AppPalette.other;
 }
 
 bool isDebtAccountType(String rawAccountType) {
@@ -256,6 +256,7 @@ Future<void> showTransactionCategoryPicker({
                   ...kReviewCategories.map((category) {
                     final isSelected = selectedCategory == category;
                     final tone = colorForDetailedCategory(category);
+                    final c = sheetContext.colors;
                     return InkWell(
                       borderRadius: BorderRadius.circular(999),
                       onTap: () {
@@ -264,29 +265,40 @@ Future<void> showTransactionCategoryPicker({
                       },
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
+                          horizontal: 11,
+                          vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: isSelected
-                              ? tone.withValues(alpha: 0.16)
-                              : Colors.white,
+                          color: isSelected ? tone : c.raised,
                           borderRadius: BorderRadius.circular(999),
-                          border: Border.all(
-                            color: isSelected ? tone : Colors.black12,
-                          ),
                         ),
-                        child: Text(
-                          category,
-                          style: TextStyle(
-                            color: isSelected ? tone : Colors.black87,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
-                          ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (!isSelected) ...[
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: tone,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                            ],
+                            Text(
+                              category,
+                              style: TextStyle(
+                                color: isSelected ? AppPalette.ink : c.text,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12.5,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     );
-                  }).toList(),
+                  }),
                   if (aiBackendUri != null && apiKey != null)
                     InkWell(
                       borderRadius: BorderRadius.circular(999),
@@ -307,25 +319,24 @@ Future<void> showTransactionCategoryPicker({
                           vertical: 5,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: sheetContext.colors.button,
                           borderRadius: BorderRadius.circular(999),
-                          border: Border.all(color: Colors.purple, width: 1.5),
                         ),
-                        child: const Row(
+                        child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
                               Icons.auto_awesome,
                               size: 14,
-                              color: Colors.purple,
+                              color: sheetContext.colors.onButton,
                             ),
-                            SizedBox(width: 4),
+                            const SizedBox(width: 4),
                             Text(
                               'Ask AI',
                               style: TextStyle(
-                                color: Colors.purple,
+                                color: sheetContext.colors.onButton,
                                 fontWeight: FontWeight.w600,
-                                fontSize: 12,
+                                fontSize: 12.5,
                               ),
                             ),
                           ],
@@ -347,21 +358,19 @@ Future<void> showTransactionCategoryPicker({
                         vertical: 5,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        border: Border.all(color: sheetContext.colors.line),
                         borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: Colors.green, width: 1.5),
                       ),
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.add, size: 14, color: Colors.green),
+                          Icon(Icons.add, size: 14),
                           SizedBox(width: 4),
                           Text(
                             'Custom',
                             style: TextStyle(
-                              color: Colors.green,
                               fontWeight: FontWeight.w600,
-                              fontSize: 12,
+                              fontSize: 12.5,
                             ),
                           ),
                         ],
@@ -539,16 +548,15 @@ Future<void> showAiCategorySuggestionDialog({
                           vertical: 8,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.blue.withValues(alpha: 0.1),
+                          color: colorForDetailedCategory(suggestedCategory),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.blue),
                         ),
                         child: Text(
                           suggestedCategory,
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
-                            color: Colors.blue,
+                            color: AppPalette.ink,
                           ),
                         ),
                       ),

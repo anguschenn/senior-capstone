@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../app/app_theme.dart';
 import '../../models/app_models.dart';
 import 'budget_alert_toasts.dart';
 
@@ -46,6 +47,7 @@ class _BudgetInsightBannerState extends State<BudgetInsightBanner> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     final alert = overCategories.isNotEmpty;
     final hasCategories =
         overCategories.isNotEmpty || atRiskCategories.isNotEmpty;
@@ -54,18 +56,15 @@ class _BudgetInsightBannerState extends State<BudgetInsightBanner> {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: alert
-            ? Colors.red.shade50.withValues(alpha: 0.9)
-            : Colors.orange.withValues(alpha: 0.12),
+        color: c.card,
         borderRadius: BorderRadius.circular(14),
-        border: alert ? Border.all(color: Colors.red.shade200) : null,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
             alert ? Icons.error_outline : Icons.warning_amber_rounded,
-            color: alert ? Colors.red.shade700 : Colors.orange,
+            color: alert ? c.bad : c.warn,
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -78,11 +77,7 @@ class _BudgetInsightBannerState extends State<BudgetInsightBanner> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (overCategories.isNotEmpty)
-                        _line(
-                          'Over budget:',
-                          overCategories,
-                          Colors.red.shade800,
-                        ),
+                        _line('Over budget:', overCategories, c.bad),
                       if (overCategories.isNotEmpty &&
                           atRiskCategories.isNotEmpty)
                         const SizedBox(height: 6),
@@ -90,7 +85,7 @@ class _BudgetInsightBannerState extends State<BudgetInsightBanner> {
                         _line(
                           'On track to overspend:',
                           atRiskCategories,
-                          Colors.orange.shade800,
+                          c.warn,
                         ),
                       if (details.isNotEmpty) ...[
                         const SizedBox(height: 4),
@@ -125,6 +120,7 @@ class _BudgetInsightBannerState extends State<BudgetInsightBanner> {
   }
 
   Widget _detailsToggle() {
+    final c = context.colors;
     return InkWell(
       borderRadius: BorderRadius.circular(8),
       onTap: () => setState(() => _expanded = !_expanded),
@@ -135,20 +131,16 @@ class _BudgetInsightBannerState extends State<BudgetInsightBanner> {
           children: [
             Text(
               _expanded ? 'Hide details' : 'Show details',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: Colors.black54,
+                color: c.muted,
               ),
             ),
             AnimatedRotation(
               turns: _expanded ? 0.5 : 0,
               duration: const Duration(milliseconds: 220),
-              child: const Icon(
-                Icons.expand_more,
-                size: 18,
-                color: Colors.black54,
-              ),
+              child: Icon(Icons.expand_more, size: 18, color: c.muted),
             ),
           ],
         ),
@@ -158,9 +150,7 @@ class _BudgetInsightBannerState extends State<BudgetInsightBanner> {
 
   /// One category's numbers, matching what its pop-up alert says.
   Widget _detail(BudgetCategoryProgress item) {
-    final color = item.isOverBudget
-        ? Colors.red.shade800
-        : Colors.orange.shade900;
+    final color = item.isOverBudget ? context.colors.bad : context.colors.warn;
     return GestureDetector(
       onTap: onCategoryTap == null ? null : () => onCategoryTap!(item.title),
       child: Column(

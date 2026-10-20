@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../app/app_theme.dart';
 import '../constants/app_constants.dart';
 import '../models/app_models.dart';
 import '../models/budget_pace.dart';
@@ -8,6 +9,7 @@ import '../widgets/budget/budget_pace_chart_card.dart';
 import '../widgets/cash_flow/cash_flow_range_selector.dart';
 import '../widgets/cash_flow/cash_flow_totals_card.dart';
 import '../widgets/cash_flow/cash_flow_trend_summary_card.dart';
+import '../widgets/common/ui.dart';
 
 class CashFlowPage extends StatefulWidget {
   const CashFlowPage({
@@ -17,6 +19,7 @@ class CashFlowPage extends StatefulWidget {
     required this.selectedMonth,
     required this.monthOptions,
     required this.onMonthChanged,
+    this.onAsk,
   });
 
   final List<AppTransaction> transactions;
@@ -24,6 +27,9 @@ class CashFlowPage extends StatefulWidget {
   final DateTime selectedMonth;
   final List<DateTime> monthOptions;
   final ValueChanged<DateTime> onMonthChanged;
+
+  /// Opens the AI with a question filled in (the ✦ Why? chip).
+  final void Function({String? prompt, String? contextLabel})? onAsk;
 
   @override
   State<CashFlowPage> createState() => _CashFlowPageState();
@@ -223,11 +229,16 @@ class _CashFlowPageState extends State<CashFlowPage> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
+    final onAsk = widget.onAsk;
     // This page is a read-only analytics view over the currently visible transactions.
     return SafeArea(
+      bottom: false,
       child: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.only(bottom: 32),
         children: [
+          if (Navigator.of(context).canPop()) const BackLink('Wallet'),
+          const LargeTitle('Cash Flow'),
           // Time-range controls and summary cards share the same filtered transaction set.
           CashFlowRangeSelector(
             viewMode: viewMode,
@@ -252,50 +263,56 @@ class _CashFlowPageState extends State<CashFlowPage> {
             },
             onClearCustomRange: () => setState(() => customRange = null),
           ),
-          const SizedBox(height: 14),
-          const Text(
-            'Cash Flow',
-            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 6),
-          const Text('Track money in and out'),
-          const SizedBox(height: 20),
-          CashFlowTotalsCard(
-            income: _periodIncome,
-            expenses: _periodExpenses,
-            net: _periodNet,
-          ),
-          const SizedBox(height: 24),
-          // Month view: Copilot-style budget remaining + burn-pace chart.
-          if (viewMode == FlowViewMode.month &&
-              !isAllYearOption(widget.selectedMonth))
-            BudgetPaceChartCard(
-              snapshot: BudgetPaceSnapshot.build(
-                focusMonth: _focusMonth,
-                budgets: widget.budgetProgress,
-                transactions: widget.transactions,
-              ),
-            )
-          else
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.04),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Text(
-                'Switch to month view to see budget pace',
-                style: TextStyle(color: Colors.black54),
-              ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              children: [
+                const SizedBox(height: 6),
+                // Month view: Copilot-style budget remaining + burn-pace chart.
+                if (viewMode == FlowViewMode.month &&
+                    !isAllYearOption(widget.selectedMonth))
+                  BudgetPaceChartCard(
+                    snapshot: BudgetPaceSnapshot.build(
+                      focusMonth: _focusMonth,
+                      budgets: widget.budgetProgress,
+                      transactions: widget.transactions,
+                    ),
+                  )
+                else
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: c.card,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Text(
+                      'Switch to month view to see budget pace',
+                      style: TextStyle(color: c.muted),
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                CashFlowTotalsCard(
+                  income: _periodIncome,
+                  expenses: _periodExpenses,
+                  net: _periodNet,
+                ),
+                const SizedBox(height: 12),
+                // Lightweight text summary that turns the chart data into a sentence.
+                CashFlowTrendSummaryCard(
+                  summaryText: _monthCompareText(),
+                  rangeLabel: _rangeLabel,
+                  income: _periodIncome,
+                  expenses: _periodExpenses,
+                  onAskWhy: onAsk == null
+                      ? null
+                      : () => onAsk(
+                          prompt: 'Why did my spending change in $_rangeLabel?',
+                          contextLabel: 'From Cash Flow · $_rangeLabel',
+                        ),
+                ),
+              ],
             ),
-          const SizedBox(height: 20),
-          // Lightweight text summary that turns the chart data into a sentence.
-          CashFlowTrendSummaryCard(
-            summaryText: _monthCompareText(),
-            rangeLabel: _rangeLabel,
-            income: _periodIncome,
-            expenses: _periodExpenses,
           ),
         ],
       ),

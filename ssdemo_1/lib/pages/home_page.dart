@@ -1,10 +1,40 @@
 import 'package:flutter/material.dart';
 
+import '../app/app_theme.dart';
 import '../constants/app_constants.dart';
 import '../models/app_models.dart';
+import '../models/budget_pace.dart';
 import '../utils/app_helpers.dart';
+import '../widgets/budget/budget_pace_chart_card.dart';
 import '../widgets/common/transaction_category_tag.dart';
-import '../widgets/dashboard_sections.dart';
+import '../widgets/common/ui.dart';
+
+/// Low-confidence transactions still waiting for the user to confirm.
+List<AppTransaction> pendingReviewTransactions({
+  required List<AppTransaction> transactions,
+  required Set<String> manualReviewedTxIds,
+  required Set<String> confirmedReviewTxIds,
+  required Set<String> lowConfidenceReviewTxIds,
+}) {
+  return transactions.where((tx) {
+    if (confirmedReviewTxIds.contains(tx.id)) return false;
+    if (manualReviewedTxIds.contains(tx.id)) return true;
+    return lowConfidenceReviewTxIds.contains(tx.id);
+  }).toList();
+}
+
+/// Category shown for a transaction: the user's pick, else Plaid's.
+String effectiveCategoryFor(
+  AppTransaction tx,
+  Map<String, String> reviewedCategoryByTxId,
+) {
+  if (tx.isIncome) return reviewedCategoryByTxId[tx.id] ?? tx.inflowLabel;
+  return reviewedCategoryByTxId[tx.id] ??
+      budgetCategoryFromPfc(
+        pfcDetailed: tx.category,
+        pfcPrimary: tx.primaryCategory,
+      );
+}
 
 class HomePage extends StatelessWidget {
   const HomePage({
@@ -15,11 +45,7 @@ class HomePage extends StatelessWidget {
     required this.monthlySubscriptionTotal,
     required this.stats,
     required this.syncing,
-    required this.syncStatus,
-    required this.onConnectBank,
     required this.onAddBank,
-    required this.onRefreshLiveData,
-    required this.onClearLiveData,
     required this.accountOptions,
     required this.selectedAccountId,
     required this.selectedMonth,
@@ -32,7 +58,13 @@ class HomePage extends StatelessWidget {
     required this.onAccountChanged,
     required this.onTransactionCategorySelected,
     required this.onReviewConfirm,
+    this.budgetProgress = const [],
     this.bankSyncBusy = false,
+    this.syncStatus = '',
+    this.onOpenFlow,
+    this.onOpenSettings,
+    this.onSeeAllActivity,
+    this.onOpenSubscriptions,
     this.aiCategorySuggestUri,
     this.apiKey,
     this.accessToken,
@@ -43,16 +75,14 @@ class HomePage extends StatelessWidget {
   final List<DetectedSubscription> subscriptions;
   final double monthlySubscriptionTotal;
   final DashboardStats stats;
+  final List<BudgetCategoryProgress> budgetProgress;
   final bool syncing;
 
-  /// A background bank refresh is running: the bank buttons wait, but the rest
-  /// of the screen (e.g. the account filter) stays usable.
+  /// A background bank refresh is running: Add Bank waits, but the rest of
+  /// the screen (e.g. switching wallet cards) stays usable.
   final bool bankSyncBusy;
   final String syncStatus;
-  final VoidCallback onConnectBank;
   final VoidCallback onAddBank;
-  final VoidCallback onRefreshLiveData;
-  final VoidCallback onClearLiveData;
   final List<AccountOption> accountOptions;
   final String selectedAccountId;
   final DateTime selectedMonth;
@@ -66,523 +96,748 @@ class HomePage extends StatelessWidget {
   final void Function(AppTransaction tx, String category)
   onTransactionCategorySelected;
   final Future<void> Function(String txId) onReviewConfirm;
+  final VoidCallback? onOpenFlow;
+  final VoidCallback? onOpenSettings;
+  final VoidCallback? onSeeAllActivity;
+  final VoidCallback? onOpenSubscriptions;
   final Uri? aiCategorySuggestUri;
   final String? apiKey;
   final String? accessToken;
 
   Future<void> _showMonthPicker(BuildContext context) async {
-    final normalizedSelected = normalizedMonthOption(selectedMonth);
-    final selected = await showModalBottomSheet<DateTime>(
+    final selected = await showOptionSheet<DateTime>(
       context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 8),
-              Container(
-                width: 44,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.black26,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-              const SizedBox(height: 12),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20),
-                child: Row(
-                  children: [
-                    Text(
-                      'Select Month',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-              Flexible(
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-                  itemCount: monthOptions.length,
-                  separatorBuilder: (context, index) =>
-                      const SizedBox(height: 2),
-                  itemBuilder: (context, index) {
-                    final raw = monthOptions[index];
-                    final option = normalizedMonthOption(raw);
-                    final isSelected = option == normalizedSelected;
-                    return ListTile(
-                      dense: true,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      tileColor: isSelected
-                          ? Theme.of(
-                              context,
-                            ).colorScheme.primary.withValues(alpha: 0.10)
-                          : null,
-                      title: Text(
-                        monthOptionLabel(raw),
-                        style: TextStyle(
-                          fontWeight: isSelected
-                              ? FontWeight.w700
-                              : FontWeight.w500,
-                        ),
-                      ),
-                      trailing: isSelected
-                          ? Icon(
-                              Icons.check_rounded,
-                              color: Theme.of(context).colorScheme.primary,
-                            )
-                          : null,
-                      onTap: () => Navigator.of(context).pop(option),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+      title: 'Select Month',
+      values: monthOptions.map(normalizedMonthOption).toList(),
+      labelOf: monthOptionLabel,
+      selected: normalizedMonthOption(selectedMonth),
     );
-    if (selected != null) {
-      onMonthChanged(selected);
-    }
+    if (selected != null) onMonthChanged(selected);
+  }
+
+  void _openReview(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => ReviewTransactionsSheet(
+        transactions: pendingReviewTransactions(
+          transactions: lowConfidenceTransactions,
+          manualReviewedTxIds: manualReviewedTxIds,
+          confirmedReviewTxIds: confirmedReviewTxIds,
+          lowConfidenceReviewTxIds: lowConfidenceReviewTxIds,
+        ),
+        accountOptions: accountOptions,
+        reviewedCategoryByTxId: reviewedCategoryByTxId,
+        onTransactionCategorySelected: onTransactionCategorySelected,
+        onReviewConfirm: onReviewConfirm,
+        aiCategorySuggestUri: aiCategorySuggestUri,
+        apiKey: apiKey,
+        accessToken: accessToken,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    double displayIncome = 0;
-    double displayExpenses = 0;
-    for (final tx in transactions) {
-      if (!transactionInSelectedPeriod(tx, selectedMonth)) continue;
-      displayIncome += tx.incomeAmount;
-      displayExpenses += tx.expenseAmount;
-    }
-    final displayNet = displayIncome - displayExpenses;
-    final periodLabel = periodLabelForSelection(selectedMonth);
-
-    final incomeTitle = 'Income ($periodLabel)';
-    final expensesTitle = 'Expenses ($periodLabel)';
-    final cashFlowLabel = 'Cash Flow ($periodLabel)';
-    final selectorDecoration = InputDecoration(
-      isDense: true,
-      filled: true,
-      fillColor: Colors.grey.shade50,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.black.withValues(alpha: 0.08)),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.black.withValues(alpha: 0.08)),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.4),
-      ),
-    );
-    final selectorValueStyle = theme.textTheme.titleMedium?.copyWith(
-      fontWeight: FontWeight.w500,
-      color: Colors.black87,
-    );
+    final c = context.colors;
+    final busy = syncing || bankSyncBusy;
     final sevenDaysAgo = DateTime.now().subtract(const Duration(days: 7));
     final recentTransactions = transactions
         .where((tx) => tx.date.isAfter(sevenDaysAgo))
         .toList();
+    final pending = pendingReviewTransactions(
+      transactions: lowConfidenceTransactions,
+      manualReviewedTxIds: manualReviewedTxIds,
+      confirmedReviewTxIds: confirmedReviewTxIds,
+      lowConfidenceReviewTxIds: lowConfidenceReviewTxIds,
+    );
 
-    // Review queue shows low-confidence transactions (income + expense).
-    final pendingReviewTransactions = lowConfidenceTransactions.where((tx) {
-      if (confirmedReviewTxIds.contains(tx.id)) {
-        return false;
-      }
-      if (manualReviewedTxIds.contains(tx.id)) {
-        return true;
-      }
-      return lowConfidenceReviewTxIds.contains(tx.id);
-    }).toList();
     return SafeArea(
+      bottom: false,
       child: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.only(bottom: 24),
         children: [
-          // Page header and global data actions.
-          // Top action row controls data sync/refresh for the whole app.
-          const Text(
-            'SmartSpend',
-            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              FilledButton.icon(
-                onPressed: syncing || bankSyncBusy ? null : onAddBank,
-                icon: syncing || bankSyncBusy
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.add_link),
-                label: Text(syncing || bankSyncBusy ? 'Syncing' : 'Add Bank'),
+          LargeTitle(
+            'Wallet',
+            trailing: [
+              CircleIconButton(
+                key: const ValueKey('wallet-add-bank'),
+                icon: Icons.add_rounded,
+                tooltip: 'Add Bank',
+                onPressed: busy ? null : onAddBank,
               ),
-              if (accountOptions.isNotEmpty)
-                OutlinedButton.icon(
-                  onPressed: syncing || bankSyncBusy ? null : onConnectBank,
-                  icon: const Icon(Icons.refresh, size: 18),
-                  label: const Text('Reconnect'),
-                ),
-              OutlinedButton(
-                onPressed: syncing || bankSyncBusy ? null : onRefreshLiveData,
-                child: const Text('Refresh'),
-              ),
-              TextButton(
-                onPressed: syncing || bankSyncBusy ? null : onClearLiveData,
-                child: const Text('Clear'),
+              CircleIconButton(
+                key: const ValueKey('wallet-settings'),
+                icon: Icons.settings_outlined,
+                tooltip: 'Settings',
+                onPressed: onOpenSettings,
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Text(syncStatus, style: const TextStyle(color: Colors.black54)),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              SizedBox(
-                width: 76,
-                child: Text(
-                  'Account',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  isExpanded: true,
-                  style: selectorValueStyle,
-                  icon: const Icon(Icons.keyboard_arrow_down_rounded),
-                  initialValue: selectedAccountId,
-                  decoration: selectorDecoration,
-                  items: [
-                    DropdownMenuItem<String>(
-                      value: kAllAccountsId,
-                      child: Text('All Accounts', style: selectorValueStyle),
-                    ),
-                    ...accountOptions.map(
-                      (account) => DropdownMenuItem<String>(
-                        value: account.accountId,
-                        child: Text(
-                          '${account.label} (${account.txCount})',
-                          style: selectorValueStyle,
-                        ),
-                      ),
-                    ),
-                  ],
-                  onChanged: syncing
-                      ? null
-                      : (value) {
-                          if (value == null) return;
-                          onAccountChanged(value);
-                        },
-                ),
-              ),
-            ],
+          ScopeLine(
+            label: busy
+                ? '${monthOptionLabel(selectedMonth)} · Syncing…'
+                : monthOptionLabel(selectedMonth),
+            onTap: () => _showMonthPicker(context),
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              SizedBox(
-                width: 76,
-                child: Text(
-                  'Month',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: () => _showMonthPicker(context),
-                  child: InputDecorator(
-                    decoration: selectorDecoration,
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            monthOptionLabel(selectedMonth),
-                            style: selectorValueStyle,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        const Icon(Icons.keyboard_arrow_down_rounded),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
+          WalletCardStack(
+            accountOptions: accountOptions,
+            selectedAccountId: selectedAccountId,
+            selectedBalance: stats.totalBalance,
+            enabled: !syncing,
+            onAccountChanged: onAccountChanged,
           ),
-          const SizedBox(height: 20),
-          const Text('Net Worth'),
-          Text(
-            '${stats.totalBalance < 0 ? '- ' : ''}\$${stats.totalBalance.abs().toStringAsFixed(2)}',
-            style: TextStyle(
-              fontSize: 32,
-              fontWeight: FontWeight.bold,
-              color: stats.totalBalance < 0 ? Colors.red : Colors.black,
+          const SizedBox(height: 14),
+          _FlowThumbnail(
+            transactions: transactions,
+            budgetProgress: budgetProgress,
+            selectedMonth: selectedMonth,
+            onTap: onOpenFlow,
+          ),
+          if (pending.isNotEmpty)
+            Section(
+              key: const ValueKey('wallet-review'),
+              onTap: () => _openReview(context),
+              child: InfoRow(
+                leading: _RoundIcon(icon: Icons.help_outline, color: c.warn),
+                title:
+                    '${pending.length} transaction${pending.length == 1 ? '' : 's'} to review',
+                subtitle: 'Check the category, then confirm',
+              ),
             ),
+          SectionHeader(
+            'Last 7 days',
+            action: 'See all',
+            onAction: onSeeAllActivity,
+          ),
+          Section(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+            child: recentTransactions.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    child: Text(
+                      'No transactions in the last 7 days.',
+                      style: TextStyle(color: c.muted),
+                    ),
+                  )
+                : Column(
+                    children: [
+                      for (final (i, tx)
+                          in recentTransactions.take(6).indexed) ...[
+                        if (i > 0)
+                          Divider(height: 0.5, thickness: 0.5, color: c.line),
+                        TransactionRow(
+                          tx: tx,
+                          accountOptions: accountOptions,
+                          reviewedCategoryByTxId: reviewedCategoryByTxId,
+                          onTransactionCategorySelected:
+                              onTransactionCategorySelected,
+                          aiCategorySuggestUri: aiCategorySuggestUri,
+                          apiKey: apiKey,
+                          accessToken: accessToken,
+                        ),
+                      ],
+                    ],
+                  ),
           ),
           const SizedBox(height: 4),
-          Text(
-            '$cashFlowLabel: ${displayNet >= 0 ? '+ ' : '- '}\$${displayNet.abs().toStringAsFixed(2)}',
-            style: TextStyle(
-              color: displayNet >= 0 ? Colors.green : Colors.red,
+          Section(
+            key: const ValueKey('wallet-subscriptions'),
+            onTap: onOpenSubscriptions,
+            child: InfoRow(
+              leading: const _RoundIcon(
+                icon: Icons.autorenew_rounded,
+                color: AppPalette.subscriptions,
+              ),
+              title: 'Upcoming subscriptions',
+              subtitle: subscriptions.isEmpty
+                  ? 'No recurring subscriptions detected yet'
+                  : 'Next: ${subscriptions.first.merchant} · ${shortDate(subscriptions.first.nextChargeDate)}',
+              trailing: Text(
+                '${formatMoney(monthlySubscriptionTotal, signed: false)}/mo',
+                style: TextStyle(color: c.muted, fontSize: 14),
+              ),
             ),
           ),
-          const SizedBox(height: 20),
-          // High-level financial summary for the selected account scope.
-          // Compact dashboard cards for current balances and monthly totals.
-          Row(
+        ],
+      ),
+    );
+  }
+}
+
+class _RoundIcon extends StatelessWidget {
+  const _RoundIcon({required this.icon, required this.color});
+
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        color: context.colors.raised,
+        shape: BoxShape.circle,
+      ),
+      child: Icon(icon, size: 18, color: color),
+    );
+  }
+}
+
+/// Apple Wallet–style stack: the other accounts peek out above, the selected
+/// one sits in front. Tap a card behind to bring it forward, or swipe the
+/// front card left/right to move through the accounts.
+class WalletCardStack extends StatelessWidget {
+  const WalletCardStack({
+    super.key,
+    required this.accountOptions,
+    required this.selectedAccountId,
+    required this.selectedBalance,
+    required this.onAccountChanged,
+    this.enabled = true,
+  });
+
+  final List<AccountOption> accountOptions;
+  final String selectedAccountId;
+
+  /// Balance (net worth for All Accounts) of the selected scope.
+  final double selectedBalance;
+  final ValueChanged<String> onAccountChanged;
+  final bool enabled;
+
+  static const double _peek = 44;
+  static const double _cardHeight = 172;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final ids = [kAllAccountsId, for (final a in accountOptions) a.accountId];
+    final selected = ids.contains(selectedAccountId)
+        ? selectedAccountId
+        : kAllAccountsId;
+    final behind = ids.where((id) => id != selected).toList();
+
+    Color colorFor(String id) {
+      if (id == kAllAccountsId) return AppPalette.walletAll;
+      final i = accountOptions.indexWhere((a) => a.accountId == id);
+      return AppPalette.walletCards[i % AppPalette.walletCards.length];
+    }
+
+    AccountOption? optionFor(String id) {
+      for (final a in accountOptions) {
+        if (a.accountId == id) return a;
+      }
+      return null;
+    }
+
+    String titleFor(String id) {
+      if (id == kAllAccountsId) return 'All Accounts';
+      final label = optionFor(id)?.label ?? id;
+      // Labels end with "••••1234"; the ending is shown on the right instead.
+      return label.replaceAll(RegExp(r'\s*•+\s*\d+\s*$'), '');
+    }
+
+    String detailFor(String id) {
+      if (id == kAllAccountsId) {
+        final n = accountOptions.length;
+        return '$n account${n == 1 ? '' : 's'}';
+      }
+      final ending = optionFor(id)?.ending ?? '';
+      return ending.isEmpty ? '' : '••$ending';
+    }
+
+    void move(int step) {
+      final i = ids.indexOf(selected);
+      final next = (i + step) % ids.length;
+      if (next != i) onAccountChanged(ids[next < 0 ? next + ids.length : next]);
+    }
+
+    Widget card(String id, {required bool front, required double top}) {
+      const onCard = Color(0xFFFBF8F2);
+      final body = Container(
+        height: _cardHeight,
+        padding: const EdgeInsets.fromLTRB(18, 13, 18, 16),
+        decoration: BoxDecoration(
+          color: colorFor(id),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: c.cardShadow,
+              blurRadius: 16,
+              offset: const Offset(0, -6),
+            ),
+          ],
+        ),
+        child: DefaultTextStyle(
+          style: const TextStyle(color: onCard),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: SummaryCard(
-                  title: incomeTitle,
-                  value: formatMoney(displayIncome, signed: false),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: SummaryCard(
-                  title: expensesTitle,
-                  value: formatMoney(displayExpenses, signed: false),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          // Most recent transaction preview shown on the dashboard.
-          // Recent transactions show the latest few rows from the active account filter.
-          const Text(
-            'Recent Transactions (Last 7 Days)',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          if (recentTransactions.isEmpty)
-            const Padding(
-              padding: EdgeInsets.only(top: 8),
-              child: Text('No transactions in the last 7 days.'),
-            ),
-          ...recentTransactions.map((tx) {
-            final effectiveCategory = tx.isIncome
-                ? tx.inflowLabel
-                : (reviewedCategoryByTxId[tx.id] ??
-                      budgetCategoryFromPfc(
-                        pfcDetailed: tx.category,
-                        pfcPrimary: tx.primaryCategory,
-                      ));
-            final colorKey = reviewedCategoryByTxId[tx.id] ?? effectiveCategory;
-            return ListTile(
-              leading: Icon(iconForTransaction(tx.category, tx.name)),
-              title: Text(tx.name),
-              subtitle: Wrap(
-                spacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
+              Row(
                 children: [
-                  Text(shortDate(tx.date, alwaysShowYear: true)),
-                  InkWell(
-                    borderRadius: BorderRadius.circular(999),
-                    onTap: tx.isIncome
-                        ? null
-                        : () {
-                            showTransactionCategoryPicker(
-                              context: context,
-                              tx: tx,
-                              selectedCategory: effectiveCategory,
-                              onSelected: (category) =>
-                                  onTransactionCategorySelected(tx, category),
-                              aiBackendUri: aiCategorySuggestUri,
-                              apiKey: apiKey,
-                              accessToken: accessToken,
-                            );
-                          },
-                    child: TransactionCategoryTag(
-                      label: effectiveCategory,
-                      colorKey: colorKey,
+                  Expanded(
+                    child: Text(
+                      titleFor(id),
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                   Text(
-                    'Acct ••••${accountEndingForId(tx.accountId, accountOptions)}',
-                    style: const TextStyle(color: Colors.black54, fontSize: 12),
+                    detailFor(id),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: onCard.withValues(alpha: 0.75),
+                    ),
                   ),
                 ],
               ),
-              trailing: Text(
-                formatTransactionMoney(
-                  amount: tx.displayAmount,
-                  isIncome: tx.isIncome,
+              if (front) ...[
+                const Spacer(),
+                Text(
+                  id == kAllAccountsId ? 'Net Worth' : 'Balance',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: onCard.withValues(alpha: 0.75),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '${selectedBalance < 0 ? '- ' : ''}\$${_withCommas(selectedBalance.abs())}',
+                    style: const TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.6,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+      return Positioned(
+        left: 0,
+        right: 0,
+        top: top,
+        child: GestureDetector(
+          key: ValueKey('wallet-card-$id'),
+          behavior: HitTestBehavior.opaque,
+          onTap: !enabled || front ? null : () => onAccountChanged(id),
+          onHorizontalDragEnd: !enabled || !front
+              ? null
+              : (d) {
+                  final v = d.primaryVelocity ?? 0;
+                  if (v.abs() < 150) return;
+                  move(v < 0 ? 1 : -1);
+                },
+          child: body,
+        ),
+      );
+    }
+
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 200),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+        child: SizedBox(
+          height: behind.length * _peek + _cardHeight,
+          child: Stack(
+            children: [
+              for (final (i, id) in behind.indexed)
+                card(id, front: false, top: i * _peek),
+              card(selected, front: true, top: behind.length * _peek),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _withCommas(double value) {
+  final fixed = value.toStringAsFixed(2);
+  final parts = fixed.split('.');
+  final digits = parts[0];
+  final out = StringBuffer();
+  for (var i = 0; i < digits.length; i++) {
+    if (i > 0 && (digits.length - i) % 3 == 0) out.write(',');
+    out.write(digits[i]);
+  }
+  return '$out.${parts[1]}';
+}
+
+/// "Cash Flow · October ›" card: budget left, pace, and a mini pace chart.
+/// Tapping it opens the full Cash Flow page.
+class _FlowThumbnail extends StatelessWidget {
+  const _FlowThumbnail({
+    required this.transactions,
+    required this.budgetProgress,
+    required this.selectedMonth,
+    required this.onTap,
+  });
+
+  final List<AppTransaction> transactions;
+  final List<BudgetCategoryProgress> budgetProgress;
+  final DateTime selectedMonth;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    double income = 0;
+    double expenses = 0;
+    for (final tx in transactions) {
+      if (!transactionInSelectedPeriod(tx, selectedMonth)) continue;
+      income += tx.incomeAmount;
+      expenses += tx.expenseAmount;
+    }
+    final net = income - expenses;
+    final monthView = !isAllYearOption(selectedMonth);
+    final snapshot = monthView
+        ? BudgetPaceSnapshot.build(
+            focusMonth: normalizedMonthOption(selectedMonth),
+            budgets: budgetProgress,
+            transactions: transactions,
+          )
+        : null;
+    final label = monthView
+        ? kMonthShortLabels[selectedMonth.month - 1]
+        : '${selectedMonth.year}';
+
+    Widget stat(String title, String value, {Color? color}) => Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: TextStyle(fontSize: 12, color: c.muted)),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: color ?? c.text,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return Section(
+      key: const ValueKey('wallet-flow'),
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Cash Flow · $label',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-            );
-          }),
-          const SizedBox(height: 16),
-          // Manual review queue for uncertain spending categories.
-          // Review queue surfaces low-confidence spending classifications for manual correction.
-          const Text(
-            'Review Transactions',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              Icon(Icons.chevron_right_rounded, size: 18, color: c.muted),
+            ],
           ),
-          const SizedBox(height: 8),
-          if (pendingReviewTransactions.isEmpty)
-            const Text(
-              'No low-confidence transactions to review.',
-              style: TextStyle(color: Colors.black54),
-            ),
-          ...pendingReviewTransactions.map((tx) {
-            final selected =
-                reviewedCategoryByTxId[tx.id] ??
-                (tx.isIncome
-                    ? tx.inflowLabel
-                    : budgetCategoryFromPfc(
-                        pfcDetailed: tx.category,
-                        pfcPrimary: tx.primaryCategory,
-                      ));
-            return Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.03),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    tx.name,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
+          if (snapshot != null && snapshot.hasBudget) ...[
+            const SizedBox(height: 8),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Wrap(
-                          spacing: 8,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            Text(
-                              shortDate(tx.date, alwaysShowYear: true),
-                              style: const TextStyle(
-                                color: Colors.black54,
-                                fontSize: 12,
-                              ),
-                            ),
-                            InkWell(
-                              borderRadius: BorderRadius.circular(999),
-                              onTap: () {
-                                showTransactionCategoryPicker(
-                                  context: context,
-                                  tx: tx,
-                                  selectedCategory: selected,
-                                  onSelected: (category) =>
-                                      onTransactionCategorySelected(
-                                        tx,
-                                        category,
-                                      ),
-                                  aiBackendUri: aiCategorySuggestUri,
-                                  apiKey: apiKey,
-                                  accessToken: accessToken,
-                                );
-                              },
-                              child: TransactionCategoryTag(
-                                label: selected,
-                                colorKey: selected,
-                              ),
-                            ),
-                            Text(
-                              'Acct ••••${accountEndingForId(tx.accountId, accountOptions)}',
-                              style: const TextStyle(
-                                color: Colors.black54,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
+                      Text(
+                        '\$${snapshot.remaining.abs().round()}',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.6,
+                          color: snapshot.isOverBudget ? c.bad : c.text,
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      FilledButton(
-                        onPressed: () async => onReviewConfirm(tx.id),
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size(52, 30),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 0,
-                          ),
-                          visualDensity: VisualDensity.compact,
-                        ),
-                        child: const Text(
-                          'Confirm',
-                          style: TextStyle(fontSize: 12),
-                        ),
+                      Text(
+                        snapshot.isOverBudget ? 'over budget' : 'budget left',
+                        style: TextStyle(fontSize: 13, color: c.muted),
+                      ),
+                      const SizedBox(height: 8),
+                      StatusPill(
+                        label: snapshot.isUnderPace
+                            ? '\$${snapshot.paceDelta.abs().round()} under pace'
+                            : '\$${snapshot.paceDelta.abs().round()} over pace',
+                        background: snapshot.isUnderPace
+                            ? c.goodTint
+                            : c.bad.withValues(alpha: 0.16),
+                        foreground: snapshot.isUnderPace ? c.good : c.bad,
                       ),
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    formatTransactionMoney(
-                      amount: tx.displayAmount,
-                      isIncome: tx.isIncome,
-                    ),
-                    style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                BudgetPaceMiniChart(snapshot: snapshot),
+              ],
+            ),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              stat('Income', formatMoney(income, signed: false)),
+              stat('Expenses', formatMoney(expenses, signed: false)),
+              stat(
+                'Cash flow',
+                '${net >= 0 ? '+' : '-'}\$${net.abs().toStringAsFixed(2)}',
+                color: net >= 0 ? c.good : c.bad,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One transaction: category dot, merchant, date + category tag, amount.
+/// Tapping the tag opens the category picker (spending only).
+class TransactionRow extends StatelessWidget {
+  const TransactionRow({
+    super.key,
+    required this.tx,
+    required this.accountOptions,
+    required this.reviewedCategoryByTxId,
+    required this.onTransactionCategorySelected,
+    this.aiCategorySuggestUri,
+    this.apiKey,
+    this.accessToken,
+    this.showDate = true,
+    this.alwaysPickable = false,
+  });
+
+  final AppTransaction tx;
+  final List<AccountOption> accountOptions;
+  final Map<String, String> reviewedCategoryByTxId;
+  final void Function(AppTransaction tx, String category)
+  onTransactionCategorySelected;
+  final Uri? aiCategorySuggestUri;
+  final String? apiKey;
+  final String? accessToken;
+  final bool showDate;
+
+  /// Lets income be re-categorised too (the review sheet allows it).
+  final bool alwaysPickable;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final category = effectiveCategoryFor(tx, reviewedCategoryByTxId);
+    final tone = colorForDetailedCategory(category);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 9),
+      child: Row(
+        children: [
+          CategoryDot(
+            color: tone,
+            icon: iconForTransaction(tx.category, tx.name),
+            size: 34,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  tx.name,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Tap category tag to adjust, then confirm to mark reviewed.',
-                    style: const TextStyle(color: Colors.black54, fontSize: 12),
+                ),
+                const SizedBox(height: 3),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    if (showDate)
+                      Text(
+                        shortDate(tx.date, alwaysShowYear: true),
+                        style: TextStyle(color: c.muted, fontSize: 12),
+                      ),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(999),
+                      onTap: tx.isIncome && !alwaysPickable
+                          ? null
+                          : () => showTransactionCategoryPicker(
+                              context: context,
+                              tx: tx,
+                              selectedCategory: category,
+                              onSelected: (picked) =>
+                                  onTransactionCategorySelected(tx, picked),
+                              aiBackendUri: aiCategorySuggestUri,
+                              apiKey: apiKey,
+                              accessToken: accessToken,
+                            ),
+                      child: TransactionCategoryTag(
+                        label: category,
+                        colorKey: category,
+                      ),
+                    ),
+                    Text(
+                      '••${accountEndingForId(tx.accountId, accountOptions)}',
+                      style: TextStyle(color: c.muted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            formatTransactionMoney(
+              amount: tx.displayAmount,
+              isIncome: tx.isIncome,
+            ),
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: tx.isIncome ? c.good : c.text,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Sheet listing transactions whose category needs a quick check.
+class ReviewTransactionsSheet extends StatefulWidget {
+  const ReviewTransactionsSheet({
+    super.key,
+    required this.transactions,
+    required this.accountOptions,
+    required this.reviewedCategoryByTxId,
+    required this.onTransactionCategorySelected,
+    required this.onReviewConfirm,
+    this.aiCategorySuggestUri,
+    this.apiKey,
+    this.accessToken,
+  });
+
+  final List<AppTransaction> transactions;
+  final List<AccountOption> accountOptions;
+  final Map<String, String> reviewedCategoryByTxId;
+  final void Function(AppTransaction tx, String category)
+  onTransactionCategorySelected;
+  final Future<void> Function(String txId) onReviewConfirm;
+  final Uri? aiCategorySuggestUri;
+  final String? apiKey;
+  final String? accessToken;
+
+  @override
+  State<ReviewTransactionsSheet> createState() =>
+      _ReviewTransactionsSheetState();
+}
+
+class _ReviewTransactionsSheetState extends State<ReviewTransactionsSheet> {
+  // The sheet was built from a snapshot of the page, so picks and confirms
+  // made here are mirrored locally until the sheet closes.
+  final _picked = <String, String>{};
+  final _confirmed = <String>{};
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final items = widget.transactions
+        .where((tx) => !_confirmed.contains(tx.id))
+        .toList();
+    final categories = {...widget.reviewedCategoryByTxId, ..._picked};
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.75,
+      maxChildSize: 0.95,
+      builder: (context, scroll) => ListView(
+        controller: scroll,
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        children: [
+          Center(
+            child: Container(
+              width: 36,
+              height: 5,
+              decoration: BoxDecoration(
+                color: c.line,
+                borderRadius: BorderRadius.circular(99),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Review Transactions',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Tap the category to change it, then confirm.',
+            style: TextStyle(color: c.muted, fontSize: 13),
+          ),
+          const SizedBox(height: 12),
+          if (items.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: Text('All caught up.', style: TextStyle(color: c.muted)),
+              ),
+            ),
+          for (final tx in items)
+            Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.fromLTRB(14, 4, 10, 8),
+              decoration: BoxDecoration(
+                color: c.card,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  TransactionRow(
+                    tx: tx,
+                    accountOptions: widget.accountOptions,
+                    reviewedCategoryByTxId: categories,
+                    alwaysPickable: true,
+                    onTransactionCategorySelected: (tx, category) {
+                      setState(() => _picked[tx.id] = category);
+                      widget.onTransactionCategorySelected(tx, category);
+                    },
+                    aiCategorySuggestUri: widget.aiCategorySuggestUri,
+                    apiKey: widget.apiKey,
+                    accessToken: widget.accessToken,
+                  ),
+                  FilledButton(
+                    onPressed: () async {
+                      setState(() => _confirmed.add(tx.id));
+                      await widget.onReviewConfirm(tx.id);
+                    },
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(80, 32),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    child: const Text('Confirm'),
                   ),
                 ],
               ),
-            );
-          }),
-          const SizedBox(height: 20),
-          // Short subscription preview to surface upcoming recurring charges.
-          // Subscription preview shows only the nearest few detected recurring charges.
-          const Text(
-            'Upcoming Subscriptions',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Monthly total: ${formatMoney(monthlySubscriptionTotal, signed: false)}',
-            style: const TextStyle(color: Colors.black54),
-          ),
-          if (subscriptions.isEmpty)
-            const Padding(
-              padding: EdgeInsets.only(top: 8),
-              child: Text('No recurring subscriptions detected yet.'),
             ),
-          ...subscriptions.map(
-            (sub) => ListTile(
-              leading: const Icon(Icons.subscriptions_outlined),
-              title: Text(sub.merchant),
-              subtitle: Text('Renews ${shortDate(sub.nextChargeDate)}'),
-              trailing: Text(formatMoney(sub.amount, signed: false)),
-            ),
-          ),
         ],
       ),
     );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../app/app_theme.dart';
 import '../services/auth_service.dart';
 
 class AuthPage extends StatefulWidget {
@@ -267,14 +268,14 @@ class _AuthPageState extends State<AuthPage> {
                           const SizedBox(height: 12),
                           Text(
                             _error,
-                            style: const TextStyle(color: Colors.red),
+                            style: TextStyle(color: context.colors.bad),
                           ),
                         ],
                         if (_message.isNotEmpty) ...[
                           const SizedBox(height: 12),
                           Text(
                             _message,
-                            style: const TextStyle(color: Colors.green),
+                            style: TextStyle(color: context.colors.good),
                           ),
                         ],
                         const SizedBox(height: 20),

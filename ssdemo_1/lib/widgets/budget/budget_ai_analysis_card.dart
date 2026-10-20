@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../app/app_theme.dart';
 import '../../models/ai/ai_models.dart';
 import '../../utils/app_helpers.dart';
 
@@ -29,6 +30,7 @@ class BudgetAiAnalysisCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     final showSuggestion = suggestion != null;
     final hasVisibleSpend = expensesValue > 0;
     final rawCopy = suggestion?.copy ?? '';
@@ -67,7 +69,7 @@ class BudgetAiAnalysisCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.green.withValues(alpha: 0.08),
+        color: c.card,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
@@ -75,11 +77,9 @@ class BudgetAiAnalysisCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.smart_toy_outlined, color: Colors.green),
-              const SizedBox(width: 10),
               const Text(
                 'AI Analysis',
-                style: TextStyle(fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
               ),
               const Spacer(),
               TextButton.icon(
@@ -90,16 +90,20 @@ class BudgetAiAnalysisCard extends StatelessWidget {
                         height: 14,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.auto_awesome, size: 18),
-                label: const Text('Generate'),
+                    : const Icon(Icons.auto_awesome, size: 16),
+                label: Text(showSuggestion ? 'Generate again' : 'Generate'),
               ),
             ],
           ),
           const SizedBox(height: 10),
-          Text('• Highest category usage: $highestCategoryText'),
+          Text(
+            '• Highest category usage: $highestCategoryText',
+            style: TextStyle(color: c.muted),
+          ),
           const SizedBox(height: 6),
           Text(
             '• $expensesLabel: ${formatMoney(expensesValue, signed: false)}',
+            style: TextStyle(color: c.muted),
           ),
           const SizedBox(height: 10),
           if (!canGenerate && suggestion == null && error.isEmpty)
@@ -113,8 +117,8 @@ class BudgetAiAnalysisCard extends StatelessWidget {
           if (error.isNotEmpty)
             Text(
               error,
-              style: const TextStyle(
-                color: Colors.redAccent,
+              style: TextStyle(
+                color: c.bad,
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),
@@ -129,12 +133,12 @@ class BudgetAiAnalysisCard extends StatelessWidget {
               children: [
                 if (contextSource.isNotEmpty &&
                     contextSource != 'rule_fallback')
-                  _metaBadge(contextSource, Colors.black45),
+                  _metaBadge(contextSource, c.muted),
                 if (showConfidenceBadge) ...[
                   const SizedBox(width: 6),
                   _metaBadge(
                     suggestion!.confidence,
-                    _confidenceBadgeColor(suggestion!.confidence),
+                    _confidenceBadgeColor(c, suggestion!.confidence),
                   ),
                 ],
               ],
@@ -203,16 +207,16 @@ class BudgetAiAnalysisCard extends StatelessWidget {
     );
   }
 
-  Color _confidenceBadgeColor(String confidence) {
+  Color _confidenceBadgeColor(AppColors c, String confidence) {
     switch (confidence) {
       case 'high':
-        return Colors.green;
+        return c.good;
       case 'medium':
-        return Colors.orange;
+        return c.warn;
       case 'low':
-        return Colors.redAccent;
+        return c.bad;
       default:
-        return Colors.grey;
+        return c.muted;
     }
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../app/app_theme.dart';
 import '../../models/app_models.dart';
 import '../../utils/app_helpers.dart';
 
@@ -71,7 +72,9 @@ class _BudgetAlertToast extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     final over = item.isOverBudget;
+    final tint = over ? c.bad : c.warn;
     final title = over
         ? '${item.title} is over budget'
         : '${item.title} on track to overspend';
@@ -98,14 +101,14 @@ class _BudgetAlertToast extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
             decoration: BoxDecoration(
-              color: Colors.red.shade50.withValues(alpha: 0.92),
+              color: c.card,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.red.shade200),
+              border: Border(left: BorderSide(color: tint, width: 4)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.red.withValues(alpha: 0.12),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
+                  color: c.cardShadow,
+                  blurRadius: 14,
+                  offset: const Offset(0, 5),
                 ),
               ],
             ),
@@ -115,7 +118,7 @@ class _BudgetAlertToast extends StatelessWidget {
                 Icon(
                   over ? Icons.error_outline : Icons.trending_up,
                   size: 20,
-                  color: Colors.red.shade700,
+                  color: tint,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -126,24 +129,18 @@ class _BudgetAlertToast extends StatelessWidget {
                         title,
                         style: TextStyle(
                           fontWeight: FontWeight.w700,
-                          color: Colors.red.shade900,
+                          color: c.text,
                         ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         usage,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.red.shade800,
-                        ),
+                        style: TextStyle(fontSize: 12, color: c.muted),
                       ),
                       if (pace != null)
                         Text(
                           pace,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.red.shade800,
-                          ),
+                          style: TextStyle(fontSize: 12, color: c.muted),
                         ),
                     ],
                   ),
@@ -153,7 +150,7 @@ class _BudgetAlertToast extends StatelessWidget {
                   visualDensity: VisualDensity.compact,
                   iconSize: 18,
                   onPressed: onDismiss,
-                  icon: Icon(Icons.close, color: Colors.red.shade400),
+                  icon: Icon(Icons.close, color: c.muted),
                 ),
               ],
             ),

@@ -3,7 +3,9 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+import '../../app/app_theme.dart';
 import '../../models/budget_pace.dart';
+import '../common/ui.dart';
 
 /// Monthly budget remaining chart: solid actual spend, dashed even-pace line.
 class BudgetPaceChartCard extends StatelessWidget {
@@ -42,82 +44,84 @@ class BudgetPaceChartCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     final over = snapshot.isOverBudget;
     final underPace = snapshot.isUnderPace;
-    final tone = underPace ? const Color(0xFF1B5E20) : const Color(0xFFC62828);
     final delta = snapshot.paceDelta.abs().round();
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.green.withValues(alpha: 0.22)),
+        color: c.card,
+        borderRadius: BorderRadius.circular(14),
       ),
       child: !snapshot.hasBudget
-          ? const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
+          ? Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
               child: Center(
                 child: Text(
                   'Set budgets to see pace',
-                  style: TextStyle(
-                    color: Colors.black54,
-                    fontWeight: FontWeight.w500,
-                  ),
+                  style: TextStyle(color: c.muted, fontWeight: FontWeight.w500),
                 ),
               ),
             )
           : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  over
-                      ? '\$${_fmt(snapshot.remaining.abs())} over'
-                      : '\$${_fmt(snapshot.remaining)} left',
-                  style: const TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF1A1A1A),
-                  ),
+                  over ? 'Over budget' : 'Budget left',
+                  style: TextStyle(fontSize: 13, color: c.muted),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  'out of \$${_fmt(snapshot.totalBudgeted)} budgeted',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF8A8A8A),
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Text(
+                      '\$${_fmt(snapshot.remaining.abs())}',
+                      style: TextStyle(
+                        fontSize: 34,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -1.2,
+                        color: over ? c.bad : c.text,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'of \$${_fmt(snapshot.totalBudgeted)}',
+                      style: TextStyle(fontSize: 15, color: c.muted),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
+                StatusPill(
+                  label: underPace
+                      ? '\$$delta under pace'
+                      : '\$$delta over pace',
+                  icon: underPace
+                      ? Icons.trending_down_rounded
+                      : Icons.trending_up_rounded,
+                  background: underPace
+                      ? c.goodTint
+                      : c.bad.withValues(alpha: 0.16),
+                  foreground: underPace ? c.good : c.bad,
+                ),
+                const SizedBox(height: 10),
                 SizedBox(
                   height: 200,
                   width: double.infinity,
                   child: CustomPaint(
-                    painter: _BudgetPaceChartPainter(snapshot: snapshot),
+                    painter: _BudgetPaceChartPainter(
+                      snapshot: snapshot,
+                      dashColor: c.muted,
+                      gridColor: c.line,
+                      labelColor: c.muted,
+                      dotFill: c.card,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 6),
                 const _ChartLegend(),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: tone,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    underPace ? '\$$delta under pace' : '\$$delta over pace',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
               ],
             ),
     );
@@ -141,7 +145,6 @@ class _ChartLegend extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Wrap(
-      alignment: WrapAlignment.center,
       spacing: 16,
       runSpacing: 4,
       children: [
@@ -166,12 +169,17 @@ class _LegendItem extends StatelessWidget {
         SizedBox(
           width: 26,
           height: 10,
-          child: CustomPaint(painter: _LegendSwatchPainter(dashed: dashed)),
+          child: CustomPaint(
+            painter: _LegendSwatchPainter(
+              dashed: dashed,
+              dashColor: context.colors.muted,
+            ),
+          ),
         ),
         const SizedBox(width: 6),
         Text(
           label,
-          style: const TextStyle(fontSize: 12, color: Color(0xFF5F5F5F)),
+          style: TextStyle(fontSize: 12, color: context.colors.muted),
         ),
       ],
     );
@@ -180,9 +188,10 @@ class _LegendItem extends StatelessWidget {
 
 /// Mini sample of each chart line, drawn with the same strokes as the chart.
 class _LegendSwatchPainter extends CustomPainter {
-  _LegendSwatchPainter({required this.dashed});
+  _LegendSwatchPainter({required this.dashed, required this.dashColor});
 
   final bool dashed;
+  final Color dashColor;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -191,8 +200,8 @@ class _LegendSwatchPainter extends CustomPainter {
     final b = Offset(size.width - 2, y);
     if (dashed) {
       final paint = Paint()
-        ..color = const Color(0xFF1B5E20)
-        ..strokeWidth = 3
+        ..color = dashColor
+        ..strokeWidth = 2
         ..strokeCap = StrokeCap.round;
       canvas.drawLine(a, Offset(a.dx + 8, y), paint);
       canvas.drawLine(Offset(b.dx - 8, y), b, paint);
@@ -220,13 +229,27 @@ class _LegendSwatchPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _LegendSwatchPainter oldDelegate) =>
-      oldDelegate.dashed != dashed;
+      oldDelegate.dashed != dashed || oldDelegate.dashColor != dashColor;
 }
 
 class _BudgetPaceChartPainter extends CustomPainter {
-  _BudgetPaceChartPainter({required this.snapshot});
+  _BudgetPaceChartPainter({
+    required this.snapshot,
+    required this.dashColor,
+    required this.gridColor,
+    required this.labelColor,
+    required this.dotFill,
+    this.showAxis = true,
+    this.strokeScale = 1,
+  });
 
   final BudgetPaceSnapshot snapshot;
+  final Color dashColor;
+  final Color gridColor;
+  final Color labelColor;
+  final Color dotFill;
+  final bool showAxis;
+  final double strokeScale;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -234,7 +257,7 @@ class _BudgetPaceChartPainter extends CustomPainter {
     if (points.isEmpty || snapshot.daysInMonth <= 0) return;
 
     const pad = 8.0;
-    const axisH = 18.0;
+    final axisH = showAxis ? 18.0 : 0.0;
     final chartW = size.width - pad * 2;
     final chartH = size.height - pad * 2 - axisH;
     if (chartW <= 0 || chartH <= 0) return;
@@ -250,7 +273,17 @@ class _BudgetPaceChartPainter extends CustomPainter {
       return Offset(pad + xNorm * chartW, pad + chartH * (1 - yNorm));
     }
 
-    _dayAxis(canvas, map, chartH + pad);
+    if (showAxis) {
+      _dayAxis(canvas, map, chartH + pad);
+    } else {
+      canvas.drawLine(
+        Offset(pad, chartH + pad),
+        Offset(size.width - pad, chartH + pad),
+        Paint()
+          ..color = gridColor
+          ..strokeWidth = 1,
+      );
+    }
 
     final actual = <Offset>[
       map(1, 0),
@@ -274,8 +307,8 @@ class _BudgetPaceChartPainter extends CustomPainter {
     ];
 
     final budgetLine = Paint()
-      ..color = const Color(0xFF1B5E20)
-      ..strokeWidth = 4
+      ..color = dashColor
+      ..strokeWidth = 2 * strokeScale
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
     _dashed(
@@ -296,7 +329,7 @@ class _BudgetPaceChartPainter extends CustomPainter {
         a,
         b,
         Paint()
-          ..strokeWidth = 5
+          ..strokeWidth = 3.5 * strokeScale
           ..strokeCap = StrokeCap.round
           ..shader = ui.Gradient.linear(a, b, [colors[i - 1], colors[i]]),
       );
@@ -304,13 +337,13 @@ class _BudgetPaceChartPainter extends CustomPainter {
 
     final last = actual.last;
     final dot = colors.last;
-    canvas.drawCircle(last, 6, Paint()..color = Colors.white);
+    canvas.drawCircle(last, 6 * strokeScale, Paint()..color = dotFill);
     canvas.drawCircle(
       last,
-      5,
+      5 * strokeScale,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 3
+        ..strokeWidth = 3 * strokeScale
         ..color = dot,
     );
   }
@@ -322,7 +355,7 @@ class _BudgetPaceChartPainter extends CustomPainter {
     double baselineY,
   ) {
     final guide = Paint()
-      ..color = Colors.black.withValues(alpha: 0.06)
+      ..color = gridColor
       ..strokeWidth = 1;
     for (final day in BudgetPaceChartCard.axisDays(snapshot.daysInMonth)) {
       final x = map(day.toDouble(), 0).dx;
@@ -330,7 +363,7 @@ class _BudgetPaceChartPainter extends CustomPainter {
       final label = TextPainter(
         text: TextSpan(
           text: '$day',
-          style: const TextStyle(fontSize: 11, color: Color(0xFF8A8A8A)),
+          style: TextStyle(fontSize: 11, color: labelColor),
         ),
         textDirection: TextDirection.ltr,
       )..layout();
@@ -357,4 +390,38 @@ class _BudgetPaceChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _BudgetPaceChartPainter oldDelegate) => true;
+}
+
+/// Small pace chart for the Wallet's Cash Flow card: no axis or legend.
+class BudgetPaceMiniChart extends StatelessWidget {
+  const BudgetPaceMiniChart({
+    super.key,
+    required this.snapshot,
+    this.width = 150,
+    this.height = 60,
+  });
+
+  final BudgetPaceSnapshot snapshot;
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return SizedBox(
+      width: width,
+      height: height,
+      child: CustomPaint(
+        painter: _BudgetPaceChartPainter(
+          snapshot: snapshot,
+          dashColor: c.muted,
+          gridColor: c.line,
+          labelColor: c.muted,
+          dotFill: c.card,
+          showAxis: false,
+          strokeScale: 0.7,
+        ),
+      ),
+    );
+  }
 }

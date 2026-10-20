@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../app/app_theme.dart';
 import '../models/ai/ai_models.dart';
 import '../models/app_models.dart';
 import '../models/budget/budget_view_mode.dart';
@@ -14,6 +15,7 @@ import '../widgets/budget/budget_progress_card.dart';
 import '../widgets/budget/budget_alert_history_card.dart';
 import '../widgets/budget/budget_scope_selector.dart';
 import '../widgets/budget/budget_suggestions_card.dart';
+import '../widgets/common/ui.dart';
 
 class BudgetPage extends StatefulWidget {
   const BudgetPage({
@@ -31,6 +33,7 @@ class BudgetPage extends StatefulWidget {
     required this.onMonthChanged,
     this.transactions = const [],
     this.reviewedCategoryByTxId = const {},
+    this.onAsk,
   });
 
   final DashboardStats stats;
@@ -50,6 +53,9 @@ class BudgetPage extends StatefulWidget {
   final List<AppTransaction> transactions;
   final Map<String, String> reviewedCategoryByTxId;
 
+  /// Opens the AI with a question filled in (the ✦ chips).
+  final void Function({String? prompt, String? contextLabel})? onAsk;
+
   @override
   State<BudgetPage> createState() => _BudgetPageState();
 }
@@ -60,6 +66,12 @@ class _BudgetPageState extends State<BudgetPage> {
   final Map<String, int> _manualBudgetOrder = <String, int>{};
   final Map<String, GlobalKey> _budgetItemKeys = <String, GlobalKey>{};
   String? _highlightedBudgetId;
+
+  /// The category card opened up in the stack.
+  String? _expandedBudgetId;
+
+  /// Edit mode: cards in a flat list with drag handles to reorder.
+  bool _editing = false;
   // Alert popups the user closed, keyed by month + budget so a new month
   // shows them again.
   final Set<String> _dismissedAlertKeys = <String>{};
@@ -246,6 +258,7 @@ class _BudgetPageState extends State<BudgetPage> {
         .take(4)
         .toList();
     return SafeArea(
+      bottom: false,
       child: Stack(
         children: [
           _budgetListView(context),
@@ -268,10 +281,44 @@ class _BudgetPageState extends State<BudgetPage> {
   String _alertKey(BudgetCategoryProgress item) =>
       '${widget.selectedMonth.year}-${widget.selectedMonth.month}|${item.budgetId}';
 
+  String get _periodLabel => switch (viewMode) {
+    BudgetViewMode.month => periodLabelForSelection(widget.selectedMonth),
+    BudgetViewMode.year => '${widget.selectedMonth.year}',
+    BudgetViewMode.all => 'All time',
+  };
+
+  void _ask(String prompt) => widget.onAsk?.call(
+    prompt: prompt,
+    contextLabel: 'From Budget · $_periodLabel',
+  );
+
   Widget _budgetListView(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.only(bottom: 32),
       children: [
+        LargeTitle(
+          'Budget',
+          trailing: [
+            TextButton(
+              key: const ValueKey('budget-edit'),
+              onPressed: activeBudgetProgress.isEmpty
+                  ? null
+                  : () => setState(() => _editing = !_editing),
+              child: Text(
+                _editing ? 'Done' : 'Edit',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            CircleIconButton(
+              icon: Icons.add_rounded,
+              tooltip: 'Add Category',
+              onPressed: () => _showCustomCategoryDialog(context),
+            ),
+          ],
+        ),
         BudgetScopeSelector(
           viewMode: viewMode,
           onViewModeChanged: (mode) {
@@ -287,141 +334,160 @@ class _BudgetPageState extends State<BudgetPage> {
           yearOptions: _yearOptions,
           onMonthChanged: widget.onMonthChanged,
         ),
-        const SizedBox(height: 12),
         _budgetHeader(context),
-        const SizedBox(height: 20),
         // Lists overspending categories; tap a name to jump to its card.
-        Builder(
-          builder: (context) {
-            final flagged = _overspendCategories();
-            final byTitle = {for (final c in flagged) c.title: c.budgetId};
-            return BudgetInsightBanner(
-              message: _budgetInsight(),
-              overCategories: [
-                for (final c in flagged)
-                  if (c.isOverBudget) c.title,
-              ],
-              atRiskCategories: [
-                for (final c in flagged)
-                  if (!c.isOverBudget) c.title,
-              ],
-              details: [
-                ...flagged.where((c) => c.isOverBudget),
-                ...flagged.where((c) => !c.isOverBudget),
-              ],
-              onCategoryTap: (title) {
-                final id = byTitle[title];
-                if (id != null) _scrollToBudgetCategory(id);
-              },
-            );
-          },
-        ),
-        const SizedBox(height: 18),
-        // Limits the backend suggests from past months; this month only.
-        if (_showsCurrentMonth)
-          BudgetSuggestionsCard(
-            month: widget.selectedMonth,
-            onUpdateBudgetLimit: widget.onUpdateBudgetLimit,
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+          child: Builder(
+            builder: (context) {
+              final flagged = _overspendCategories();
+              final byTitle = {for (final c in flagged) c.title: c.budgetId};
+              return BudgetInsightBanner(
+                message: _budgetInsight(),
+                overCategories: [
+                  for (final c in flagged)
+                    if (c.isOverBudget) c.title,
+                ],
+                atRiskCategories: [
+                  for (final c in flagged)
+                    if (!c.isOverBudget) c.title,
+                ],
+                details: [
+                  ...flagged.where((c) => c.isOverBudget),
+                  ...flagged.where((c) => !c.isOverBudget),
+                ],
+                onCategoryTap: (title) {
+                  final id = byTitle[title];
+                  if (id != null) _scrollToBudgetCategory(id);
+                },
+              );
+            },
           ),
+        ),
         // Category budget cards show spent vs. limit for the current time scope.
         if (activeBudgetProgress.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.04),
-              borderRadius: BorderRadius.circular(14),
+          Section(
+            child: Text(
+              'No budgets configured for this view yet.',
+              style: TextStyle(color: context.colors.muted),
             ),
-            child: const Text('No budgets configured for this view yet.'),
           ),
-        if (activeBudgetProgress.isNotEmpty) _budgetList(context),
+        if (activeBudgetProgress.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+            child: _editing ? _budgetList(context) : _budgetStack(context),
+          ),
+        if (_editing)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: OutlinedButton.icon(
+              onPressed: () => _showBulkEditBudgetDialog(context),
+              icon: const Icon(Icons.tune, size: 18),
+              label: const Text('Edit Budget'),
+            ),
+          ),
+        const SizedBox(height: 8),
+        // Limits the backend suggests from past months; this month only.
+        if (_showsCurrentMonth)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: BudgetSuggestionsCard(
+              month: widget.selectedMonth,
+              onUpdateBudgetLimit: widget.onUpdateBudgetLimit,
+              onAskWhy: widget.onAsk == null
+                  ? null
+                  : (category) => _ask(
+                      'Why is the suggested $category budget different from my current one?',
+                    ),
+            ),
+          ),
         // Past months that ended over budget (backend alert history).
         if (viewMode == BudgetViewMode.month &&
             !isAllYearOption(widget.selectedMonth))
-          BudgetAlertHistoryCard(month: widget.selectedMonth),
-        const SizedBox(height: 18),
-        BudgetAiAnalysisCard(
-          loading: _loadingAi,
-          error: _aiError,
-          suggestion: _aiSuggestion,
-          contextSource: _aiContextSource,
-          highestCategoryText: _highestCategoryText(),
-          expensesLabel: _selectedRangeExpensesLabel(),
-          expensesValue: _selectedRangeExpensesValue(),
-          canGenerate: _hasEnoughAiData(),
-          onGenerate: _generateAiBudgetSuggestions,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: BudgetAlertHistoryCard(month: widget.selectedMonth),
+          ),
+        const SizedBox(height: 10),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: BudgetAiAnalysisCard(
+            loading: _loadingAi,
+            error: _aiError,
+            suggestion: _aiSuggestion,
+            contextSource: _aiContextSource,
+            highestCategoryText: _highestCategoryText(),
+            expensesLabel: _selectedRangeExpensesLabel(),
+            expensesValue: _selectedRangeExpensesValue(),
+            canGenerate: _hasEnoughAiData(),
+            onGenerate: _generateAiBudgetSuggestions,
+          ),
         ),
       ],
     );
   }
 
+  /// "Left to spend" hero with the period's cash flow under it.
   Widget _budgetHeader(BuildContext context) {
+    final c = context.colors;
     final net = widget.stats.cashFlowNetThisMonth;
     final positive = net >= 0;
-    final tone = positive ? Colors.green.shade700 : Colors.redAccent;
-    final period = periodLabelForSelection(widget.selectedMonth);
+    final budgeted = activeBudgetProgress
+        .where((b) => b.hasLimit)
+        .fold<double>(0, (sum, b) => sum + b.limit);
+    final spent = activeBudgetProgress
+        .where((b) => b.hasLimit)
+        .fold<double>(0, (sum, b) => sum + b.spent);
+    final left = budgeted - spent;
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-      decoration: BoxDecoration(
-        color: Colors.green.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(16),
-      ),
+    return Section(
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Budget',
-            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+          Text(
+            left >= 0 ? 'Left to spend' : 'Over budget',
+            style: TextStyle(fontSize: 13, color: c.muted),
+          ),
+          const SizedBox(height: 2),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                '\$${left.abs().toStringAsFixed(0)}',
+                style: TextStyle(
+                  fontSize: 34,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.8,
+                  color: left >= 0 ? c.text : c.bad,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'of \$${budgeted.toStringAsFixed(0)} budgeted',
+                style: TextStyle(fontSize: 14, color: c.muted),
+              ),
+            ],
           ),
           const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  positive ? Icons.trending_up : Icons.trending_down,
-                  size: 18,
-                  color: tone,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    '$period cash flow',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: Colors.black54,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-                Text(
-                  '${positive ? '+' : '-'}\$${net.abs().toStringAsFixed(2)}',
-                  style: TextStyle(fontWeight: FontWeight.w700, color: tone),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
+          Divider(height: 1, thickness: 0.5, color: c.line),
+          const SizedBox(height: 10),
           Row(
             children: [
               Expanded(
-                child: _headerAction(
-                  icon: Icons.add_circle_outline,
-                  label: 'Add Category',
-                  onPressed: () => _showCustomCategoryDialog(context),
+                child: Text(
+                  '$_periodLabel cash flow',
+                  style: TextStyle(fontSize: 14, color: c.muted),
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _headerAction(
-                  icon: Icons.tune,
-                  label: 'Edit Budget',
-                  onPressed: () => _showBulkEditBudgetDialog(context),
+              Text(
+                '${positive ? '+' : '-'}\$${net.abs().toStringAsFixed(2)}',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: positive ? c.good : c.bad,
                 ),
               ),
             ],
@@ -431,47 +497,67 @@ class _BudgetPageState extends State<BudgetPage> {
     );
   }
 
-  Widget _headerAction({
-    required IconData icon,
-    required String label,
-    required VoidCallback onPressed,
-  }) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 18, color: Colors.green.shade700),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.green.shade800,
+  /// Wallet-style stack of category cards; tap one to open it up.
+  Widget _budgetStack(BuildContext context) {
+    final items = orderedBudgetProgress;
+    final txByCategory = _transactionsByCategory();
+    return Column(
+      children: [
+        for (final (index, item) in items.indexed)
+          Builder(
+            builder: (context) {
+              final open = _expandedBudgetId == item.budgetId;
+              final last = index == items.length - 1;
+              final itemKey = _budgetItemKeys.putIfAbsent(
+                item.budgetId,
+                GlobalKey.new,
+              );
+              // A closed card is drawn full height but only its top strip
+              // takes up room, so the next card overlaps the rest of it.
+              return AnimatedSize(
+                key: ValueKey('budget-item-${item.budgetId}'),
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                alignment: Alignment.topCenter,
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  heightFactor: open || last ? 1 : 0.62,
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: open && !last ? 10 : 0),
+                    child: KeyedSubtree(
+                      key: itemKey,
+                      child: BudgetProgressCard(
+                        item: item,
+                        index: index,
+                        expanded: open,
+                        transactions:
+                            txByCategory[normalizeCategoryKey(item.title)] ??
+                            const [],
+                        highlighted: _highlightedBudgetId == item.budgetId,
+                        onTap: () => setState(
+                          () => _expandedBudgetId = open ? null : item.budgetId,
+                        ),
+                        onEdit: (selectedItem) =>
+                            _showEditBudgetDialog(context, selectedItem),
+                        onAskWhy: widget.onAsk == null
+                            ? null
+                            : () => _ask(
+                                'Why is my ${item.title} spending high in $_periodLabel?',
+                              ),
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ],
+              );
+            },
           ),
-        ),
-      ),
+      ],
     );
   }
 
-  // Builds the visible list of budget cards for the selected time scope.
+  // Edit mode: a flat list of cards with drag handles to reorder them.
   Widget _budgetList(BuildContext context) {
     final items = orderedBudgetProgress;
-    final txByCategory = _transactionsByCategory();
     return ReorderableListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -490,24 +576,17 @@ class _BudgetPageState extends State<BudgetPage> {
       },
       itemBuilder: (context, index) {
         final item = items[index];
-        final itemKey = _budgetItemKeys.putIfAbsent(
-          item.budgetId,
-          GlobalKey.new,
-        );
         return Padding(
-          key: ValueKey('budget-item-${item.budgetId}'),
-          padding: EdgeInsets.only(bottom: index == items.length - 1 ? 0 : 14),
-          child: KeyedSubtree(
-            key: itemKey,
-            child: BudgetProgressCard(
-              item: item,
-              index: index,
-              transactions:
-                  txByCategory[normalizeCategoryKey(item.title)] ?? const [],
-              highlighted: _highlightedBudgetId == item.budgetId,
-              onEdit: (selectedItem) =>
-                  _showEditBudgetDialog(context, selectedItem),
-            ),
+          key: ValueKey('budget-edit-${item.budgetId}'),
+          padding: const EdgeInsets.only(bottom: 8),
+          child: BudgetProgressCard(
+            item: item,
+            index: index,
+            expanded: false,
+            reorderable: true,
+            onTap: () => _showEditBudgetDialog(context, item),
+            onEdit: (selectedItem) =>
+                _showEditBudgetDialog(context, selectedItem),
           ),
         );
       },
@@ -575,9 +654,17 @@ class _BudgetPageState extends State<BudgetPage> {
   }
 
   Future<void> _scrollToBudgetCategory(String budgetId) async {
+    if (_editing || _expandedBudgetId != budgetId) {
+      setState(() {
+        _editing = false;
+        _expandedBudgetId = budgetId;
+      });
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+    }
     final key = _budgetItemKeys[budgetId];
     final target = key?.currentContext;
-    if (target == null) return;
+    if (target == null || !target.mounted) return;
 
     setState(() => _highlightedBudgetId = budgetId);
     await Scrollable.ensureVisible(

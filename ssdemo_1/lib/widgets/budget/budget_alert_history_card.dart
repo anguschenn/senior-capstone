@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../app/app_theme.dart';
 import '../../constants/app_constants.dart';
 import '../../services/auth_service.dart';
 import '../../services/budget_alert_service.dart';
 import '../../services/budget_service.dart';
+import '../../utils/app_helpers.dart' show colorForDetailedCategory;
 import '../../utils/formatters.dart';
 
 /// The last six finished months' budget overruns, newest first, so a pattern
@@ -82,38 +84,30 @@ class _BudgetAlertHistoryCardState extends State<BudgetAlertHistoryCard> {
   @override
   Widget build(BuildContext context) {
     if (_items.isEmpty) return const SizedBox.shrink();
+    final c = context.colors;
     final byMonth = <String, List<BudgetOverrun>>{};
     for (final item in _items) {
       byMonth.putIfAbsent(item.month, () => []).add(item);
     }
     return Container(
-      margin: const EdgeInsets.only(top: 18),
+      margin: const EdgeInsets.only(top: 10),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.04),
+        color: c.card,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
-            children: [
-              Icon(Icons.history, size: 18, color: Colors.black54),
-              SizedBox(width: 8),
-              Text(
-                'Alert history',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ],
+          const Text(
+            'Alert history',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 4),
           Text(
             'Months that ended over budget, last '
             '${BudgetAlertHistoryCard.months} months.',
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.black.withValues(alpha: 0.6),
-            ),
+            style: TextStyle(fontSize: 12, color: c.muted),
           ),
           for (final entry in byMonth.entries) ...[
             const SizedBox(height: 10),
@@ -123,12 +117,27 @@ class _BudgetAlertHistoryCardState extends State<BudgetAlertHistoryCard> {
             ),
             for (final item in entry.value)
               Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Text(
-                  '${item.category}: ${formatMoney(item.spent, signed: false)}'
-                  ' of ${formatMoney(item.limit, signed: false)}'
-                  ' (over by ${formatMoney(item.overBy, signed: false)})',
-                  style: const TextStyle(fontSize: 13),
+                padding: const EdgeInsets.only(top: 4),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: colorForDetailedCategory(item.category),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '${item.category}: ${formatMoney(item.spent, signed: false)}'
+                        ' of ${formatMoney(item.limit, signed: false)}'
+                        ' (over by ${formatMoney(item.overBy, signed: false)})',
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  ],
                 ),
               ),
           ],

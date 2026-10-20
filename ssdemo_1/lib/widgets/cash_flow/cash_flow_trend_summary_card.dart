@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../app/app_theme.dart';
 import '../../utils/app_helpers.dart';
+import '../common/ui.dart';
 
 class CashFlowTrendSummaryCard extends StatelessWidget {
   const CashFlowTrendSummaryCard({
@@ -9,6 +11,7 @@ class CashFlowTrendSummaryCard extends StatelessWidget {
     required this.rangeLabel,
     required this.income,
     required this.expenses,
+    this.onAskWhy,
   });
 
   final String summaryText;
@@ -16,38 +19,45 @@ class CashFlowTrendSummaryCard extends StatelessWidget {
   final double income;
   final double expenses;
 
+  /// Shows a ✦ "Why?" chip that opens the AI about this trend.
+  final VoidCallback? onAskWhy;
+
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
+    final body = TextStyle(fontSize: 14, height: 1.35, color: c.text);
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2)),
-        ],
+        color: c.card,
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.trending_up, color: Colors.green),
-              SizedBox(width: 8),
-              Text(
-                'Trend Summary',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              const Expanded(
+                child: Text(
+                  'Trend Summary',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
               ),
+              if (onAskWhy != null) AskChip(label: 'Why?', onTap: onAskWhy!),
             ],
           ),
           const SizedBox(height: 10),
-          Text(summaryText),
+          Text(summaryText, style: body),
           const SizedBox(height: 6),
-          Text('• $rangeLabel income: ${formatMoney(income, signed: false)}'),
+          Text(
+            '• $rangeLabel income: ${formatMoney(income, signed: false)}',
+            style: body,
+          ),
           const SizedBox(height: 6),
           Text(
             '• $rangeLabel expenses: ${formatMoney(expenses, signed: false)}',
+            style: body,
           ),
         ],
       ),

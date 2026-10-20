@@ -34,6 +34,10 @@ AppTransaction _tx(
 }
 
 Future<void> _pump(WidgetTester tester) async {
+  // Tall enough that every row is on screen under the Activity header.
+  tester.view.physicalSize = const Size(800, 1000);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
   await tester.pumpWidget(
     MaterialApp(
       home: Scaffold(

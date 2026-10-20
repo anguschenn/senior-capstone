@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../app/app_theme.dart';
 import '../../models/ai/ai_models.dart';
 
 class AiResponseCard extends StatelessWidget {
@@ -14,11 +15,12 @@ class AiResponseCard extends StatelessWidget {
         response.answerSource.trim().isNotEmpty ||
         response.factsUsed.isNotEmpty ||
         response.periodResolved.isNotEmpty;
+    final c = context.colors;
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.grey.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
+        color: c.card,
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -30,12 +32,12 @@ class AiResponseCard extends StatelessWidget {
             ),
           if (response.insights.isNotEmpty) ...[
             const SizedBox(height: 10),
-            const Text(
+            Text(
               'Insights',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
-                color: Colors.black54,
+                color: c.muted,
               ),
             ),
             const SizedBox(height: 4),
@@ -59,12 +61,12 @@ class AiResponseCard extends StatelessWidget {
           ],
           if (response.actions.isNotEmpty) ...[
             const SizedBox(height: 10),
-            const Text(
+            Text(
               'Actions',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
-                color: Colors.black54,
+                color: c.muted,
               ),
             ),
             const SizedBox(height: 4),
@@ -74,10 +76,7 @@ class AiResponseCard extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      '→ ',
-                      style: TextStyle(fontSize: 13, color: Colors.green),
-                    ),
+                    Text('→ ', style: TextStyle(fontSize: 13, color: c.good)),
                     Expanded(
                       child: Text(
                         item,
@@ -91,14 +90,14 @@ class AiResponseCard extends StatelessWidget {
           ],
           if (kDebugMode && hasDebugData) ...[
             const SizedBox(height: 10),
-            const Divider(height: 1),
+            Divider(height: 1, color: c.line),
             const SizedBox(height: 8),
             Text(
               'Debug',
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
-                color: Colors.black.withValues(alpha: 0.5),
+                color: c.muted,
               ),
             ),
             if (response.answerSource.trim().isNotEmpty)
@@ -106,11 +105,7 @@ class AiResponseCard extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
                   'source: ${response.answerSource}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.black.withValues(alpha: 0.65),
-                    height: 1.25,
-                  ),
+                  style: TextStyle(fontSize: 11, color: c.muted, height: 1.25),
                 ),
               ),
             if (response.periodResolved.isNotEmpty)
@@ -118,11 +113,7 @@ class AiResponseCard extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
                   'period: ${response.periodResolved}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.black.withValues(alpha: 0.65),
-                    height: 1.25,
-                  ),
+                  style: TextStyle(fontSize: 11, color: c.muted, height: 1.25),
                 ),
               ),
             if (response.factsUsed.isNotEmpty)
@@ -130,11 +121,7 @@ class AiResponseCard extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
                   'facts: ${response.factsUsed.join(' | ')}',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.black.withValues(alpha: 0.65),
-                    height: 1.25,
-                  ),
+                  style: TextStyle(fontSize: 11, color: c.muted, height: 1.25),
                 ),
               ),
           ],
