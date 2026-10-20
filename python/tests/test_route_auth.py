@@ -3,7 +3,7 @@
 import unittest
 from unittest import mock
 
-from route_helpers import VALID_TOKEN, app_client, headers
+from route_helpers import USER_ID, VALID_TOKEN, app_client, headers
 from supabase_auth.errors import AuthApiError, AuthRetryableError
 
 import auth
@@ -130,6 +130,35 @@ class ChatAuthTests(_AuthCases, unittest.TestCase):
 class SuggestCategoryAuthTests(_AuthCases, unittest.TestCase):
     path = "/api/ai/suggest_category"
     body = {"merchant_name": "Starbucks"}
+
+
+class LinkTokenAuthTests(_AuthCases, unittest.TestCase):
+    """Starting a Plaid Link needs a signed-in user, not just the bundled x-api-key."""
+
+    path = "/api/create_link_token"
+    body = {}
+
+    def test_valid_token_sends_the_user_id_to_plaid(self):
+        from types import SimpleNamespace
+
+        from routes import plaid_routes
+
+        sent = []
+
+        def fake_create(link_request):
+            sent.append(link_request)
+            return SimpleNamespace(to_dict=lambda: {"link_token": "link-sandbox-123"})
+
+        with (
+            app_client() as client,
+            mock.patch.object(plaid_routes, "PLAID_CLIENT_ID", "id"),
+            mock.patch.object(plaid_routes, "PLAID_SECRET", "secret"),
+            mock.patch.object(plaid_routes.client, "link_token_create", side_effect=fake_create),
+        ):
+            response = self._call(client, VALID_TOKEN)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), {"link_token": "link-sandbox-123"})
+        self.assertEqual(sent[0].user.client_user_id, USER_ID)
 
 
 if __name__ == "__main__":
