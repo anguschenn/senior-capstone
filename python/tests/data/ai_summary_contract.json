@@ -1,0 +1,2911 @@
+{
+  "description": "Shared by python/tests/test_server_summary.py and ssdemo_1/test/services/ai_summary_contract_test.dart. `expected` is written by `python tests/test_server_summary.py --write`; both sides must match it.",
+  "now": "2026-10-10T12:00:00",
+  "accounts": [
+    {
+      "plaid_account_id": "acc-checking",
+      "name": "Everyday Checking",
+      "account_type": "depository",
+      "subtype": "checking"
+    },
+    {
+      "plaid_account_id": "acc-card",
+      "name": "Freedom Credit Card",
+      "account_type": "credit",
+      "subtype": "credit card"
+    }
+  ],
+  "rules": {
+    "starbucks|food and drink|food and drink coffee": "Entertainment"
+  },
+  "transactions": [
+    {
+      "plaid_transaction_id": "tx-01",
+      "plaid_account_id": "acc-checking",
+      "amount": -2000,
+      "date": "2026-10-01",
+      "name": "ACME PAYROLL",
+      "merchant_name": "ACME PAYROLL",
+      "pfc_primary": "INCOME",
+      "pfc_detailed": "INCOME_WAGES",
+      "category": null,
+      "pfc_confidence": "high",
+      "pending": false
+    },
+    {
+      "plaid_transaction_id": "tx-02",
+      "plaid_account_id": "acc-checking",
+      "amount": -2000,
+      "date": "2026-09-15",
+      "name": "ACME PAYROLL",
+      "merchant_name": "ACME PAYROLL",
+      "pfc_primary": "INCOME",
+      "pfc_detailed": "INCOME_WAGES",
+      "category": null,
+      "pfc_confidence": "high",
+      "pending": false
+    },
+    {
+      "plaid_transaction_id": "tx-03",
+      "plaid_account_id": "acc-checking",
+      "amount": -1950,
+      "date": "2026-08-14",
+      "name": "ACME PAYROLL",
+      "merchant_name": "ACME PAYROLL",
+      "pfc_primary": "INCOME",
+      "pfc_detailed": "INCOME_WAGES",
+      "category": null,
+      "pfc_confidence": "high",
+      "pending": false
+    },
+    {
+      "plaid_transaction_id": "tx-04",
+      "plaid_account_id": "acc-card",
+      "amount": 45.5,
+      "date": "2026-10-08",
+      "name": "Chipotle",
+      "merchant_name": "Chipotle",
+      "pfc_primary": "FOOD_AND_DRINK",
+      "pfc_detailed": "FOOD_AND_DRINK_RESTAURANT",
+      "category": null,
+      "pfc_confidence": "high",
+      "pending": false
+    },
+    {
+      "plaid_transaction_id": "tx-05",
+      "plaid_account_id": "acc-card",
+      "amount": 6.25,
+      "date": "2026-10-09",
+      "name": "Starbucks",
+      "merchant_name": "Starbucks",
+      "pfc_primary": "FOOD_AND_DRINK",
+      "pfc_detailed": "FOOD_AND_DRINK_COFFEE",
+      "category": null,
+      "pfc_confidence": "high",
+      "pending": false
+    },
+    {
+      "plaid_transaction_id": "tx-06",
+      "plaid_account_id": "acc-card",
+      "amount": 120,
+      "date": "2026-10-03",
+      "name": "Amazon",
+      "merchant_name": "Amazon",
+      "pfc_primary": "GENERAL_MERCHANDISE",
+      "pfc_detailed": "GENERAL_MERCHANDISE_ONLINE_MARKETPLACES",
+      "category": null,
+      "pfc_confidence": "high",
+      "pending": false
+    },
+    {
+      "plaid_transaction_id": "tx-07",
+      "plaid_account_id": "acc-card",
+      "amount": -30,
+      "date": "2026-10-05",
+      "name": "Amazon refund",
+      "merchant_name": "Amazon refund",
+      "pfc_primary": "GENERAL_MERCHANDISE",
+      "pfc_detailed": "GENERAL_MERCHANDISE_ONLINE_MARKETPLACES",
+      "category": null,
+      "pfc_confidence": "high",
+      "pending": false
+    },
+    {
+      "plaid_transaction_id": "tx-08",
+      "plaid_account_id": "acc-checking",
+      "amount": 500,
+      "date": "2026-10-06",
+      "name": "Payment to Chase card",
+      "merchant_name": "Payment to Chase card",
+      "pfc_primary": "LOAN_PAYMENTS",
+      "pfc_detailed": "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT",
+      "category": null,
+      "pfc_confidence": "high",
+      "pending": false
+    },
+    {
+      "plaid_transaction_id": "tx-09",
+      "plaid_account_id": "acc-card",
+      "amount": -500,
+      "date": "2026-10-07",
+      "name": "Payment Thank You",
+      "merchant_name": "Payment Thank You",
+      "pfc_primary": "LOAN_PAYMENTS",
+      "pfc_detailed": "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT",
+      "category": null,
+      "pfc_confidence": "high",
+      "pending": false
+    },
+    {
+      "plaid_transaction_id": "tx-10",
+      "plaid_account_id": "acc-checking",
+      "amount": 80,
+      "date": "2026-09-20",
+      "name": "Zelle payment to Sam",
+      "merchant_name": "Zelle payment to Sam",
+      "pfc_primary": "TRANSFER_OUT",
+      "pfc_detailed": "TRANSFER_OUT_ACCOUNT_TRANSFER",
+      "category": null,
+      "pfc_confidence": "high",
+      "pending": false
+    },
+    {
+      "plaid_transaction_id": "tx-11",
+      "plaid_account_id": "acc-checking",
+      "amount": 1500,
+      "date": "2026-09-01",
+      "name": "Rent",
+      "merchant_name": "Rent",
+      "pfc_primary": "RENT_AND_UTILITIES",
+      "pfc_detailed": "RENT_AND_UTILITIES_RENT",
+      "category": null,
+      "pfc_confidence": "high",
+      "pending": false
+    },
+    {
+      "plaid_transaction_id": "tx-12",
+      "plaid_account_id": "acc-card",
+      "amount": 210.4,
+      "date": "2026-09-12",
+      "name": "Whole Foods",
+      "merchant_name": "Whole Foods",
+      "pfc_primary": "FOOD_AND_DRINK",
+      "pfc_detailed": "FOOD_AND_DRINK_GROCERIES",
+      "category": null,
+      "pfc_confidence": "high",
+      "pending": false
+    },
+    {
+      "plaid_transaction_id": "tx-13",
+      "plaid_account_id": "acc-card",
+      "amount": 15.49,
+      "date": "2026-09-18",
+      "name": "Netflix",
+      "merchant_name": "Netflix",
+      "pfc_primary": "ENTERTAINMENT",
+      "pfc_detailed": "ENTERTAINMENT_TV_AND_MOVIES",
+      "category": null,
+      "pfc_confidence": "high",
+      "pending": false
+    },
+    {
+      "plaid_transaction_id": "tx-14",
+      "plaid_account_id": "acc-card",
+      "amount": 42,
+      "date": "2026-08-22",
+      "name": "Shell",
+      "merchant_name": "Shell",
+      "pfc_primary": "TRANSPORTATION",
+      "pfc_detailed": "TRANSPORTATION_GAS",
+      "category": null,
+      "pfc_confidence": "high",
+      "pending": false
+    },
+    {
+      "plaid_transaction_id": "tx-15",
+      "plaid_account_id": "acc-card",
+      "amount": 33,
+      "date": "2026-06-10",
+      "name": "Panera",
+      "merchant_name": "Panera",
+      "pfc_primary": "FOOD_AND_DRINK",
+      "pfc_detailed": "FOOD_AND_DRINK_RESTAURANT",
+      "category": null,
+      "pfc_confidence": "high",
+      "pending": false
+    },
+    {
+      "plaid_transaction_id": "tx-16",
+      "plaid_account_id": "acc-card",
+      "amount": 75,
+      "date": "2026-05-02",
+      "name": "Target",
+      "merchant_name": "Target",
+      "pfc_primary": "GENERAL_MERCHANDISE",
+      "pfc_detailed": "GENERAL_MERCHANDISE_SUPERSTORES",
+      "category": null,
+      "pfc_confidence": "high",
+      "pending": false
+    },
+    {
+      "plaid_transaction_id": "tx-17",
+      "plaid_account_id": "acc-checking",
+      "amount": -1900,
+      "date": "2026-04-15",
+      "name": "ACME PAYROLL",
+      "merchant_name": "ACME PAYROLL",
+      "pfc_primary": "INCOME",
+      "pfc_detailed": "INCOME_WAGES",
+      "category": null,
+      "pfc_confidence": "high",
+      "pending": false
+    },
+    {
+      "plaid_transaction_id": "tx-04",
+      "plaid_account_id": "acc-card",
+      "amount": 45.5,
+      "date": "2026-10-08",
+      "name": "Chipotle",
+      "merchant_name": "Chipotle",
+      "pfc_primary": "FOOD_AND_DRINK",
+      "pfc_detailed": "FOOD_AND_DRINK_RESTAURANT",
+      "category": null,
+      "pfc_confidence": "high",
+      "pending": false
+    },
+    {
+      "plaid_transaction_id": "tx-18",
+      "plaid_account_id": "acc-card",
+      "amount": 12,
+      "date": "2026-10-10",
+      "name": "Uber",
+      "merchant_name": "Uber",
+      "pfc_primary": "TRANSPORTATION",
+      "pfc_detailed": "TRANSPORTATION_TAXIS_AND_RIDE_SHARES",
+      "category": null,
+      "pfc_confidence": "high",
+      "pending": true
+    },
+    {
+      "plaid_transaction_id": "tx-19",
+      "plaid_account_id": "acc-checking",
+      "amount": 25,
+      "date": "2026-07-03",
+      "name": "Mystery charge",
+      "merchant_name": null,
+      "pfc_primary": null,
+      "pfc_detailed": null,
+      "category": null,
+      "pfc_confidence": "high",
+      "pending": false
+    },
+    {
+      "plaid_transaction_id": "tx-20",
+      "plaid_account_id": "acc-card",
+      "amount": "19.99",
+      "date": "2026-10-02",
+      "name": "Spotify",
+      "merchant_name": "Spotify",
+      "pfc_primary": "ENTERTAINMENT",
+      "pfc_detailed": "ENTERTAINMENT_MUSIC_AND_AUDIO",
+      "category": null,
+      "pfc_confidence": "high",
+      "pending": false
+    },
+    {
+      "plaid_transaction_id": "tx-21",
+      "plaid_account_id": "acc-checking",
+      "amount": 64.3,
+      "date": "2026-09-25",
+      "name": "Venmo cashout to Alex",
+      "merchant_name": "Venmo cashout to Alex",
+      "pfc_primary": "TRANSFER_OUT",
+      "pfc_detailed": "TRANSFER_OUT_ACCOUNT_TRANSFER",
+      "category": null,
+      "pfc_confidence": "high",
+      "pending": false
+    },
+    {
+      "plaid_transaction_id": "tx-22",
+      "plaid_account_id": "acc-card",
+      "amount": 88.8,
+      "date": "2026-07-19",
+      "name": "Delta",
+      "merchant_name": "Delta",
+      "pfc_primary": "TRAVEL",
+      "pfc_detailed": "TRAVEL_FLIGHTS",
+      "category": null,
+      "pfc_confidence": "high",
+      "pending": false
+    }
+  ],
+  "cases": [
+    {
+      "description": "all accounts, October (current month)",
+      "account_ids": [],
+      "focus_month": "2026-10",
+      "all_year": false,
+      "scope_label": "Overall (All Accounts)",
+      "account_type": "",
+      "budget_progress": [
+        {
+          "category": "Food",
+          "spent": 45.5,
+          "limit": 300
+        },
+        {
+          "category": "Shopping",
+          "spent": 120,
+          "limit": 100
+        },
+        {
+          "category": "Housing",
+          "spent": 0,
+          "limit": 0
+        }
+      ],
+      "expected": {
+        "version": 3,
+        "scope": "all_accounts",
+        "scope_label": "Overall (All Accounts)",
+        "account_type": "",
+        "data_coverage": {
+          "transaction_count_total": 22,
+          "range_start": "2026-04-15",
+          "range_end": "2026-10-10",
+          "days_span": 179,
+          "active_days": 22,
+          "coverage_ratio_recent_30d": 0.4666666666666667
+        },
+        "confidence": {
+          "score": 0.7068749999999999,
+          "overall": "medium",
+          "reasons": [],
+          "components": {
+            "tx_count_recent_30d": 0.7,
+            "coverage_recent_30d": 0.4666666666666667,
+            "history_span": 1.0,
+            "noise_penalty_adjusted": 0.8125
+          }
+        },
+        "warnings": [],
+        "category_index": {
+          "Food": 288.9,
+          "Entertainment": 6.25,
+          "Shopping": 195.0,
+          "Bills & Utilities": 1500.0,
+          "Subscriptions": 35.48,
+          "Transport": 142.8,
+          "Other": 25.0
+        },
+        "time_anchor": {
+          "selected_month": "2026-10",
+          "selected_year": 2026,
+          "tz": ""
+        },
+        "window_days": 30,
+        "window_definition": {
+          "windows_anchor": "anchor_based_selected_month",
+          "windows_rolling": "rolling_from_generated_at"
+        },
+        "windows_anchor": {
+          "last_7d": {
+            "income": 30.0,
+            "expenses": 63.75,
+            "tx_count": 6
+          },
+          "last_30d": {
+            "income": 4030.0,
+            "expenses": 573.93,
+            "tx_count": 14,
+            "expense_tx_count": 10
+          },
+          "last_90d": {
+            "income": 5980.0,
+            "expenses": 2204.7300000000005,
+            "tx_count": 18
+          }
+        },
+        "windows_rolling": {
+          "last_7d": {
+            "income": 30.0,
+            "expenses": 63.75,
+            "tx_count": 6
+          },
+          "last_30d": {
+            "income": 4030.0,
+            "expenses": 573.93,
+            "tx_count": 14,
+            "expense_tx_count": 10
+          },
+          "last_90d": {
+            "income": 5980.0,
+            "expenses": 2204.7300000000005,
+            "tx_count": 18
+          }
+        },
+        "year_index": {
+          "2026": {
+            "income": 7880.0,
+            "expenses": 2337.7300000000005,
+            "tx_count": 22
+          }
+        },
+        "month_index": {
+          "2026-04": {
+            "income": 1900.0,
+            "expenses": 0.0,
+            "card_payments_in": 0.0,
+            "card_payments_out": 0.0,
+            "tx_count": 1,
+            "expense_tx_count": 0,
+            "top_category": null,
+            "categories": {}
+          },
+          "2026-05": {
+            "income": 0.0,
+            "expenses": 75.0,
+            "card_payments_in": 0.0,
+            "card_payments_out": 0.0,
+            "tx_count": 1,
+            "expense_tx_count": 1,
+            "top_category": {
+              "name": "Shopping",
+              "amount": 75.0
+            },
+            "categories": {
+              "Shopping": 75.0
+            }
+          },
+          "2026-06": {
+            "income": 0.0,
+            "expenses": 33.0,
+            "card_payments_in": 0.0,
+            "card_payments_out": 0.0,
+            "tx_count": 1,
+            "expense_tx_count": 1,
+            "top_category": {
+              "name": "Food",
+              "amount": 33.0
+            },
+            "categories": {
+              "Food": 33.0
+            }
+          },
+          "2026-07": {
+            "income": 0.0,
+            "expenses": 113.8,
+            "card_payments_in": 0.0,
+            "card_payments_out": 0.0,
+            "tx_count": 2,
+            "expense_tx_count": 2,
+            "top_category": {
+              "name": "Transport",
+              "amount": 88.8
+            },
+            "categories": {
+              "Transport": 88.8,
+              "Other": 25.0
+            }
+          },
+          "2026-08": {
+            "income": 1950.0,
+            "expenses": 42.0,
+            "card_payments_in": 0.0,
+            "card_payments_out": 0.0,
+            "tx_count": 2,
+            "expense_tx_count": 1,
+            "top_category": {
+              "name": "Transport",
+              "amount": 42.0
+            },
+            "categories": {
+              "Transport": 42.0
+            }
+          },
+          "2026-09": {
+            "income": 2000.0,
+            "expenses": 1870.19,
+            "card_payments_in": 0.0,
+            "card_payments_out": 0.0,
+            "tx_count": 6,
+            "expense_tx_count": 5,
+            "top_category": {
+              "name": "Bills & Utilities",
+              "amount": 1500.0
+            },
+            "categories": {
+              "Bills & Utilities": 1500.0,
+              "Food": 210.4,
+              "Subscriptions": 15.49
+            }
+          },
+          "2026-10": {
+            "income": 2030.0,
+            "expenses": 203.74,
+            "card_payments_in": 500.0,
+            "card_payments_out": 500.0,
+            "tx_count": 9,
+            "expense_tx_count": 6,
+            "top_category": {
+              "name": "Shopping",
+              "amount": 120.0
+            },
+            "categories": {
+              "Shopping": 120.0,
+              "Food": 45.5,
+              "Subscriptions": 19.99,
+              "Transport": 12.0,
+              "Entertainment": 6.25
+            }
+          }
+        },
+        "day_index_recent": {
+          "2026-06-10": {
+            "income": 0.0,
+            "expenses": 33.0,
+            "tx_count": 1
+          },
+          "2026-07-03": {
+            "income": 0.0,
+            "expenses": 25.0,
+            "tx_count": 1
+          },
+          "2026-07-19": {
+            "income": 0.0,
+            "expenses": 88.8,
+            "tx_count": 1
+          },
+          "2026-08-14": {
+            "income": 1950.0,
+            "expenses": 0.0,
+            "tx_count": 1
+          },
+          "2026-08-22": {
+            "income": 0.0,
+            "expenses": 42.0,
+            "tx_count": 1
+          },
+          "2026-09-01": {
+            "income": 0.0,
+            "expenses": 1500.0,
+            "tx_count": 1
+          },
+          "2026-09-12": {
+            "income": 0.0,
+            "expenses": 210.4,
+            "tx_count": 1
+          },
+          "2026-09-15": {
+            "income": 2000.0,
+            "expenses": 0.0,
+            "tx_count": 1
+          },
+          "2026-09-18": {
+            "income": 0.0,
+            "expenses": 15.49,
+            "tx_count": 1
+          },
+          "2026-09-20": {
+            "income": 0.0,
+            "expenses": 80.0,
+            "tx_count": 1
+          },
+          "2026-09-25": {
+            "income": 0.0,
+            "expenses": 64.3,
+            "tx_count": 1
+          },
+          "2026-10-01": {
+            "income": 2000.0,
+            "expenses": 0.0,
+            "tx_count": 1
+          },
+          "2026-10-02": {
+            "income": 0.0,
+            "expenses": 19.99,
+            "tx_count": 1
+          },
+          "2026-10-03": {
+            "income": 0.0,
+            "expenses": 120.0,
+            "tx_count": 1
+          },
+          "2026-10-05": {
+            "income": 30.0,
+            "expenses": 0.0,
+            "tx_count": 1
+          },
+          "2026-10-06": {
+            "income": 0.0,
+            "expenses": 0.0,
+            "tx_count": 1
+          },
+          "2026-10-07": {
+            "income": 0.0,
+            "expenses": 0.0,
+            "tx_count": 1
+          },
+          "2026-10-08": {
+            "income": 0.0,
+            "expenses": 45.5,
+            "tx_count": 1
+          },
+          "2026-10-09": {
+            "income": 0.0,
+            "expenses": 6.25,
+            "tx_count": 1
+          },
+          "2026-10-10": {
+            "income": 0.0,
+            "expenses": 12.0,
+            "tx_count": 1
+          }
+        },
+        "month_day_index": {
+          "2026-10": [
+            {
+              "date": "2026-10-01",
+              "income": 2000.0,
+              "expenses": 0.0,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-10-02",
+              "income": 0.0,
+              "expenses": 19.99,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-10-03",
+              "income": 0.0,
+              "expenses": 120.0,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-10-05",
+              "income": 30.0,
+              "expenses": 0.0,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-10-06",
+              "income": 0.0,
+              "expenses": 0.0,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-10-07",
+              "income": 0.0,
+              "expenses": 0.0,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-10-08",
+              "income": 0.0,
+              "expenses": 45.5,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-10-09",
+              "income": 0.0,
+              "expenses": 6.25,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-10-10",
+              "income": 0.0,
+              "expenses": 12.0,
+              "tx_count": 1
+            }
+          ],
+          "2026-09": [
+            {
+              "date": "2026-09-01",
+              "income": 0.0,
+              "expenses": 1500.0,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-09-12",
+              "income": 0.0,
+              "expenses": 210.4,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-09-15",
+              "income": 2000.0,
+              "expenses": 0.0,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-09-18",
+              "income": 0.0,
+              "expenses": 15.49,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-09-20",
+              "income": 0.0,
+              "expenses": 80.0,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-09-25",
+              "income": 0.0,
+              "expenses": 64.3,
+              "tx_count": 1
+            }
+          ],
+          "2026-08": [
+            {
+              "date": "2026-08-14",
+              "income": 1950.0,
+              "expenses": 0.0,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-08-22",
+              "income": 0.0,
+              "expenses": 42.0,
+              "tx_count": 1
+            }
+          ],
+          "2026-07": [
+            {
+              "date": "2026-07-03",
+              "income": 0.0,
+              "expenses": 25.0,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-07-19",
+              "income": 0.0,
+              "expenses": 88.8,
+              "tx_count": 1
+            }
+          ],
+          "2026-06": [
+            {
+              "date": "2026-06-10",
+              "income": 0.0,
+              "expenses": 33.0,
+              "tx_count": 1
+            }
+          ],
+          "2026-05": [
+            {
+              "date": "2026-05-02",
+              "income": 0.0,
+              "expenses": 75.0,
+              "tx_count": 1
+            }
+          ]
+        },
+        "rankings": {
+          "highest_spending_months": [
+            {
+              "month": "2026-09",
+              "expenses": 1870.19
+            },
+            {
+              "month": "2026-10",
+              "expenses": 203.74
+            },
+            {
+              "month": "2026-07",
+              "expenses": 113.8
+            },
+            {
+              "month": "2026-05",
+              "expenses": 75.0
+            },
+            {
+              "month": "2026-08",
+              "expenses": 42.0
+            },
+            {
+              "month": "2026-06",
+              "expenses": 33.0
+            },
+            {
+              "month": "2026-04",
+              "expenses": 0.0
+            }
+          ],
+          "highest_spending_days_recent": [
+            {
+              "date": "2026-09-01",
+              "expenses": 1500.0
+            },
+            {
+              "date": "2026-09-12",
+              "expenses": 210.4
+            },
+            {
+              "date": "2026-10-03",
+              "expenses": 120.0
+            },
+            {
+              "date": "2026-07-19",
+              "expenses": 88.8
+            },
+            {
+              "date": "2026-09-20",
+              "expenses": 80.0
+            },
+            {
+              "date": "2026-09-25",
+              "expenses": 64.3
+            },
+            {
+              "date": "2026-10-08",
+              "expenses": 45.5
+            },
+            {
+              "date": "2026-08-22",
+              "expenses": 42.0
+            },
+            {
+              "date": "2026-06-10",
+              "expenses": 33.0
+            },
+            {
+              "date": "2026-07-03",
+              "expenses": 25.0
+            }
+          ]
+        },
+        "totals": {
+          "income_30d": 4030.0,
+          "expenses_30d": 573.93,
+          "net_30d": 3456.07,
+          "tx_count_30d": 14,
+          "expense_tx_count_30d": 10,
+          "income_month": 2030.0,
+          "expenses_month": 203.74,
+          "net_month": 1826.26
+        },
+        "top_expense_categories": [
+          {
+            "category": "Food",
+            "amount": 255.9
+          },
+          {
+            "category": "Shopping",
+            "amount": 120.0
+          },
+          {
+            "category": "Subscriptions",
+            "amount": 35.48
+          },
+          {
+            "category": "Transport",
+            "amount": 12.0
+          },
+          {
+            "category": "Entertainment",
+            "amount": 6.25
+          }
+        ],
+        "recent_transactions": [
+          {
+            "id": "tx-18",
+            "date": "2026-10-10",
+            "name": "Uber",
+            "amount": 12.0,
+            "category": "Transport",
+            "type": "TRANSPORTATION",
+            "account_id": "acc-card"
+          },
+          {
+            "id": "tx-05",
+            "date": "2026-10-09",
+            "name": "Starbucks",
+            "amount": 6.25,
+            "category": "Entertainment",
+            "type": "FOOD_AND_DRINK",
+            "account_id": "acc-card"
+          },
+          {
+            "id": "tx-04",
+            "date": "2026-10-08",
+            "name": "Chipotle",
+            "amount": 45.5,
+            "category": "Food",
+            "type": "FOOD_AND_DRINK",
+            "account_id": "acc-card"
+          },
+          {
+            "id": "tx-09",
+            "date": "2026-10-07",
+            "name": "Payment Thank You",
+            "amount": -500.0,
+            "category": "Fees & Transfers",
+            "type": "LOAN_PAYMENTS",
+            "account_id": "acc-card"
+          },
+          {
+            "id": "tx-08",
+            "date": "2026-10-06",
+            "name": "Payment to Chase card",
+            "amount": 500.0,
+            "category": "Fees & Transfers",
+            "type": "LOAN_PAYMENTS",
+            "account_id": "acc-checking"
+          }
+        ],
+        "budget_alerts": [
+          {
+            "category": "Shopping",
+            "spent": 120,
+            "limit": 100,
+            "ratio": 1.2
+          }
+        ],
+        "budgets": {
+          "month": "2026-10",
+          "items": [
+            {
+              "category": "Food",
+              "spent": 45.5,
+              "limit": 300
+            },
+            {
+              "category": "Shopping",
+              "spent": 120,
+              "limit": 100
+            }
+          ]
+        },
+        "annual_summary": {
+          "year": 2026,
+          "totals": {
+            "income_year": 7880.0,
+            "expenses_year": 2337.7300000000005,
+            "net_year": 5542.2699999999995,
+            "expense_tx_count_year": 16
+          },
+          "monthly_breakdown": [
+            {
+              "month": "2026-04",
+              "income": 1900.0,
+              "expenses": 0.0
+            },
+            {
+              "month": "2026-05",
+              "income": 0.0,
+              "expenses": 75.0
+            },
+            {
+              "month": "2026-06",
+              "income": 0.0,
+              "expenses": 33.0
+            },
+            {
+              "month": "2026-07",
+              "income": 0.0,
+              "expenses": 113.8
+            },
+            {
+              "month": "2026-08",
+              "income": 1950.0,
+              "expenses": 42.0
+            },
+            {
+              "month": "2026-09",
+              "income": 2000.0,
+              "expenses": 1870.19
+            },
+            {
+              "month": "2026-10",
+              "income": 2030.0,
+              "expenses": 203.74
+            }
+          ],
+          "top_expense_categories_year": [
+            {
+              "category": "Bills & Utilities",
+              "amount": 1500.0
+            },
+            {
+              "category": "Food",
+              "amount": 288.9
+            },
+            {
+              "category": "Shopping",
+              "amount": 195.0
+            },
+            {
+              "category": "Transport",
+              "amount": 142.8
+            },
+            {
+              "category": "Subscriptions",
+              "amount": 35.48
+            },
+            {
+              "category": "Other",
+              "amount": 25.0
+            },
+            {
+              "category": "Entertainment",
+              "amount": 6.25
+            }
+          ],
+          "monthly_expense_ranking": [
+            {
+              "month": "2026-09",
+              "expenses": 1870.19
+            },
+            {
+              "month": "2026-10",
+              "expenses": 203.74
+            },
+            {
+              "month": "2026-07",
+              "expenses": 113.8
+            },
+            {
+              "month": "2026-05",
+              "expenses": 75.0
+            },
+            {
+              "month": "2026-08",
+              "expenses": 42.0
+            },
+            {
+              "month": "2026-06",
+              "expenses": 33.0
+            },
+            {
+              "month": "2026-04",
+              "expenses": 0.0
+            }
+          ],
+          "monthly_expense_trend": [
+            {
+              "month": "2026-04",
+              "expenses": 0.0,
+              "mom_change_pct": null
+            },
+            {
+              "month": "2026-05",
+              "expenses": 75.0,
+              "mom_change_pct": null
+            },
+            {
+              "month": "2026-06",
+              "expenses": 33.0,
+              "mom_change_pct": -0.56
+            },
+            {
+              "month": "2026-07",
+              "expenses": 113.8,
+              "mom_change_pct": 2.4484848484848483
+            },
+            {
+              "month": "2026-08",
+              "expenses": 42.0,
+              "mom_change_pct": -0.6309314586994728
+            },
+            {
+              "month": "2026-09",
+              "expenses": 1870.19,
+              "mom_change_pct": 43.528333333333336
+            },
+            {
+              "month": "2026-10",
+              "expenses": 203.74,
+              "mom_change_pct": -0.891059197193868
+            }
+          ],
+          "monthly_top_categories": [
+            {
+              "month": "2026-05",
+              "category": "Shopping",
+              "amount": 75.0
+            },
+            {
+              "month": "2026-06",
+              "category": "Food",
+              "amount": 33.0
+            },
+            {
+              "month": "2026-07",
+              "category": "Transport",
+              "amount": 88.8
+            },
+            {
+              "month": "2026-08",
+              "category": "Transport",
+              "amount": 42.0
+            },
+            {
+              "month": "2026-09",
+              "category": "Bills & Utilities",
+              "amount": 1500.0
+            },
+            {
+              "month": "2026-10",
+              "category": "Shopping",
+              "amount": 120.0
+            }
+          ],
+          "daily_expense_totals": [
+            {
+              "date": "2026-04-15",
+              "amount": 0.0
+            },
+            {
+              "date": "2026-05-02",
+              "amount": 75.0
+            },
+            {
+              "date": "2026-06-10",
+              "amount": 33.0
+            },
+            {
+              "date": "2026-07-03",
+              "amount": 25.0
+            },
+            {
+              "date": "2026-07-19",
+              "amount": 88.8
+            },
+            {
+              "date": "2026-08-14",
+              "amount": 0.0
+            },
+            {
+              "date": "2026-08-22",
+              "amount": 42.0
+            },
+            {
+              "date": "2026-09-01",
+              "amount": 1500.0
+            },
+            {
+              "date": "2026-09-12",
+              "amount": 210.4
+            },
+            {
+              "date": "2026-09-15",
+              "amount": 0.0
+            },
+            {
+              "date": "2026-09-18",
+              "amount": 15.49
+            },
+            {
+              "date": "2026-09-20",
+              "amount": 80.0
+            },
+            {
+              "date": "2026-09-25",
+              "amount": 64.3
+            },
+            {
+              "date": "2026-10-01",
+              "amount": 0.0
+            },
+            {
+              "date": "2026-10-02",
+              "amount": 19.99
+            },
+            {
+              "date": "2026-10-03",
+              "amount": 120.0
+            },
+            {
+              "date": "2026-10-05",
+              "amount": 0.0
+            },
+            {
+              "date": "2026-10-06",
+              "amount": 0.0
+            },
+            {
+              "date": "2026-10-07",
+              "amount": 0.0
+            },
+            {
+              "date": "2026-10-08",
+              "amount": 45.5
+            },
+            {
+              "date": "2026-10-09",
+              "amount": 6.25
+            },
+            {
+              "date": "2026-10-10",
+              "amount": 12.0
+            }
+          ],
+          "anomalies_top": [
+            {
+              "date": "2026-09-01",
+              "name": "Rent",
+              "amount": 1500.0,
+              "category": "Bills & Utilities"
+            },
+            {
+              "date": "2026-09-12",
+              "name": "Whole Foods",
+              "amount": 210.4,
+              "category": "Food"
+            },
+            {
+              "date": "2026-10-03",
+              "name": "Amazon",
+              "amount": 120.0,
+              "category": "Shopping"
+            },
+            {
+              "date": "2026-07-19",
+              "name": "Delta",
+              "amount": 88.8,
+              "category": "Transport"
+            },
+            {
+              "date": "2026-05-02",
+              "name": "Target",
+              "amount": 75.0,
+              "category": "Shopping"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "description": "credit card only, September (finished month)",
+      "account_ids": [
+        "acc-card"
+      ],
+      "focus_month": "2026-09",
+      "all_year": false,
+      "scope_label": "Freedom Credit Card",
+      "account_type": "credit",
+      "budget_progress": [
+        {
+          "category": "Food",
+          "spent": 210.4,
+          "limit": 200
+        },
+        {
+          "category": "Entertainment",
+          "spent": 15.49,
+          "limit": 50
+        }
+      ],
+      "expected": {
+        "version": 3,
+        "scope": "single_account",
+        "scope_label": "Freedom Credit Card",
+        "account_type": "credit",
+        "data_coverage": {
+          "transaction_count_total": 13,
+          "range_start": "2026-05-02",
+          "range_end": "2026-10-10",
+          "days_span": 162,
+          "active_days": 13,
+          "coverage_ratio_recent_30d": 0.3
+        },
+        "confidence": {
+          "score": 0.5975,
+          "overall": "medium",
+          "reasons": [],
+          "components": {
+            "tx_count_recent_30d": 0.45,
+            "coverage_recent_30d": 0.3,
+            "history_span": 1.0,
+            "noise_penalty_adjusted": 1.0
+          }
+        },
+        "warnings": [],
+        "category_index": {
+          "Food": 288.9,
+          "Entertainment": 6.25,
+          "Shopping": 195.0,
+          "Subscriptions": 35.48,
+          "Transport": 142.8
+        },
+        "time_anchor": {
+          "selected_month": "2026-09",
+          "selected_year": 2026,
+          "tz": ""
+        },
+        "window_days": 30,
+        "window_definition": {
+          "windows_anchor": "anchor_based_selected_month",
+          "windows_rolling": "rolling_from_generated_at"
+        },
+        "windows_anchor": {
+          "last_7d": {
+            "income": 0.0,
+            "expenses": 0.0,
+            "tx_count": 0
+          },
+          "last_30d": {
+            "income": 0.0,
+            "expenses": 225.89000000000001,
+            "tx_count": 2,
+            "expense_tx_count": 2
+          },
+          "last_90d": {
+            "income": 0.0,
+            "expenses": 356.69,
+            "tx_count": 4
+          }
+        },
+        "windows_rolling": {
+          "last_7d": {
+            "income": 30.0,
+            "expenses": 63.75,
+            "tx_count": 5
+          },
+          "last_30d": {
+            "income": 30.0,
+            "expenses": 429.63,
+            "tx_count": 9,
+            "expense_tx_count": 7
+          },
+          "last_90d": {
+            "income": 30.0,
+            "expenses": 560.43,
+            "tx_count": 11
+          }
+        },
+        "year_index": {
+          "2026": {
+            "income": 30.0,
+            "expenses": 668.43,
+            "tx_count": 13
+          }
+        },
+        "month_index": {
+          "2026-05": {
+            "income": 0.0,
+            "expenses": 75.0,
+            "card_payments_in": 0.0,
+            "card_payments_out": 0.0,
+            "tx_count": 1,
+            "expense_tx_count": 1,
+            "top_category": {
+              "name": "Shopping",
+              "amount": 75.0
+            },
+            "categories": {
+              "Shopping": 75.0
+            }
+          },
+          "2026-06": {
+            "income": 0.0,
+            "expenses": 33.0,
+            "card_payments_in": 0.0,
+            "card_payments_out": 0.0,
+            "tx_count": 1,
+            "expense_tx_count": 1,
+            "top_category": {
+              "name": "Food",
+              "amount": 33.0
+            },
+            "categories": {
+              "Food": 33.0
+            }
+          },
+          "2026-07": {
+            "income": 0.0,
+            "expenses": 88.8,
+            "card_payments_in": 0.0,
+            "card_payments_out": 0.0,
+            "tx_count": 1,
+            "expense_tx_count": 1,
+            "top_category": {
+              "name": "Transport",
+              "amount": 88.8
+            },
+            "categories": {
+              "Transport": 88.8
+            }
+          },
+          "2026-08": {
+            "income": 0.0,
+            "expenses": 42.0,
+            "card_payments_in": 0.0,
+            "card_payments_out": 0.0,
+            "tx_count": 1,
+            "expense_tx_count": 1,
+            "top_category": {
+              "name": "Transport",
+              "amount": 42.0
+            },
+            "categories": {
+              "Transport": 42.0
+            }
+          },
+          "2026-09": {
+            "income": 0.0,
+            "expenses": 225.89000000000001,
+            "card_payments_in": 0.0,
+            "card_payments_out": 0.0,
+            "tx_count": 2,
+            "expense_tx_count": 2,
+            "top_category": {
+              "name": "Food",
+              "amount": 210.4
+            },
+            "categories": {
+              "Food": 210.4,
+              "Subscriptions": 15.49
+            }
+          },
+          "2026-10": {
+            "income": 30.0,
+            "expenses": 203.74,
+            "card_payments_in": 500.0,
+            "card_payments_out": 0.0,
+            "tx_count": 7,
+            "expense_tx_count": 5,
+            "top_category": {
+              "name": "Shopping",
+              "amount": 120.0
+            },
+            "categories": {
+              "Shopping": 120.0,
+              "Food": 45.5,
+              "Subscriptions": 19.99,
+              "Transport": 12.0,
+              "Entertainment": 6.25
+            }
+          }
+        },
+        "day_index_recent": {
+          "2026-06-10": {
+            "income": 0.0,
+            "expenses": 33.0,
+            "tx_count": 1
+          },
+          "2026-07-19": {
+            "income": 0.0,
+            "expenses": 88.8,
+            "tx_count": 1
+          },
+          "2026-08-22": {
+            "income": 0.0,
+            "expenses": 42.0,
+            "tx_count": 1
+          },
+          "2026-09-12": {
+            "income": 0.0,
+            "expenses": 210.4,
+            "tx_count": 1
+          },
+          "2026-09-18": {
+            "income": 0.0,
+            "expenses": 15.49,
+            "tx_count": 1
+          },
+          "2026-10-02": {
+            "income": 0.0,
+            "expenses": 19.99,
+            "tx_count": 1
+          },
+          "2026-10-03": {
+            "income": 0.0,
+            "expenses": 120.0,
+            "tx_count": 1
+          },
+          "2026-10-05": {
+            "income": 30.0,
+            "expenses": 0.0,
+            "tx_count": 1
+          },
+          "2026-10-07": {
+            "income": 0.0,
+            "expenses": 0.0,
+            "tx_count": 1
+          },
+          "2026-10-08": {
+            "income": 0.0,
+            "expenses": 45.5,
+            "tx_count": 1
+          },
+          "2026-10-09": {
+            "income": 0.0,
+            "expenses": 6.25,
+            "tx_count": 1
+          },
+          "2026-10-10": {
+            "income": 0.0,
+            "expenses": 12.0,
+            "tx_count": 1
+          }
+        },
+        "month_day_index": {
+          "2026-10": [
+            {
+              "date": "2026-10-02",
+              "income": 0.0,
+              "expenses": 19.99,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-10-03",
+              "income": 0.0,
+              "expenses": 120.0,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-10-05",
+              "income": 30.0,
+              "expenses": 0.0,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-10-07",
+              "income": 0.0,
+              "expenses": 0.0,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-10-08",
+              "income": 0.0,
+              "expenses": 45.5,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-10-09",
+              "income": 0.0,
+              "expenses": 6.25,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-10-10",
+              "income": 0.0,
+              "expenses": 12.0,
+              "tx_count": 1
+            }
+          ],
+          "2026-09": [
+            {
+              "date": "2026-09-12",
+              "income": 0.0,
+              "expenses": 210.4,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-09-18",
+              "income": 0.0,
+              "expenses": 15.49,
+              "tx_count": 1
+            }
+          ],
+          "2026-08": [
+            {
+              "date": "2026-08-22",
+              "income": 0.0,
+              "expenses": 42.0,
+              "tx_count": 1
+            }
+          ],
+          "2026-07": [
+            {
+              "date": "2026-07-19",
+              "income": 0.0,
+              "expenses": 88.8,
+              "tx_count": 1
+            }
+          ],
+          "2026-06": [
+            {
+              "date": "2026-06-10",
+              "income": 0.0,
+              "expenses": 33.0,
+              "tx_count": 1
+            }
+          ],
+          "2026-05": [
+            {
+              "date": "2026-05-02",
+              "income": 0.0,
+              "expenses": 75.0,
+              "tx_count": 1
+            }
+          ]
+        },
+        "rankings": {
+          "highest_spending_months": [
+            {
+              "month": "2026-09",
+              "expenses": 225.89000000000001
+            },
+            {
+              "month": "2026-10",
+              "expenses": 203.74
+            },
+            {
+              "month": "2026-07",
+              "expenses": 88.8
+            },
+            {
+              "month": "2026-05",
+              "expenses": 75.0
+            },
+            {
+              "month": "2026-08",
+              "expenses": 42.0
+            },
+            {
+              "month": "2026-06",
+              "expenses": 33.0
+            }
+          ],
+          "highest_spending_days_recent": [
+            {
+              "date": "2026-09-12",
+              "expenses": 210.4
+            },
+            {
+              "date": "2026-10-03",
+              "expenses": 120.0
+            },
+            {
+              "date": "2026-07-19",
+              "expenses": 88.8
+            },
+            {
+              "date": "2026-10-08",
+              "expenses": 45.5
+            },
+            {
+              "date": "2026-08-22",
+              "expenses": 42.0
+            },
+            {
+              "date": "2026-06-10",
+              "expenses": 33.0
+            },
+            {
+              "date": "2026-10-02",
+              "expenses": 19.99
+            },
+            {
+              "date": "2026-09-18",
+              "expenses": 15.49
+            },
+            {
+              "date": "2026-10-10",
+              "expenses": 12.0
+            },
+            {
+              "date": "2026-10-09",
+              "expenses": 6.25
+            }
+          ]
+        },
+        "totals": {
+          "income_30d": 0.0,
+          "expenses_30d": 225.89000000000001,
+          "net_30d": -225.89000000000001,
+          "tx_count_30d": 2,
+          "expense_tx_count_30d": 2,
+          "income_month": 0.0,
+          "expenses_month": 225.89000000000001,
+          "net_month": -225.89000000000001
+        },
+        "top_expense_categories": [
+          {
+            "category": "Food",
+            "amount": 210.4
+          },
+          {
+            "category": "Subscriptions",
+            "amount": 15.49
+          }
+        ],
+        "recent_transactions": [
+          {
+            "id": "tx-18",
+            "date": "2026-10-10",
+            "name": "Uber",
+            "amount": 12.0,
+            "category": "Transport",
+            "type": "TRANSPORTATION",
+            "account_id": "acc-card"
+          },
+          {
+            "id": "tx-05",
+            "date": "2026-10-09",
+            "name": "Starbucks",
+            "amount": 6.25,
+            "category": "Entertainment",
+            "type": "FOOD_AND_DRINK",
+            "account_id": "acc-card"
+          },
+          {
+            "id": "tx-04",
+            "date": "2026-10-08",
+            "name": "Chipotle",
+            "amount": 45.5,
+            "category": "Food",
+            "type": "FOOD_AND_DRINK",
+            "account_id": "acc-card"
+          },
+          {
+            "id": "tx-09",
+            "date": "2026-10-07",
+            "name": "Payment Thank You",
+            "amount": -500.0,
+            "category": "Fees & Transfers",
+            "type": "LOAN_PAYMENTS",
+            "account_id": "acc-card"
+          },
+          {
+            "id": "tx-07",
+            "date": "2026-10-05",
+            "name": "Amazon refund",
+            "amount": -30.0,
+            "category": "Shopping",
+            "type": "GENERAL_MERCHANDISE",
+            "account_id": "acc-card"
+          }
+        ],
+        "budget_alerts": [
+          {
+            "category": "Food",
+            "spent": 210.4,
+            "limit": 200,
+            "ratio": 1.052
+          }
+        ],
+        "budgets": {
+          "month": "2026-09",
+          "items": [
+            {
+              "category": "Food",
+              "spent": 210.4,
+              "limit": 200
+            },
+            {
+              "category": "Entertainment",
+              "spent": 15.49,
+              "limit": 50
+            }
+          ]
+        },
+        "annual_summary": {
+          "year": 2026,
+          "totals": {
+            "income_year": 30.0,
+            "expenses_year": 668.43,
+            "net_year": -638.43,
+            "expense_tx_count_year": 11
+          },
+          "monthly_breakdown": [
+            {
+              "month": "2026-05",
+              "income": 0.0,
+              "expenses": 75.0
+            },
+            {
+              "month": "2026-06",
+              "income": 0.0,
+              "expenses": 33.0
+            },
+            {
+              "month": "2026-07",
+              "income": 0.0,
+              "expenses": 88.8
+            },
+            {
+              "month": "2026-08",
+              "income": 0.0,
+              "expenses": 42.0
+            },
+            {
+              "month": "2026-09",
+              "income": 0.0,
+              "expenses": 225.89000000000001
+            },
+            {
+              "month": "2026-10",
+              "income": 30.0,
+              "expenses": 203.74
+            }
+          ],
+          "top_expense_categories_year": [
+            {
+              "category": "Food",
+              "amount": 288.9
+            },
+            {
+              "category": "Shopping",
+              "amount": 195.0
+            },
+            {
+              "category": "Transport",
+              "amount": 142.8
+            },
+            {
+              "category": "Subscriptions",
+              "amount": 35.48
+            },
+            {
+              "category": "Entertainment",
+              "amount": 6.25
+            }
+          ],
+          "monthly_expense_ranking": [
+            {
+              "month": "2026-09",
+              "expenses": 225.89000000000001
+            },
+            {
+              "month": "2026-10",
+              "expenses": 203.74
+            },
+            {
+              "month": "2026-07",
+              "expenses": 88.8
+            },
+            {
+              "month": "2026-05",
+              "expenses": 75.0
+            },
+            {
+              "month": "2026-08",
+              "expenses": 42.0
+            },
+            {
+              "month": "2026-06",
+              "expenses": 33.0
+            }
+          ],
+          "monthly_expense_trend": [
+            {
+              "month": "2026-05",
+              "expenses": 75.0,
+              "mom_change_pct": null
+            },
+            {
+              "month": "2026-06",
+              "expenses": 33.0,
+              "mom_change_pct": -0.56
+            },
+            {
+              "month": "2026-07",
+              "expenses": 88.8,
+              "mom_change_pct": 1.690909090909091
+            },
+            {
+              "month": "2026-08",
+              "expenses": 42.0,
+              "mom_change_pct": -0.527027027027027
+            },
+            {
+              "month": "2026-09",
+              "expenses": 225.89000000000001,
+              "mom_change_pct": 4.378333333333334
+            },
+            {
+              "month": "2026-10",
+              "expenses": 203.74,
+              "mom_change_pct": -0.09805657620965959
+            }
+          ],
+          "monthly_top_categories": [
+            {
+              "month": "2026-05",
+              "category": "Shopping",
+              "amount": 75.0
+            },
+            {
+              "month": "2026-06",
+              "category": "Food",
+              "amount": 33.0
+            },
+            {
+              "month": "2026-07",
+              "category": "Transport",
+              "amount": 88.8
+            },
+            {
+              "month": "2026-08",
+              "category": "Transport",
+              "amount": 42.0
+            },
+            {
+              "month": "2026-09",
+              "category": "Food",
+              "amount": 210.4
+            },
+            {
+              "month": "2026-10",
+              "category": "Shopping",
+              "amount": 120.0
+            }
+          ],
+          "daily_expense_totals": [
+            {
+              "date": "2026-05-02",
+              "amount": 75.0
+            },
+            {
+              "date": "2026-06-10",
+              "amount": 33.0
+            },
+            {
+              "date": "2026-07-19",
+              "amount": 88.8
+            },
+            {
+              "date": "2026-08-22",
+              "amount": 42.0
+            },
+            {
+              "date": "2026-09-12",
+              "amount": 210.4
+            },
+            {
+              "date": "2026-09-18",
+              "amount": 15.49
+            },
+            {
+              "date": "2026-10-02",
+              "amount": 19.99
+            },
+            {
+              "date": "2026-10-03",
+              "amount": 120.0
+            },
+            {
+              "date": "2026-10-05",
+              "amount": 0.0
+            },
+            {
+              "date": "2026-10-07",
+              "amount": 0.0
+            },
+            {
+              "date": "2026-10-08",
+              "amount": 45.5
+            },
+            {
+              "date": "2026-10-09",
+              "amount": 6.25
+            },
+            {
+              "date": "2026-10-10",
+              "amount": 12.0
+            }
+          ],
+          "anomalies_top": [
+            {
+              "date": "2026-09-12",
+              "name": "Whole Foods",
+              "amount": 210.4,
+              "category": "Food"
+            },
+            {
+              "date": "2026-10-03",
+              "name": "Amazon",
+              "amount": 120.0,
+              "category": "Shopping"
+            },
+            {
+              "date": "2026-07-19",
+              "name": "Delta",
+              "amount": 88.8,
+              "category": "Transport"
+            },
+            {
+              "date": "2026-05-02",
+              "name": "Target",
+              "amount": 75.0,
+              "category": "Shopping"
+            },
+            {
+              "date": "2026-10-08",
+              "name": "Chipotle",
+              "amount": 45.5,
+              "category": "Food"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "description": "all accounts, 2026 all year",
+      "account_ids": [],
+      "focus_month": "2026-01",
+      "all_year": true,
+      "scope_label": "Overall (All Accounts)",
+      "account_type": "",
+      "budget_progress": [],
+      "expected": {
+        "version": 3,
+        "scope": "all_accounts",
+        "scope_label": "Overall (All Accounts)",
+        "account_type": "",
+        "data_coverage": {
+          "transaction_count_total": 22,
+          "range_start": "2026-04-15",
+          "range_end": "2026-10-10",
+          "days_span": 179,
+          "active_days": 22,
+          "coverage_ratio_recent_30d": 0.4666666666666667
+        },
+        "confidence": {
+          "score": 0.7068749999999999,
+          "overall": "medium",
+          "reasons": [],
+          "components": {
+            "tx_count_recent_30d": 0.7,
+            "coverage_recent_30d": 0.4666666666666667,
+            "history_span": 1.0,
+            "noise_penalty_adjusted": 0.8125
+          }
+        },
+        "warnings": [],
+        "category_index": {
+          "Food": 288.9,
+          "Entertainment": 6.25,
+          "Shopping": 195.0,
+          "Bills & Utilities": 1500.0,
+          "Subscriptions": 35.48,
+          "Transport": 142.8,
+          "Other": 25.0
+        },
+        "time_anchor": {
+          "selected_month": "2026-01",
+          "selected_year": 2026,
+          "tz": ""
+        },
+        "window_days": 30,
+        "window_definition": {
+          "windows_anchor": "anchor_based_selected_month",
+          "windows_rolling": "rolling_from_generated_at"
+        },
+        "windows_anchor": {
+          "last_7d": {
+            "income": 0.0,
+            "expenses": 0.0,
+            "tx_count": 0
+          },
+          "last_30d": {
+            "income": 0.0,
+            "expenses": 0.0,
+            "tx_count": 0,
+            "expense_tx_count": 0
+          },
+          "last_90d": {
+            "income": 0.0,
+            "expenses": 0.0,
+            "tx_count": 0
+          }
+        },
+        "windows_rolling": {
+          "last_7d": {
+            "income": 30.0,
+            "expenses": 63.75,
+            "tx_count": 6
+          },
+          "last_30d": {
+            "income": 4030.0,
+            "expenses": 573.93,
+            "tx_count": 14,
+            "expense_tx_count": 10
+          },
+          "last_90d": {
+            "income": 5980.0,
+            "expenses": 2204.7300000000005,
+            "tx_count": 18
+          }
+        },
+        "year_index": {
+          "2026": {
+            "income": 7880.0,
+            "expenses": 2337.7300000000005,
+            "tx_count": 22
+          }
+        },
+        "month_index": {
+          "2026-04": {
+            "income": 1900.0,
+            "expenses": 0.0,
+            "card_payments_in": 0.0,
+            "card_payments_out": 0.0,
+            "tx_count": 1,
+            "expense_tx_count": 0,
+            "top_category": null,
+            "categories": {}
+          },
+          "2026-05": {
+            "income": 0.0,
+            "expenses": 75.0,
+            "card_payments_in": 0.0,
+            "card_payments_out": 0.0,
+            "tx_count": 1,
+            "expense_tx_count": 1,
+            "top_category": {
+              "name": "Shopping",
+              "amount": 75.0
+            },
+            "categories": {
+              "Shopping": 75.0
+            }
+          },
+          "2026-06": {
+            "income": 0.0,
+            "expenses": 33.0,
+            "card_payments_in": 0.0,
+            "card_payments_out": 0.0,
+            "tx_count": 1,
+            "expense_tx_count": 1,
+            "top_category": {
+              "name": "Food",
+              "amount": 33.0
+            },
+            "categories": {
+              "Food": 33.0
+            }
+          },
+          "2026-07": {
+            "income": 0.0,
+            "expenses": 113.8,
+            "card_payments_in": 0.0,
+            "card_payments_out": 0.0,
+            "tx_count": 2,
+            "expense_tx_count": 2,
+            "top_category": {
+              "name": "Transport",
+              "amount": 88.8
+            },
+            "categories": {
+              "Transport": 88.8,
+              "Other": 25.0
+            }
+          },
+          "2026-08": {
+            "income": 1950.0,
+            "expenses": 42.0,
+            "card_payments_in": 0.0,
+            "card_payments_out": 0.0,
+            "tx_count": 2,
+            "expense_tx_count": 1,
+            "top_category": {
+              "name": "Transport",
+              "amount": 42.0
+            },
+            "categories": {
+              "Transport": 42.0
+            }
+          },
+          "2026-09": {
+            "income": 2000.0,
+            "expenses": 1870.19,
+            "card_payments_in": 0.0,
+            "card_payments_out": 0.0,
+            "tx_count": 6,
+            "expense_tx_count": 5,
+            "top_category": {
+              "name": "Bills & Utilities",
+              "amount": 1500.0
+            },
+            "categories": {
+              "Bills & Utilities": 1500.0,
+              "Food": 210.4,
+              "Subscriptions": 15.49
+            }
+          },
+          "2026-10": {
+            "income": 2030.0,
+            "expenses": 203.74,
+            "card_payments_in": 500.0,
+            "card_payments_out": 500.0,
+            "tx_count": 9,
+            "expense_tx_count": 6,
+            "top_category": {
+              "name": "Shopping",
+              "amount": 120.0
+            },
+            "categories": {
+              "Shopping": 120.0,
+              "Food": 45.5,
+              "Subscriptions": 19.99,
+              "Transport": 12.0,
+              "Entertainment": 6.25
+            }
+          }
+        },
+        "day_index_recent": {
+          "2026-04-15": {
+            "income": 1900.0,
+            "expenses": 0.0,
+            "tx_count": 1
+          },
+          "2026-05-02": {
+            "income": 0.0,
+            "expenses": 75.0,
+            "tx_count": 1
+          },
+          "2026-06-10": {
+            "income": 0.0,
+            "expenses": 33.0,
+            "tx_count": 1
+          },
+          "2026-07-03": {
+            "income": 0.0,
+            "expenses": 25.0,
+            "tx_count": 1
+          },
+          "2026-07-19": {
+            "income": 0.0,
+            "expenses": 88.8,
+            "tx_count": 1
+          },
+          "2026-08-14": {
+            "income": 1950.0,
+            "expenses": 0.0,
+            "tx_count": 1
+          },
+          "2026-08-22": {
+            "income": 0.0,
+            "expenses": 42.0,
+            "tx_count": 1
+          },
+          "2026-09-01": {
+            "income": 0.0,
+            "expenses": 1500.0,
+            "tx_count": 1
+          },
+          "2026-09-12": {
+            "income": 0.0,
+            "expenses": 210.4,
+            "tx_count": 1
+          },
+          "2026-09-15": {
+            "income": 2000.0,
+            "expenses": 0.0,
+            "tx_count": 1
+          },
+          "2026-09-18": {
+            "income": 0.0,
+            "expenses": 15.49,
+            "tx_count": 1
+          },
+          "2026-09-20": {
+            "income": 0.0,
+            "expenses": 80.0,
+            "tx_count": 1
+          },
+          "2026-09-25": {
+            "income": 0.0,
+            "expenses": 64.3,
+            "tx_count": 1
+          },
+          "2026-10-01": {
+            "income": 2000.0,
+            "expenses": 0.0,
+            "tx_count": 1
+          },
+          "2026-10-02": {
+            "income": 0.0,
+            "expenses": 19.99,
+            "tx_count": 1
+          },
+          "2026-10-03": {
+            "income": 0.0,
+            "expenses": 120.0,
+            "tx_count": 1
+          },
+          "2026-10-05": {
+            "income": 30.0,
+            "expenses": 0.0,
+            "tx_count": 1
+          },
+          "2026-10-06": {
+            "income": 0.0,
+            "expenses": 0.0,
+            "tx_count": 1
+          },
+          "2026-10-07": {
+            "income": 0.0,
+            "expenses": 0.0,
+            "tx_count": 1
+          },
+          "2026-10-08": {
+            "income": 0.0,
+            "expenses": 45.5,
+            "tx_count": 1
+          },
+          "2026-10-09": {
+            "income": 0.0,
+            "expenses": 6.25,
+            "tx_count": 1
+          },
+          "2026-10-10": {
+            "income": 0.0,
+            "expenses": 12.0,
+            "tx_count": 1
+          }
+        },
+        "month_day_index": {
+          "2026-10": [
+            {
+              "date": "2026-10-01",
+              "income": 2000.0,
+              "expenses": 0.0,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-10-02",
+              "income": 0.0,
+              "expenses": 19.99,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-10-03",
+              "income": 0.0,
+              "expenses": 120.0,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-10-05",
+              "income": 30.0,
+              "expenses": 0.0,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-10-06",
+              "income": 0.0,
+              "expenses": 0.0,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-10-07",
+              "income": 0.0,
+              "expenses": 0.0,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-10-08",
+              "income": 0.0,
+              "expenses": 45.5,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-10-09",
+              "income": 0.0,
+              "expenses": 6.25,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-10-10",
+              "income": 0.0,
+              "expenses": 12.0,
+              "tx_count": 1
+            }
+          ],
+          "2026-09": [
+            {
+              "date": "2026-09-01",
+              "income": 0.0,
+              "expenses": 1500.0,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-09-12",
+              "income": 0.0,
+              "expenses": 210.4,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-09-15",
+              "income": 2000.0,
+              "expenses": 0.0,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-09-18",
+              "income": 0.0,
+              "expenses": 15.49,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-09-20",
+              "income": 0.0,
+              "expenses": 80.0,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-09-25",
+              "income": 0.0,
+              "expenses": 64.3,
+              "tx_count": 1
+            }
+          ],
+          "2026-08": [
+            {
+              "date": "2026-08-14",
+              "income": 1950.0,
+              "expenses": 0.0,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-08-22",
+              "income": 0.0,
+              "expenses": 42.0,
+              "tx_count": 1
+            }
+          ],
+          "2026-07": [
+            {
+              "date": "2026-07-03",
+              "income": 0.0,
+              "expenses": 25.0,
+              "tx_count": 1
+            },
+            {
+              "date": "2026-07-19",
+              "income": 0.0,
+              "expenses": 88.8,
+              "tx_count": 1
+            }
+          ],
+          "2026-06": [
+            {
+              "date": "2026-06-10",
+              "income": 0.0,
+              "expenses": 33.0,
+              "tx_count": 1
+            }
+          ],
+          "2026-05": [
+            {
+              "date": "2026-05-02",
+              "income": 0.0,
+              "expenses": 75.0,
+              "tx_count": 1
+            }
+          ]
+        },
+        "rankings": {
+          "highest_spending_months": [
+            {
+              "month": "2026-09",
+              "expenses": 1870.19
+            },
+            {
+              "month": "2026-10",
+              "expenses": 203.74
+            },
+            {
+              "month": "2026-07",
+              "expenses": 113.8
+            },
+            {
+              "month": "2026-05",
+              "expenses": 75.0
+            },
+            {
+              "month": "2026-08",
+              "expenses": 42.0
+            },
+            {
+              "month": "2026-06",
+              "expenses": 33.0
+            },
+            {
+              "month": "2026-04",
+              "expenses": 0.0
+            }
+          ],
+          "highest_spending_days_recent": [
+            {
+              "date": "2026-09-01",
+              "expenses": 1500.0
+            },
+            {
+              "date": "2026-09-12",
+              "expenses": 210.4
+            },
+            {
+              "date": "2026-10-03",
+              "expenses": 120.0
+            },
+            {
+              "date": "2026-07-19",
+              "expenses": 88.8
+            },
+            {
+              "date": "2026-09-20",
+              "expenses": 80.0
+            },
+            {
+              "date": "2026-05-02",
+              "expenses": 75.0
+            },
+            {
+              "date": "2026-09-25",
+              "expenses": 64.3
+            },
+            {
+              "date": "2026-10-08",
+              "expenses": 45.5
+            },
+            {
+              "date": "2026-08-22",
+              "expenses": 42.0
+            },
+            {
+              "date": "2026-06-10",
+              "expenses": 33.0
+            }
+          ]
+        },
+        "totals": {
+          "income_30d": 0.0,
+          "expenses_30d": 0.0,
+          "net_30d": 0.0,
+          "tx_count_30d": 0,
+          "expense_tx_count_30d": 0,
+          "income_month": 7880.0,
+          "expenses_month": 2337.73,
+          "net_month": 5542.27
+        },
+        "top_expense_categories": [],
+        "recent_transactions": [
+          {
+            "id": "tx-18",
+            "date": "2026-10-10",
+            "name": "Uber",
+            "amount": 12.0,
+            "category": "Transport",
+            "type": "TRANSPORTATION",
+            "account_id": "acc-card"
+          },
+          {
+            "id": "tx-05",
+            "date": "2026-10-09",
+            "name": "Starbucks",
+            "amount": 6.25,
+            "category": "Entertainment",
+            "type": "FOOD_AND_DRINK",
+            "account_id": "acc-card"
+          },
+          {
+            "id": "tx-04",
+            "date": "2026-10-08",
+            "name": "Chipotle",
+            "amount": 45.5,
+            "category": "Food",
+            "type": "FOOD_AND_DRINK",
+            "account_id": "acc-card"
+          },
+          {
+            "id": "tx-09",
+            "date": "2026-10-07",
+            "name": "Payment Thank You",
+            "amount": -500.0,
+            "category": "Fees & Transfers",
+            "type": "LOAN_PAYMENTS",
+            "account_id": "acc-card"
+          },
+          {
+            "id": "tx-08",
+            "date": "2026-10-06",
+            "name": "Payment to Chase card",
+            "amount": 500.0,
+            "category": "Fees & Transfers",
+            "type": "LOAN_PAYMENTS",
+            "account_id": "acc-checking"
+          }
+        ],
+        "budget_alerts": [],
+        "budgets": {
+          "month": "2026-01",
+          "items": []
+        },
+        "annual_summary": {
+          "year": 2026,
+          "totals": {
+            "income_year": 7880.0,
+            "expenses_year": 2337.7300000000005,
+            "net_year": 5542.2699999999995,
+            "expense_tx_count_year": 16
+          },
+          "monthly_breakdown": [
+            {
+              "month": "2026-04",
+              "income": 1900.0,
+              "expenses": 0.0
+            },
+            {
+              "month": "2026-05",
+              "income": 0.0,
+              "expenses": 75.0
+            },
+            {
+              "month": "2026-06",
+              "income": 0.0,
+              "expenses": 33.0
+            },
+            {
+              "month": "2026-07",
+              "income": 0.0,
+              "expenses": 113.8
+            },
+            {
+              "month": "2026-08",
+              "income": 1950.0,
+              "expenses": 42.0
+            },
+            {
+              "month": "2026-09",
+              "income": 2000.0,
+              "expenses": 1870.19
+            },
+            {
+              "month": "2026-10",
+              "income": 2030.0,
+              "expenses": 203.74
+            }
+          ],
+          "top_expense_categories_year": [
+            {
+              "category": "Bills & Utilities",
+              "amount": 1500.0
+            },
+            {
+              "category": "Food",
+              "amount": 288.9
+            },
+            {
+              "category": "Shopping",
+              "amount": 195.0
+            },
+            {
+              "category": "Transport",
+              "amount": 142.8
+            },
+            {
+              "category": "Subscriptions",
+              "amount": 35.48
+            },
+            {
+              "category": "Other",
+              "amount": 25.0
+            },
+            {
+              "category": "Entertainment",
+              "amount": 6.25
+            }
+          ],
+          "monthly_expense_ranking": [
+            {
+              "month": "2026-09",
+              "expenses": 1870.19
+            },
+            {
+              "month": "2026-10",
+              "expenses": 203.74
+            },
+            {
+              "month": "2026-07",
+              "expenses": 113.8
+            },
+            {
+              "month": "2026-05",
+              "expenses": 75.0
+            },
+            {
+              "month": "2026-08",
+              "expenses": 42.0
+            },
+            {
+              "month": "2026-06",
+              "expenses": 33.0
+            },
+            {
+              "month": "2026-04",
+              "expenses": 0.0
+            }
+          ],
+          "monthly_expense_trend": [
+            {
+              "month": "2026-04",
+              "expenses": 0.0,
+              "mom_change_pct": null
+            },
+            {
+              "month": "2026-05",
+              "expenses": 75.0,
+              "mom_change_pct": null
+            },
+            {
+              "month": "2026-06",
+              "expenses": 33.0,
+              "mom_change_pct": -0.56
+            },
+            {
+              "month": "2026-07",
+              "expenses": 113.8,
+              "mom_change_pct": 2.4484848484848483
+            },
+            {
+              "month": "2026-08",
+              "expenses": 42.0,
+              "mom_change_pct": -0.6309314586994728
+            },
+            {
+              "month": "2026-09",
+              "expenses": 1870.19,
+              "mom_change_pct": 43.528333333333336
+            },
+            {
+              "month": "2026-10",
+              "expenses": 203.74,
+              "mom_change_pct": -0.891059197193868
+            }
+          ],
+          "monthly_top_categories": [
+            {
+              "month": "2026-05",
+              "category": "Shopping",
+              "amount": 75.0
+            },
+            {
+              "month": "2026-06",
+              "category": "Food",
+              "amount": 33.0
+            },
+            {
+              "month": "2026-07",
+              "category": "Transport",
+              "amount": 88.8
+            },
+            {
+              "month": "2026-08",
+              "category": "Transport",
+              "amount": 42.0
+            },
+            {
+              "month": "2026-09",
+              "category": "Bills & Utilities",
+              "amount": 1500.0
+            },
+            {
+              "month": "2026-10",
+              "category": "Shopping",
+              "amount": 120.0
+            }
+          ],
+          "daily_expense_totals": [
+            {
+              "date": "2026-04-15",
+              "amount": 0.0
+            },
+            {
+              "date": "2026-05-02",
+              "amount": 75.0
+            },
+            {
+              "date": "2026-06-10",
+              "amount": 33.0
+            },
+            {
+              "date": "2026-07-03",
+              "amount": 25.0
+            },
+            {
+              "date": "2026-07-19",
+              "amount": 88.8
+            },
+            {
+              "date": "2026-08-14",
+              "amount": 0.0
+            },
+            {
+              "date": "2026-08-22",
+              "amount": 42.0
+            },
+            {
+              "date": "2026-09-01",
+              "amount": 1500.0
+            },
+            {
+              "date": "2026-09-12",
+              "amount": 210.4
+            },
+            {
+              "date": "2026-09-15",
+              "amount": 0.0
+            },
+            {
+              "date": "2026-09-18",
+              "amount": 15.49
+            },
+            {
+              "date": "2026-09-20",
+              "amount": 80.0
+            },
+            {
+              "date": "2026-09-25",
+              "amount": 64.3
+            },
+            {
+              "date": "2026-10-01",
+              "amount": 0.0
+            },
+            {
+              "date": "2026-10-02",
+              "amount": 19.99
+            },
+            {
+              "date": "2026-10-03",
+              "amount": 120.0
+            },
+            {
+              "date": "2026-10-05",
+              "amount": 0.0
+            },
+            {
+              "date": "2026-10-06",
+              "amount": 0.0
+            },
+            {
+              "date": "2026-10-07",
+              "amount": 0.0
+            },
+            {
+              "date": "2026-10-08",
+              "amount": 45.5
+            },
+            {
+              "date": "2026-10-09",
+              "amount": 6.25
+            },
+            {
+              "date": "2026-10-10",
+              "amount": 12.0
+            }
+          ],
+          "anomalies_top": [
+            {
+              "date": "2026-09-01",
+              "name": "Rent",
+              "amount": 1500.0,
+              "category": "Bills & Utilities"
+            },
+            {
+              "date": "2026-09-12",
+              "name": "Whole Foods",
+              "amount": 210.4,
+              "category": "Food"
+            },
+            {
+              "date": "2026-10-03",
+              "name": "Amazon",
+              "amount": 120.0,
+              "category": "Shopping"
+            },
+            {
+              "date": "2026-07-19",
+              "name": "Delta",
+              "amount": 88.8,
+              "category": "Transport"
+            },
+            {
+              "date": "2026-05-02",
+              "name": "Target",
+              "amount": 75.0,
+              "category": "Shopping"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

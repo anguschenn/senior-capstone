@@ -7,6 +7,7 @@ import '../../models/app_models.dart';
 import '../../services/ai_api_client.dart';
 import '../../services/auth_service.dart';
 import '../../services/chat_history_store.dart';
+import '../../utils/app_helpers.dart';
 import 'ai_response_card.dart';
 
 /// Single chat turn: user prompt + optional structured response.
@@ -32,6 +33,7 @@ class AIAssistantPanel extends StatefulWidget {
     required this.accountOptions,
     required this.initialAccountId,
     required this.spendingSummaryByAccount,
+    this.selectedMonth,
   });
 
   final Uri chatApiUri;
@@ -39,6 +41,10 @@ class AIAssistantPanel extends StatefulWidget {
   final List<AccountOption> accountOptions;
   final String initialAccountId;
   final Map<String, Map<String, dynamic>> spendingSummaryByAccount;
+
+  /// The month (or all-year option) the summaries were built for. When set,
+  /// the backend builds the summary itself and only a small context is sent.
+  final DateTime? selectedMonth;
 
   @override
   State<AIAssistantPanel> createState() => _AIAssistantPanelState();
@@ -138,6 +144,26 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
         const <String, dynamic>{};
   }
 
+  /// Null without [AIAssistantPanel.selectedMonth]: the full summary is sent.
+  Map<String, dynamic>? get _chatContext {
+    final month = widget.selectedMonth;
+    if (month == null) return null;
+    final accountId = _resolvedAccountId;
+    AccountOption? option;
+    for (final candidate in widget.accountOptions) {
+      if (candidate.accountId == accountId) option = candidate;
+    }
+    final accountIds = accountId == kAllAccountsId
+        ? const <String>[]
+        : (option?.linkedAccountIds.toList() ?? [accountId]);
+    return AiApiClient.chatContext(
+      accountIds: accountIds,
+      selectedMonth: month,
+      allYear: isAllYearOption(month),
+      scopeLabel: '${_activeSummary['scope_label'] ?? ''}',
+    );
+  }
+
   List<AiChatMessage> _buildHistoryPayload() {
     final history = <AiChatMessage>[];
     final since = DateTime.now().subtract(_followUpWindow);
@@ -187,6 +213,7 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
         prompt: prompt,
         history: historyPayload,
         spendingSummary: _activeSummary,
+        context: _chatContext,
       );
       setState(() {
         _turns[_turns.length - 1] = _ChatTurn(

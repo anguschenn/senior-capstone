@@ -50,6 +50,20 @@ PLAID_WEBHOOK_URL = _empty_to_none("PLAID_WEBHOOK_URL")
 AI_PROVIDER = (_empty_to_none("AI_PROVIDER") or "ollama").strip().lower()
 # Default to V2 router; keep env override for rollback.
 AI_ROUTER_V2_ENABLED = os.getenv("AI_ROUTER_V2_ENABLED", "1").strip() in {"1", "true", "TRUE"}
+# Build the chat's spending summary on the server when the app sends a `context` block,
+# instead of using the summary the app sends. 0 = always use the app's (it is asked to send it).
+CHAT_SERVER_SUMMARY_ENABLED = os.getenv("CHAT_SERVER_SUMMARY_ENABLED", "1").strip() not in {
+    "0",
+    "false",
+    "FALSE",
+}
+# Model rewrite of chat questions the rules don't recognise; 0 turns it off.
+AI_REWRITE_ENABLED = os.getenv("AI_REWRITE_ENABLED", "1").strip() not in {"0", "false", "FALSE"}
+# JSON-lines log of masked chat questions (ai/question_log.py). Default is python/logs/,
+# which is git-ignored and wiped on every Render deploy.
+CHAT_QUESTION_LOG_PATH = _empty_to_none("CHAT_QUESTION_LOG_PATH") or os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "logs", "chat_questions.jsonl"
+)
 OLLAMA_MODEL = _empty_to_none("OLLAMA_MODEL") or "llama3"
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
 OPENROUTER_API_KEY = _empty_to_none("OPENROUTER_API_KEY")

@@ -154,8 +154,10 @@ class AiSummaryService {
     Map<String, dynamic>? precomputedSummary,
     Map<String, String> reviewedCategoryByTxId = const <String, String>{},
     DateTime? focusMonth,
+    // Tests only: a fixed clock (the shared contract with the backend).
+    DateTime? now,
   }) {
-    final now = DateTime.now();
+    now ??= DateTime.now();
     final focus = focusMonth ?? now;
     final anchor = DateTime(focus.year, focus.month, 1);
     // Anchored windows are the N days ending with the selected month (today,

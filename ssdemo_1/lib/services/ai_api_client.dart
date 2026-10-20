@@ -18,6 +18,11 @@ class AiApiException implements Exception {
 class AiApiClient {
   const AiApiClient();
 
+  /// With [context] (account ids, month, today), the backend builds the
+  /// spending summary itself from Supabase and the large [spendingSummary] is
+  /// not sent. If the backend can't, it answers `retry_with_summary` and the
+  /// question is sent once more with [spendingSummary]. See
+  /// python/ai/server_summary.py.
   Future<AiChatResponse> sendChat({
     required Uri uri,
     required String apiKey,
@@ -25,18 +30,51 @@ class AiApiClient {
     required String prompt,
     required List<AiChatMessage> history,
     required Map<String, dynamic> spendingSummary,
+    Map<String, dynamic>? context,
   }) async {
-    final parsed = await _postJson(
+    final body = <String, dynamic>{
+      'prompt': prompt,
+      'history': history.map((item) => item.toJson()).toList(),
+      'context': ?context,
+      if (context == null) 'spending_summary': spendingSummary,
+    };
+    var parsed = await _postJson(
       uri: uri,
       apiKey: apiKey,
       accessToken: accessToken,
-      body: {
-        'prompt': prompt,
-        'history': history.map((item) => item.toJson()).toList(),
-        'spending_summary': spendingSummary,
-      },
+      body: body,
     );
+    if (parsed['retry_with_summary'] == true && context != null) {
+      parsed = await _postJson(
+        uri: uri,
+        apiKey: apiKey,
+        accessToken: accessToken,
+        body: {...body, 'spending_summary': spendingSummary},
+      );
+    }
     return AiChatResponse.fromJson(parsed);
+  }
+
+  /// The `context` block for [sendChat]: which accounts and month the chat
+  /// is about, and the user's local date (the server's clock is UTC).
+  static Map<String, dynamic> chatContext({
+    required List<String> accountIds,
+    required DateTime selectedMonth,
+    required bool allYear,
+    required String scopeLabel,
+    DateTime? now,
+  }) {
+    final today = now ?? DateTime.now();
+    String two(int v) => v.toString().padLeft(2, '0');
+    return {
+      'account_ids': accountIds,
+      'selected_month': allYear
+          ? '${selectedMonth.year}'
+          : '${selectedMonth.year}-${two(selectedMonth.month)}',
+      'scope_label': scopeLabel,
+      'today': '${today.year}-${two(today.month)}-${two(today.day)}',
+      'tz': today.timeZoneName,
+    };
   }
 
   Future<AiBudgetSuggestionResponse> fetchBudgetSuggestions({

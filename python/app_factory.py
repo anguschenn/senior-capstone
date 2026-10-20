@@ -9,7 +9,8 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from ai.chat_service import ChatService
 from ai.predict_service import PredictService
 from ai.providers import generate_llm_reply
-from ai.question_log import record_question
+from ai.question_log import store_question
+from ai.rewrite_cache import SupabaseRewriteCache
 from ai.snapshot_service import SpendingSnapshotService
 from auth import require_api_key
 from config import ALLOWED_ORIGINS
@@ -43,9 +44,10 @@ def create_app() -> Flask:
     app.config["chat_service"] = ChatService(
         generate_reply=generate_llm_reply,
         get_detailed_snapshot=snapshot_service.get_cached_snapshot,
+        rewrite_cache=SupabaseRewriteCache(),
     )
     app.config["predict_service"] = PredictService(generate_reply=generate_llm_reply)
-    app.config["question_log"] = record_question
+    app.config["question_log"] = store_question
 
     app.register_blueprint(plaid_bp)
     app.register_blueprint(ai_bp)

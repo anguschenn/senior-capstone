@@ -11,6 +11,8 @@ from unittest.mock import patch
 
 import sync_jobs
 
+_EMPTY_MODEL = {"tx_rows": [], "stats": None, "alerts": None, "suggestions": None}
+
 
 class _FakeSnapshotService:
     def invalidate(self, user_id):
@@ -34,7 +36,10 @@ def _run_concurrently(user_ids, hold_seconds=0.05):
         return {"detected": 0, "inserted": 0, "updated": 0, "deactivated": 0}
 
     snapshot_service = _FakeSnapshotService()
-    with patch.object(sync_jobs, "detect_and_upsert_subscriptions", side_effect=fake_detect):
+    with (
+        patch.object(sync_jobs, "detect_and_upsert_subscriptions", side_effect=fake_detect),
+        patch.object(sync_jobs, "refresh_user_model", return_value=_EMPTY_MODEL),
+    ):
         threads = [
             threading.Thread(target=sync_jobs.run_post_sync, args=(uid, snapshot_service))
             for uid in user_ids
@@ -89,7 +94,10 @@ def test_a_second_run_sees_what_the_first_run_committed():
         return {"detected": 1, "inserted": 1, "updated": 0, "deactivated": 0}
 
     snapshot_service = _FakeSnapshotService()
-    with patch.object(sync_jobs, "detect_and_upsert_subscriptions", side_effect=fake_detect):
+    with (
+        patch.object(sync_jobs, "detect_and_upsert_subscriptions", side_effect=fake_detect),
+        patch.object(sync_jobs, "refresh_user_model", return_value=_EMPTY_MODEL),
+    ):
         threads = [
             threading.Thread(target=sync_jobs.run_post_sync, args=("user-a", snapshot_service))
             for _ in range(2)

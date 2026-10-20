@@ -12,6 +12,7 @@ import '../widgets/budget/budget_alert_toasts.dart';
 import '../widgets/budget/budget_insight_banner.dart';
 import '../widgets/budget/budget_progress_card.dart';
 import '../widgets/budget/budget_scope_selector.dart';
+import '../widgets/budget/budget_suggestions_card.dart';
 
 class BudgetPage extends StatefulWidget {
   const BudgetPage({
@@ -315,6 +316,12 @@ class _BudgetPageState extends State<BudgetPage> {
           },
         ),
         const SizedBox(height: 18),
+        // Limits the backend suggests from past months; this month only.
+        if (_showsCurrentMonth)
+          BudgetSuggestionsCard(
+            month: widget.selectedMonth,
+            onUpdateBudgetLimit: widget.onUpdateBudgetLimit,
+          ),
         // Category budget cards show spent vs. limit for the current time scope.
         if (activeBudgetProgress.isEmpty)
           Container(

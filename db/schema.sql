@@ -136,6 +136,74 @@ create table ai_chat_messages (
   asked_at timestamptz not null default now()
 );
 
+-- Server-owned derived state, rebuilt after every sync (python/user_model.py); see
+-- migrations/014_server_user_model.sql for RLS, column grants and checks.
+create table category_month_stats (
+  user_id uuid not null references users(id) on delete cascade,
+  month text not null,
+  category text not null,
+  spent numeric(12, 2) not null default 0,
+  tx_count integer not null default 0,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, month, category)
+);
+
+create table budget_alerts (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id) on delete cascade,
+  month text not null,
+  category_id uuid not null references categories(id) on delete cascade,
+  category text not null,
+  kind text not null,                -- approaching | projected_over | over_budget
+  spent numeric(12, 2) not null,
+  limit_amount numeric(12, 2) not null,
+  projected_month_end numeric(12, 2),
+  used_ratio numeric(8, 4) not null,
+  first_detected_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  resolved_at timestamptz,
+  dismissed_at timestamptz,
+  notified_at timestamptz,
+  unique (user_id, month, category_id)
+);
+
+create table budget_suggestions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id) on delete cascade,
+  budget_id uuid not null references budgets(id) on delete cascade,
+  category_id uuid not null references categories(id) on delete cascade,
+  category text not null,
+  month text not null,
+  current_limit numeric(12, 2) not null,
+  suggested_limit numeric(12, 2) not null,
+  basis jsonb not null default '{}'::jsonb,
+  status text not null default 'pending',  -- pending | accepted | edited | dismissed
+  decided_limit numeric(12, 2),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  decided_at timestamptz,
+  unique (user_id, category_id, month)
+);
+
+-- Backend-only (RLS on, no policies): masked chat questions and cached rewrites.
+create table chat_question_log (
+  id bigint generated always as identity primary key,
+  asked_at timestamptz not null default now(),
+  question text not null,
+  intent text not null default '',
+  answer_source text not null default '',
+  outcome text not null,
+  missing text not null default ''
+);
+
+create table chat_rewrite_cache (
+  question_key text primary key,
+  rewritten text not null,
+  hits integer not null default 0,
+  created_at timestamptz not null default now(),
+  last_used_at timestamptz not null default now()
+);
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Row-level security, the auth.users -> public.users trigger, NOT NULL
 -- constraints and indexes all live in db/migrations/009_security_model.sql.

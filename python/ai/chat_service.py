@@ -2,7 +2,7 @@ import os
 import re
 from datetime import date as date_cls
 
-from config import AI_ROUTER_V2_ENABLED
+from config import AI_REWRITE_ENABLED, AI_ROUTER_V2_ENABLED
 
 from .explainers import build_chat_prompt
 from .intent_router import IntentRouter
@@ -54,14 +54,16 @@ class ChatService:
     HIGH_CONFIDENCE_THRESHOLD = 0.70
     MID_CONFIDENCE_THRESHOLD = 0.45
 
-    def __init__(self, generate_reply, get_detailed_snapshot):
+    def __init__(self, generate_reply, get_detailed_snapshot, rewrite_cache=None):
         self.generate_reply = generate_reply
         self.get_detailed_snapshot = get_detailed_snapshot
+        # get(message) -> str | None and put(message, rewritten); see ai/rewrite_cache.py.
+        self.rewrite_cache = rewrite_cache
         self.router = IntentRouter(classify_with_llm=generate_reply)
 
     def _rewrite_enabled(self):
         """Model rewrite of unrecognised questions; AI_REWRITE_ENABLED=0 turns it off."""
-        return os.getenv("AI_REWRITE_ENABLED", "1").strip() not in {"0", "false", "FALSE"}
+        return AI_REWRITE_ENABLED
 
     def _router_v2_enabled(self):
         env_value = os.getenv("AI_ROUTER_V2_ENABLED")
@@ -2435,7 +2437,12 @@ class ChatService:
 
     def _rewrite_question(self, message):
         """Ask the model to restate a question in wording the rules understand. The model
-        only rephrases; every number still comes from the data."""
+        only rephrases; every number still comes from the data. A wording rewritten before
+        is reused from rewrite_cache without a model call."""
+        if self.rewrite_cache is not None:
+            cached = self.rewrite_cache.get(message)
+            if cached:
+                return cached
         try:
             raw = self.generate_reply(
                 self._REWRITE_PROMPT.format(message=clamp_str(message, 500)),
@@ -2447,6 +2454,8 @@ class ChatService:
         text = re.sub(r"^[-*\s]+", "", text).strip()
         if not text or "NONE" in text.upper() or len(text.split()) < 3:
             return ""
+        if self.rewrite_cache is not None:
+            self.rewrite_cache.put(message, text)
         return text
 
     def _handle_chat(self, payload, user_id=None):
@@ -2589,7 +2598,9 @@ class ChatService:
         context_source = "frontend_summary"
         used_summary = summary is not None
 
-        # Product rule: chat only uses app-sent summary; no server DB read fallback.
+        # The summary is the request's spending_summary: built on the server from Supabase
+        # when the app sends a `context` block (routes/ai_routes.py, ai/server_summary.py),
+        # otherwise the one the app sent. ChatService itself never reads the database.
         context_text = self._summary_to_text(summary)
         if summary is None:
             context_source = "frontend_summary_empty"

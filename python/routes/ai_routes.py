@@ -2,10 +2,12 @@
 
 from flask import Blueprint, current_app, jsonify, request
 
+from ai import server_summary
 from ai.response_utils import confidence_label, short_copy
 from ai.validators import clamp_str
 from api.http_helpers import log_route_error
 from auth import UserAuthError, is_rate_limited_for_ai, require_supabase_user_id
+from config import CHAT_SERVER_SUMMARY_ENABLED
 
 ai_bp = Blueprint("ai", __name__)
 
@@ -17,6 +19,24 @@ def _record_question(body, response):
         record(body.get("prompt") or body.get("message") or "", response)
 
 
+def _with_server_summary(body, user_id):
+    """(body, source). With a `context` block, spending_summary is replaced by one built
+    from Supabase (source "server"); if that fails, the app's own summary is used ("app"),
+    and with neither the app is asked to resend with its summary (body None)."""
+    context = server_summary.parse_context(body.get("context"))
+    if context is None:
+        return body, "app"
+    if CHAT_SERVER_SUMMARY_ENABLED:
+        try:
+            summary = server_summary.summary_for(user_id, context)
+            return {**body, "spending_summary": summary}, "server"
+        except Exception as error:
+            log_route_error("/api/ai/chat server summary", error)
+    if isinstance(body.get("spending_summary"), dict):
+        return body, "app"
+    return None, "app"
+
+
 @ai_bp.route("/api/ai/chat", methods=["POST"])
 def ai_chat():
     body = request.get_json(silent=True) or {}
@@ -24,7 +44,12 @@ def ai_chat():
         user_id = require_supabase_user_id()
         if is_rate_limited_for_ai(user_id):
             return jsonify({"error": "Rate limit exceeded"}), 429
-        response = current_app.config["chat_service"].handle_chat(body, user_id=user_id)
+        payload, summary_source = _with_server_summary(body, user_id)
+        if payload is None:
+            return jsonify({"retry_with_summary": True}), 200
+        response = current_app.config["chat_service"].handle_chat(payload, user_id=user_id)
+        if isinstance(response, dict):
+            response["summary_source"] = summary_source
         _record_question(body, response)
         return jsonify(response)
     except UserAuthError as error:

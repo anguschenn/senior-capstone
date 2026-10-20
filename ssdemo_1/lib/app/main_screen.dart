@@ -291,6 +291,7 @@ class _MainScreenState extends State<MainScreen> {
                   accountOptions: c.liveAccountOptions,
                   initialAccountId: c.selectedAccountId,
                   spendingSummaryByAccount: summariesByAccount,
+                  selectedMonth: c.selectedMonth,
                 ),
               );
             },

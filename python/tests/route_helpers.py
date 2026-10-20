@@ -43,6 +43,7 @@ def app_client(generate_reply=None):
         app = create_app()
         app.testing = True
         app.config["question_log"] = None  # never write to the real database from tests
+        app.config["chat_service"].rewrite_cache = None
         yield app.test_client()
         auth._rate_buckets.clear()
 

@@ -5,9 +5,11 @@ import threading
 
 import plaid
 
+from ai import server_summary
 from plaid_sync import _safe_api_exception_body, sync_transactions_to_supabase
 from subscription_detector import detect_and_upsert_subscriptions
 from supabase_repo import supabase
+from user_model import refresh_user_model
 
 # One lock per user_id so an app-triggered sync and a webhook-triggered sync for the
 # same user never run detect_and_upsert_subscriptions at the same time. Without this,
@@ -48,12 +50,32 @@ def run_post_sync(user_id: str, snapshot_service) -> None:
     first caller just wrote — never a duplicate detection pass on stale data.
     """
     snapshot_service.invalidate(user_id)
-    try:
-        with _user_lock(user_id):
+    server_summary.invalidate(user_id)
+    with _user_lock(user_id):
+        try:
             sub_stats = detect_and_upsert_subscriptions(user_id)
-        print(f"Subscription detection for user {user_id}: {sub_stats}")
-    except Exception as sub_error:
-        print(f"Subscription detection warning for user {user_id}: {sub_error}")
+            print(f"Subscription detection for user {user_id}: {sub_stats}")
+        except Exception as sub_error:
+            print(f"Subscription detection warning for user {user_id}: {sub_error}")
+        # Stats, alerts and suggestions (migration 014). Never raises.
+        model = refresh_user_model(user_id)
+        print(
+            f"User model for user {user_id}: stats={model['stats']} "
+            f"alerts={model['alerts']} suggestions={model['suggestions']}"
+        )
+    warm_chat_summary(user_id, model["tx_rows"])
+
+
+def warm_chat_summary(user_id: str, tx_rows: list[dict]) -> None:
+    """Build the all-accounts, this-month chat summary now, from the rows just read, so the
+    next chat question doesn't wait for it. Never raises."""
+    if not tx_rows:
+        return
+    try:
+        context = server_summary.parse_context({"today": dt.date.today().isoformat()})
+        server_summary.summary_for(user_id, context, tx_rows=tx_rows)
+    except Exception as error:
+        print(f"chat summary warm-up skipped for user {user_id}: {type(error).__name__}")
 
 
 def sync_item_from_webhook(plaid_item_id: str, snapshot_service) -> None:
