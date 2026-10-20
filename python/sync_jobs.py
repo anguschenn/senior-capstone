@@ -1,12 +1,27 @@
 """Work that follows a transaction sync, shared by the app-triggered and webhook-triggered paths."""
 
 import datetime as dt
+import threading
 
 import plaid
 
 from plaid_sync import _safe_api_exception_body, sync_transactions_to_supabase
 from subscription_detector import detect_and_upsert_subscriptions
 from supabase_repo import supabase
+
+# One lock per user_id so an app-triggered sync and a webhook-triggered sync for the
+# same user never run detect_and_upsert_subscriptions at the same time. Without this,
+# both can read "no existing row for this merchant yet" before either has inserted one,
+# and each inserts its own copy — a duplicate subscription. Process-local, which is
+# correct only because gunicorn runs a single worker (see CLAUDE.md), same as the
+# per-item lock in plaid_sync.py.
+_user_locks: dict[str, threading.Lock] = {}
+_user_locks_guard = threading.Lock()
+
+
+def _user_lock(user_id: str) -> threading.Lock:
+    with _user_locks_guard:
+        return _user_locks.setdefault(user_id, threading.Lock())
 
 
 def record_sync(user_id: str, source: str) -> None:
@@ -27,10 +42,15 @@ def record_sync(user_id: str, source: str) -> None:
 
 
 def run_post_sync(user_id: str, snapshot_service) -> None:
-    """Refresh everything derived from transactions. Never raises."""
+    """Refresh everything derived from transactions. Never raises.
+
+    A second caller for the same user waits, then re-reads the transactions the
+    first caller just wrote — never a duplicate detection pass on stale data.
+    """
     snapshot_service.invalidate(user_id)
     try:
-        sub_stats = detect_and_upsert_subscriptions(user_id)
+        with _user_lock(user_id):
+            sub_stats = detect_and_upsert_subscriptions(user_id)
         print(f"Subscription detection for user {user_id}: {sub_stats}")
     except Exception as sub_error:
         print(f"Subscription detection warning for user {user_id}: {sub_error}")

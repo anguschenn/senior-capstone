@@ -199,4 +199,80 @@ void main() {
       expect(saved.hasData, fresh.hasData);
     });
   });
+
+  group('parseBudgetProgressResponse', () {
+    // Shaped like the real GET /api/budget_progress response -- see
+    // get_budget_progress / build_budget_progress in python/budget_progress.py.
+    test('parses a well-formed response', () {
+      final decoded = jsonDecode('''
+      {
+        "month": "2026-09",
+        "progress": [
+          {"budget_id": "b1", "category_id": "c1", "category": "Food", "spent": 278.25, "limit": 300.0, "ratio": 0.9275},
+          {"budget_id": "b2", "category_id": "c2", "category": "Transport", "spent": 66.2, "limit": 100.0, "ratio": 0.662}
+        ]
+      }
+      ''');
+
+      final progress = parseBudgetProgressResponse(decoded);
+
+      expect(progress, hasLength(2));
+      expect(progress[0].budgetId, 'b1');
+      expect(progress[0].categoryId, 'c1');
+      expect(progress[0].title, 'Food');
+      expect(progress[0].spent, 278.25);
+      expect(progress[0].limit, 300.0);
+      expect(progress[1].title, 'Transport');
+    });
+
+    test('skips a row missing budget_id or category_id, keeps the rest', () {
+      final decoded = jsonDecode('''
+      {
+        "month": "2026-09",
+        "progress": [
+          {"budget_id": "", "category_id": "c1", "category": "Food", "spent": 1, "limit": 2},
+          {"budget_id": "b2", "category_id": null, "category": "Bad", "spent": 1, "limit": 2},
+          {"budget_id": "b3", "category_id": "c3", "category": "Health", "spent": 5, "limit": 50}
+        ]
+      }
+      ''');
+
+      final progress = parseBudgetProgressResponse(decoded);
+
+      expect(progress, hasLength(1));
+      expect(progress.single.title, 'Health');
+    });
+
+    test('an empty progress list (no budgets set yet) parses to empty', () {
+      final decoded = jsonDecode('{"month": "2026-09", "progress": []}');
+      expect(parseBudgetProgressResponse(decoded), isEmpty);
+    });
+
+    test('non-numeric spent/limit falls back to 0 rather than throwing', () {
+      final decoded = jsonDecode('''
+      {"month": "2026-09", "progress": [
+        {"budget_id": "b1", "category_id": "c1", "category": "Food", "spent": "oops", "limit": null}
+      ]}
+      ''');
+      final progress = parseBudgetProgressResponse(decoded);
+      expect(progress.single.spent, 0);
+      expect(progress.single.limit, 0);
+    });
+
+    for (final badShape in [
+      'null',
+      '[]',
+      '"not an object"',
+      '{"month": "2026-09"}', // no "progress" key
+      '{"progress": "not a list"}',
+      '{"progress": [1, 2, "not objects"]}',
+    ]) {
+      test('malformed input "$badShape" never throws', () {
+        expect(
+          () => parseBudgetProgressResponse(jsonDecode(badShape)),
+          returnsNormally,
+        );
+      });
+    }
+  });
 }

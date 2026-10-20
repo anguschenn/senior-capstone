@@ -53,6 +53,14 @@ class MainScreenController extends ChangeNotifier {
   List<BudgetCategoryProgress> liveBudgetProgress = const [];
   List<BudgetCategoryProgress> liveBudgetProgressYear = const [];
   List<BudgetCategoryProgress> liveBudgetProgressAll = const [];
+
+  /// Current-month budget progress from GET /api/budget_progress (all
+  /// accounts, no per-account filter -- see SyncService.fetchServerBudgetProgress).
+  /// Null when unavailable (error, no budget rows yet, or stale for the
+  /// now-selected month); FinancialSnapshotService then falls back to the
+  /// Dart computation from [liveBudgetProgress].
+  List<BudgetCategoryProgress>? serverBudgetProgress;
+  DateTime? serverBudgetProgressMonth;
   List<CategoryOption> liveCategoryOptions = const [];
   List<AccountOption> liveAccountOptions = const [];
   Map<String, String> reviewedCategoryByTxId = const {};
@@ -115,6 +123,31 @@ class MainScreenController extends ChangeNotifier {
 
   void selectMonth(DateTime month) {
     selectedMonth = normalizedMonthOption(month);
+    unawaited(_refreshServerBudgetProgress());
+    _notifyListenersSafe();
+  }
+
+  /// Fetches server-computed budget progress for the now-selected month.
+  /// Fire-and-forget from callers: applies only if [selectedMonth] is still
+  /// the same month when the response arrives, so a slow response can't
+  /// clobber progress for whatever month the user has since switched to.
+  Future<void> _refreshServerBudgetProgress() async {
+    final month = normalizedMonthOption(selectedMonth);
+    if (isAllYearOption(month)) {
+      // The endpoint computes one calendar month; nothing to fetch for
+      // an "All Year" selection.
+      if (serverBudgetProgress != null) {
+        serverBudgetProgress = null;
+        serverBudgetProgressMonth = null;
+        _notifyListenersSafe();
+      }
+      return;
+    }
+    final result = await _sync.fetchServerBudgetProgress(month);
+    if (_isDisposed) return;
+    if (normalizedMonthOption(selectedMonth) != month) return;
+    serverBudgetProgress = result;
+    serverBudgetProgressMonth = result == null ? null : month;
     _notifyListenersSafe();
   }
 
@@ -334,6 +367,8 @@ class MainScreenController extends ChangeNotifier {
     liveBudgetProgressAll = const [];
     liveCategoryOptions = const [];
     liveAccountOptions = const [];
+    serverBudgetProgress = null;
+    serverBudgetProgressMonth = null;
     reviewedCategoryByTxId = const {};
     manualReviewedTxIds = const {};
     confirmedReviewTxIds = const {};
@@ -493,6 +528,7 @@ class MainScreenController extends ChangeNotifier {
         !result.accountOptions.any((a) => a.accountId == selectedAccountId)) {
       selectedAccountId = kAllAccountsId;
     }
+    unawaited(_refreshServerBudgetProgress());
   }
 
   void _applyManualLimitOverrides() {
@@ -512,6 +548,18 @@ class MainScreenController extends ChangeNotifier {
       yearly: false,
       allTime: true,
     );
+    // A just-edited limit must show immediately even when the Budget page is
+    // currently reading serverBudgetProgress, not the Dart-computed list this
+    // overlay normally touches -- otherwise the edit would appear to do
+    // nothing until the next server refresh completes.
+    final server = serverBudgetProgress;
+    if (server != null) {
+      serverBudgetProgress = _withManualLimits(
+        server,
+        yearly: false,
+        allTime: false,
+      );
+    }
   }
 
   List<BudgetCategoryProgress> _withManualLimits(

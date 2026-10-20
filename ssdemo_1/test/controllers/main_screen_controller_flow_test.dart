@@ -70,6 +70,21 @@ class _FakeSync implements SyncService {
     calls.add('clear');
   }
 
+  // Tracked separately from `calls`: it fires after every applied sync
+  // result and on every month change, so interleaving it into that ordered
+  // list would make the exact-sequence assertions elsewhere in this file
+  // flaky. Tests for it live in sync_service_build_test.dart /
+  // financial_snapshot_service_test.dart instead.
+  final serverBudgetProgressRequests = <DateTime>[];
+
+  @override
+  Future<List<BudgetCategoryProgress>?> fetchServerBudgetProgress(
+    DateTime month,
+  ) async {
+    serverBudgetProgressRequests.add(month);
+    return null;
+  }
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

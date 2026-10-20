@@ -14,6 +14,41 @@ import 'budget_service.dart';
 import 'category_service.dart';
 import 'sync_cache.dart';
 
+/// Parses the JSON body of GET /api/budget_progress (already json-decoded)
+/// into the same model the Dart-computed path produces. A pure function, no
+/// network/auth involved, so it can be tested directly against a fixture
+/// shaped like the real response -- see budget_progress.py's
+/// build_budget_progress for the producing side.
+///
+/// Malformed input (wrong shape, missing ids, non-numeric spent/limit)
+/// is skipped per-row rather than thrown: a single bad row from the server
+/// should not discard every other category's progress.
+List<BudgetCategoryProgress> parseBudgetProgressResponse(Object? decoded) {
+  if (decoded is! Map) return const [];
+  final rows = decoded['progress'];
+  if (rows is! List) return const [];
+
+  final progress = <BudgetCategoryProgress>[];
+  for (final row in rows) {
+    if (row is! Map) continue;
+    final budgetId = (row['budget_id'] as String?) ?? '';
+    final categoryId = (row['category_id'] as String?) ?? '';
+    if (budgetId.isEmpty || categoryId.isEmpty) continue;
+    final rawSpent = row['spent'];
+    final rawLimit = row['limit'];
+    progress.add(
+      BudgetCategoryProgress(
+        budgetId: budgetId,
+        categoryId: categoryId,
+        title: (row['category'] as String?) ?? 'Unknown',
+        spent: rawSpent is num ? rawSpent.toDouble() : 0,
+        limit: rawLimit is num ? rawLimit.toDouble() : 0,
+      ),
+    );
+  }
+  return progress;
+}
+
 /// Thrown when Plaid reports ITEM_LOGIN_REQUIRED for a linked bank.
 class ItemLoginRequiredException implements Exception {
   const ItemLoginRequiredException();
@@ -147,6 +182,29 @@ class SyncService {
 
   /// Forgets the on-device copy (sign-out, "Clear").
   Future<void> clearSavedData() => SyncCache.instance.clear();
+
+  /// Budget progress for [month] computed by the backend from ALL the user's
+  /// transactions (see python/budget_progress.py) -- no per-account filter,
+  /// so this is only valid for the "All Accounts" view. Null on any failure,
+  /// or when the server has no budget rows for that month yet; callers fall
+  /// back to the Dart computation (BudgetService.rebasedProgressFromTemplate).
+  Future<List<BudgetCategoryProgress>?> fetchServerBudgetProgress(
+    DateTime month,
+  ) async {
+    try {
+      final uri = ApiConfig.instance.budgetProgressUri.replace(
+        queryParameters: {'month': _monthKey(normalizedMonthOption(month))},
+      );
+      final response = await http
+          .get(uri, headers: _backendHeaders())
+          .timeout(const Duration(seconds: 15));
+      if (response.statusCode != 200) return null;
+      final progress = parseBudgetProgressResponse(jsonDecode(response.body));
+      return progress.isEmpty ? null : progress;
+    } catch (_) {
+      return null;
+    }
+  }
 
   /// When the backend last synced this user's banks (by webhook or by the
   /// app), read straight from Supabase so it never wakes the backend. Null

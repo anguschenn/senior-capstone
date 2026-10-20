@@ -16,16 +16,21 @@ class ApiConfig {
       )
       .._aiCategorySuggestUri = Uri.parse(
         '${env.backendUrl}/api/ai/suggest_category',
-      );
+      )
+      .._budgetProgressUri = Uri.parse('${env.backendUrl}/api/budget_progress');
   }
 
   late final Uri _transactionsUri;
   late final Uri _aiChatUri;
   late final Uri _aiBudgetSuggestUri;
   late final Uri _aiCategorySuggestUri;
+  late final Uri _budgetProgressUri;
 
   Uri get transactionsUri => _transactionsUri;
   Uri get aiChatUri => _aiChatUri;
   Uri get aiBudgetSuggestUri => _aiBudgetSuggestUri;
   Uri get aiCategorySuggestUri => _aiCategorySuggestUri;
+
+  /// Base URI for GET /api/budget_progress; callers append ?month=YYYY-MM.
+  Uri get budgetProgressUri => _budgetProgressUri;
 }

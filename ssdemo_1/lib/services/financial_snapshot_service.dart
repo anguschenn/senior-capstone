@@ -51,14 +51,29 @@ class FinancialSnapshotService {
               .where((tx) => selectedAccountIds.contains(tx.accountId))
               .toList();
     final visibleSubscriptions = controller.liveSubscriptions;
-    final visibleBudgetProgress = _rebaseProgressFromTemplate(
-      template: controller.liveBudgetProgress,
-      txs: visibleTransactions,
-      focusMonth: focusMonth,
-      yearly: isAllYearOption(focusMonth),
-      allTime: false,
-      reviewedCategoryByTxId: controller.reviewedCategoryByTxId,
-    );
+    // The server has no per-account filter (python/budget_progress.py sums
+    // every transaction), so its numbers are only correct for "All Accounts"
+    // on the exact month it was computed for. Everything else -- a specific
+    // account, Year/All-time view, or no server data yet -- falls back to
+    // the existing Dart computation, unchanged.
+    final serverMonth = controller.serverBudgetProgressMonth;
+    final useServerBudgetProgress =
+        targetAccountId == kAllAccountsId &&
+        !isAllYearOption(focusMonth) &&
+        controller.serverBudgetProgress != null &&
+        serverMonth != null &&
+        serverMonth.year == focusMonth.year &&
+        serverMonth.month == focusMonth.month;
+    final visibleBudgetProgress = useServerBudgetProgress
+        ? controller.serverBudgetProgress!
+        : _rebaseProgressFromTemplate(
+            template: controller.liveBudgetProgress,
+            txs: visibleTransactions,
+            focusMonth: focusMonth,
+            yearly: isAllYearOption(focusMonth),
+            allTime: false,
+            reviewedCategoryByTxId: controller.reviewedCategoryByTxId,
+          );
     final visibleBudgetProgressYear = _rebaseProgressFromTemplate(
       template: controller.liveBudgetProgressYear,
       txs: visibleTransactions,
