@@ -18,6 +18,7 @@ class _Query:
         self._action = "select"
         self._payload = None
         self._on_conflict = None
+        self._ignore_duplicates = False
         self._order = None
         self._range = None
         self._limit = None
@@ -31,8 +32,9 @@ class _Query:
         self._action, self._payload = "insert", payload
         return self
 
-    def upsert(self, payload, on_conflict=None):
+    def upsert(self, payload, on_conflict=None, ignore_duplicates=False):
         self._action, self._payload, self._on_conflict = "upsert", payload, on_conflict
+        self._ignore_duplicates = ignore_duplicates
         return self
 
     def update(self, payload):
@@ -49,6 +51,10 @@ class _Query:
 
     def gte(self, column, value):
         self._filters.append(lambda r: str(r.get(column)) >= str(value))
+        return self
+
+    def lte(self, column, value):
+        self._filters.append(lambda r: str(r.get(column)) <= str(value))
         return self
 
     def lt(self, column, value):
@@ -104,7 +110,7 @@ class _Query:
                     new = copy.deepcopy(item)
                     new.setdefault("id", f"{self._table}-{len(rows) + 1}")
                     rows.append(new)
-                else:
+                elif not self._ignore_duplicates:
                     existing.update(copy.deepcopy(item))
             return _Result(payload)
         if self._action == "update":

@@ -11,6 +11,7 @@ import '../widgets/budget/budget_ai_analysis_card.dart';
 import '../widgets/budget/budget_alert_toasts.dart';
 import '../widgets/budget/budget_insight_banner.dart';
 import '../widgets/budget/budget_progress_card.dart';
+import '../widgets/budget/budget_alert_history_card.dart';
 import '../widgets/budget/budget_scope_selector.dart';
 import '../widgets/budget/budget_suggestions_card.dart';
 
@@ -333,6 +334,10 @@ class _BudgetPageState extends State<BudgetPage> {
             child: const Text('No budgets configured for this view yet.'),
           ),
         if (activeBudgetProgress.isNotEmpty) _budgetList(context),
+        // Past months that ended over budget (backend alert history).
+        if (viewMode == BudgetViewMode.month &&
+            !isAllYearOption(widget.selectedMonth))
+          BudgetAlertHistoryCard(month: widget.selectedMonth),
         const SizedBox(height: 18),
         BudgetAiAnalysisCard(
           loading: _loadingAi,

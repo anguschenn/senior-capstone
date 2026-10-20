@@ -218,6 +218,16 @@ class ChatService:
                     "this is a credit card, so 'income' below is card payments and refunds, "
                     "not income; never describe it as income, earnings or savings; "
                 )
+        # Month-end budget overruns (server summary only, ai/server_summary.py), so advice
+        # can say "Food went over in 3 of the last 6 months".
+        overruns = [
+            f"{a.get('month')} {a.get('category')} ${float(a.get('spent', 0)):.0f} "
+            f"of ${float(a.get('limit', 0)):.0f} limit"
+            for a in (summary.get("alert_history") or [])
+            if a.get("kind") == "over_budget"
+        ]
+        if overruns:
+            scope_text += f"months that ended over budget: {', '.join(overruns[:12])}; "
         return (
             f"{scope_text}{month_text}; "
             f"savings options from cutting 30d category spend: {savings_text}; "

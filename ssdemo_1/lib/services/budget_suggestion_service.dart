@@ -10,6 +10,7 @@ class BudgetSuggestion {
     required this.currentLimit,
     required this.suggestedLimit,
     required this.months,
+    this.monthsOver = 0,
   });
 
   final String id;
@@ -21,6 +22,9 @@ class BudgetSuggestion {
   /// The months ('YYYY-MM') the suggestion was averaged over.
   final List<String> months;
 
+  /// How many of [months] ended over that month's limit.
+  final int monthsOver;
+
   static BudgetSuggestion? fromRow(Map<String, dynamic> row) {
     final id = (row['id'] as String?) ?? '';
     final budgetId = (row['budget_id'] as String?) ?? '';
@@ -30,6 +34,7 @@ class BudgetSuggestion {
     final months = basis is Map && basis['months'] is List
         ? (basis['months'] as List).map((m) => '$m').toList()
         : const <String>[];
+    final monthsOver = basis is Map ? basis['months_over'] : null;
     return BudgetSuggestion(
       id: id,
       budgetId: budgetId,
@@ -37,6 +42,7 @@ class BudgetSuggestion {
       currentLimit: double.tryParse('${row['current_limit']}') ?? 0,
       suggestedLimit: suggested,
       months: months,
+      monthsOver: monthsOver is num ? monthsOver.toInt() : 0,
     );
   }
 }

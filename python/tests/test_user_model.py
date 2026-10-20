@@ -1,5 +1,7 @@
 import datetime as dt
+import json
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from fake_supabase import FakeSupabase
@@ -122,36 +124,77 @@ class AlertTests(unittest.TestCase):
         self.assertEqual(alerts["Other"]["kind"], "approaching")
 
 
+def _stats():
+    return user_model.build_category_month_stats(HISTORY + OCTOBER, {})
+
+
+def _alerts():
+    from budget_progress import build_budget_progress
+
+    progress = build_budget_progress(BUDGETS, CATEGORIES, HISTORY + OCTOBER, {}, "2026-10")
+    return user_model.build_alerts(progress, TODAY)
+
+
+class AutoLimitContractTests(unittest.TestCase):
+    """Shared with ssdemo_1/test/services/budget_auto_limit_contract_test.dart."""
+
+    def test_cases(self):
+        fixture = json.loads(
+            (Path(__file__).parent / "data" / "budget_auto_limit_contract.json").read_text()
+        )
+        for case in fixture["cases"]:
+            with self.subTest(case["description"]):
+                self.assertEqual(
+                    user_model.auto_limits(
+                        case["stats"], case["cards"], case["previous"], case["month"]
+                    ),
+                    case["expected"],
+                )
+
+
 class SuggestionTests(unittest.TestCase):
     def test_trimmed_mean_drops_high_and_low(self):
         self.assertEqual(user_model.trimmed_mean([200, 250, 260, 240, 900, 100]), 237.5)
         self.assertEqual(user_model.trimmed_mean([10, 20]), 15)
 
-    def test_suggests_only_meaningful_changes(self):
-        suggestions = user_model.build_suggestions(
-            BUDGETS, CATEGORIES, HISTORY + OCTOBER, {}, "2026-10"
-        )
-        by_category = {s["category"]: s for s in suggestions}
-        # Food: 300 -> 240. Shopping matches its limit. Other: no history, so no $0 ask.
-        self.assertEqual(set(by_category), {"Food"})
-        food_suggestion = by_category["Food"]
-        self.assertEqual(food_suggestion["suggested_limit"], 240.0)
-        self.assertEqual(food_suggestion["current_limit"], 300.0)
-        self.assertEqual(food_suggestion["budget_id"], "b-food")
+    def test_only_alerted_cards_below_their_normal_are_raised(self):
+        # Food is alerted and 300 > its normal 240: no raise. Shopping is alerted (over)
+        # with a 100 limit and normal 100: nothing. Lower Food's limit to 150: raise to 240.
+        budgets = [dict(b) for b in BUDGETS]
         self.assertEqual(
-            food_suggestion["basis"]["months"],
-            ["2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09"],
+            user_model.build_suggestions(budgets, CATEGORIES, _stats(), "2026-10", _alerts()), []
+        )
+        budgets[0]["monthly_limit"] = 150
+        (suggestion,) = user_model.build_suggestions(
+            budgets, CATEGORIES, _stats(), "2026-10", _alerts()
+        )
+        self.assertEqual(suggestion["category"], "Food")
+        self.assertEqual(suggestion["suggested_limit"], 240.0)
+        self.assertEqual(suggestion["current_limit"], 150.0)
+
+    def test_no_alert_no_suggestion(self):
+        budgets = [{"id": "b-food", "category_id": "cat-food", "monthly_limit": 50}]
+        self.assertEqual(
+            user_model.build_suggestions(budgets, CATEGORIES, _stats(), "2026-10", []), []
         )
 
-    def test_small_changes_are_not_asked(self):
-        budgets = [{"id": "b-food", "category_id": "cat-food", "monthly_limit": 245}]
-        self.assertEqual(
-            user_model.build_suggestions(budgets, CATEGORIES, HISTORY, {}, "2026-10"), []
+    def test_months_over_counts_history_months_over_their_limit(self):
+        budgets = [{"id": "b-food", "category_id": "cat-food", "monthly_limit": 150}]
+        alerts = [{"category_id": "cat-food"}]
+        past = {"2026-08": {"food": 800}, "2026-09": {"food": 90}, "2026-07": {"food": 0}}
+        (suggestion,) = user_model.build_suggestions(
+            budgets, CATEGORIES, _stats(), "2026-10", alerts, past
         )
+        # August 900 > 800 and September 100 > 90; July has no limit.
+        self.assertEqual(suggestion["basis"]["months_over"], 2)
 
     def test_needs_three_months_of_history(self):
         rows = [food("2026-08-05", 100), food("2026-09-05", 100)]
-        self.assertEqual(user_model.build_suggestions(BUDGETS, CATEGORIES, rows, {}, "2026-10"), [])
+        stats = user_model.build_category_month_stats(rows, {})
+        alerts = [{"category_id": "cat-food"}]
+        self.assertEqual(
+            user_model.build_suggestions(BUDGETS, CATEGORIES, stats, "2026-10", alerts), []
+        )
 
 
 class WriteTests(unittest.TestCase):
@@ -252,12 +295,65 @@ class WriteTests(unittest.TestCase):
         result = user_model.refresh_user_model(USER, TODAY)
         self.assertEqual(len(result["tx_rows"]), len(HISTORY + OCTOBER))
         self.assertEqual(result["alerts"], 3)
-        self.assertEqual(result["suggestions"], 1)
-        self.assertEqual(
-            self.db.tables["budget_suggestions"][0]["status"],
-            "pending",
-        )
+        self.assertEqual(result["suggestions"], 0)  # every alerted limit is at or above normal
         self.assertTrue(self.db.tables["category_month_stats"])
+
+    def _seed_previous_month(self, source="auto"):
+        self.db.tables.update(
+            {
+                "budgets": [
+                    {**b, "user_id": USER, "month_year": "2026-09", "limit_source": source}
+                    for b in BUDGETS
+                ],
+            }
+        )
+
+    def test_new_month_rows_come_from_history(self):
+        self._seed_previous_month()
+        rows = user_model.ensure_month_budget_rows(USER, "2026-10", _stats(), CATEGORIES)
+        by_category = {r["category_id"]: r for r in rows}
+        self.assertEqual(by_category["cat-food"]["monthly_limit"], 240.0)
+        self.assertEqual(by_category["cat-shop"]["monthly_limit"], 100.0)
+        self.assertEqual(by_category["cat-food"]["limit_source"], "auto")
+
+    def test_user_limits_carry_forward(self):
+        self._seed_previous_month(source="user")
+        rows = user_model.ensure_month_budget_rows(USER, "2026-10", _stats(), CATEGORIES)
+        food_row = next(r for r in rows if r["category_id"] == "cat-food")
+        self.assertEqual((food_row["monthly_limit"], food_row["limit_source"]), (300, "user"))
+
+    def test_existing_rows_are_never_touched(self):
+        self._seed_previous_month()
+        self.db.tables["budgets"].append(
+            {
+                "id": "b-oct",
+                "user_id": USER,
+                "category_id": "cat-food",
+                "month_year": "2026-10",
+                "monthly_limit": 77,
+                "limit_source": "user",
+            }
+        )
+        rows = user_model.ensure_month_budget_rows(USER, "2026-10", _stats(), CATEGORIES)
+        self.assertEqual([(r["id"], r["monthly_limit"]) for r in rows], [("b-oct", 77)])
+
+    def test_no_previous_month_leaves_it_to_the_app(self):
+        self.assertEqual(user_model.ensure_month_budget_rows(USER, "2026-10", _stats(), {}), [])
+        self.assertFalse(self.db.tables.get("budgets"))
+
+    def test_finished_month_alerts_are_history(self):
+        self._seed_previous_month()
+        written = user_model.finalize_month_alerts(
+            USER, "2026-09", HISTORY + OCTOBER, {}, CATEGORIES
+        )
+        self.assertEqual(written, 0)  # Food 100 and Shopping 100 vs 300 and 100: not over
+        self.db.tables["budgets"][0]["monthly_limit"] = 90  # Food limit 90 < 100 spent
+        self.assertEqual(
+            user_model.finalize_month_alerts(USER, "2026-09", HISTORY + OCTOBER, {}, CATEGORIES), 1
+        )
+        (row,) = self.db.tables["budget_alerts"]
+        self.assertEqual((row["kind"], row["month"]), ("over_budget", "2026-09"))
+        self.assertIsNotNone(row["notified_at"])  # never reaches a future push sender
 
     def test_missing_tables_never_raise(self):
         broken = mock.MagicMock()

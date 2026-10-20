@@ -1,3 +1,5 @@
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../constants/app_constants.dart';
 import '../core/config/supabase_client.dart';
 import '../models/app_models.dart';
@@ -35,6 +37,10 @@ class BudgetService {
     return out;
   }
 
+  /// Creates [monthYear]'s missing budget rows. A limit the user set last
+  /// month carries forward; otherwise the limit comes from spending history
+  /// (category_month_stats, see [autoLimits]); otherwise last month's limit.
+  /// Existing rows are never changed.
   Future<void> ensureMonthlyBudgetRows(
     List<CategoryOption> categories,
     String monthYear,
@@ -56,17 +62,182 @@ class BudgetService {
         if (categoryId == null || categoryId.isEmpty) continue;
         hasBudgetByCategory.add(categoryId);
       }
-      for (final c in categories) {
-        if (hasBudgetByCategory.contains(c.id)) continue;
-        await AppSupabase.client.from('budgets').insert({
+      final missing = [
+        for (final c in categories)
+          if (!hasBudgetByCategory.contains(c.id)) c,
+      ];
+      if (missing.isEmpty) return;
+      final limits = autoLimits(
+        stats: await _historyStats(userId, monthYear),
+        cardNames: [for (final c in categories) c.name],
+        previous: await _previousLimits(userId, monthYear, categories),
+        month: monthYear,
+      );
+      for (final c in missing) {
+        final value = limits[c.name] ?? (limit: 0.0, source: 'auto');
+        final row = {
           'user_id': userId,
           'category_id': c.id,
-          'monthly_limit': 0,
+          'monthly_limit': value.limit,
           'rollover_amount': 0,
           _budgetMonthColumn: monthYear,
-        });
+        };
+        try {
+          await AppSupabase.client.from('budgets').insert({
+            ...row,
+            'limit_source': value.source,
+          });
+        } catch (_) {
+          // Before migration 015 there is no limit_source column. A row the
+          // backend created at the same moment fails here too; that's fine.
+          try {
+            await AppSupabase.client.from('budgets').insert(row);
+          } catch (_) {}
+        }
       }
     } catch (_) {}
+  }
+
+  Future<List<Map<String, dynamic>>> _historyStats(
+    String userId,
+    String monthYear,
+  ) async {
+    try {
+      final months = previousMonths(monthYear, autoLimitHistoryMonths);
+      final rows = await AppSupabase.client
+          .from('category_month_stats')
+          .select('month,category,spent')
+          .eq('user_id', userId)
+          .inFilter('month', months);
+      return (rows as List).whereType<Map<String, dynamic>>().toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Last month's limits by normalized category name.
+  Future<Map<String, ({double limit, String source})>> _previousLimits(
+    String userId,
+    String monthYear,
+    List<CategoryOption> categories,
+  ) async {
+    final nameById = {for (final c in categories) c.id: c.name};
+    final previous = previousMonths(monthYear, 1).single;
+    List rows;
+    try {
+      rows = await AppSupabase.client
+          .from('budgets')
+          .select('category_id,monthly_limit,limit_source')
+          .eq('user_id', userId)
+          .eq(_budgetMonthColumn, previous);
+    } catch (_) {
+      try {
+        // Before migration 015: every existing limit counts as the user's.
+        rows = await AppSupabase.client
+            .from('budgets')
+            .select('category_id,monthly_limit')
+            .eq('user_id', userId)
+            .eq(_budgetMonthColumn, previous);
+      } catch (_) {
+        return const {};
+      }
+    }
+    final out = <String, ({double limit, String source})>{};
+    for (final row in rows.whereType<Map<String, dynamic>>()) {
+      final name = nameById['${row['category_id']}'];
+      if (name == null) continue;
+      out[normalizeCategoryKey(name)] = (
+        limit: double.tryParse('${row['monthly_limit']}') ?? 0,
+        source: (row['limit_source'] as String?) ?? 'user',
+      );
+    }
+    return out;
+  }
+
+  static const autoLimitHistoryMonths = 6;
+  static const _autoLimitMinMonths = 3;
+
+  /// The [count] months ('YYYY-MM') before [month], oldest first.
+  static List<String> previousMonths(String month, int count) {
+    final parts = month.split('-');
+    var year = int.parse(parts[0]);
+    var mon = int.parse(parts[1]);
+    final out = <String>[];
+    for (var i = 0; i < count; i++) {
+      mon -= 1;
+      if (mon == 0) {
+        year -= 1;
+        mon = 12;
+      }
+      out.add('$year-${mon.toString().padLeft(2, '0')}');
+    }
+    return out.reversed.toList();
+  }
+
+  static double _trimmedMean(List<double> values) {
+    final ordered = [...values]..sort();
+    final kept = ordered.length >= 3
+        ? ordered.sublist(1, ordered.length - 1)
+        : ordered;
+    if (kept.isEmpty) return 0;
+    return kept.reduce((a, b) => a + b) / kept.length;
+  }
+
+  /// Limits for a new month's rows, by card name: the user's own limit from
+  /// last month as is ('user'); else the trimmed mean (highest and lowest
+  /// month dropped) of the card's spend over the last 6 months with any
+  /// spending, at least 3, rounded to $5 ('auto'); else last month's limit;
+  /// else 0. [previous] is keyed by normalized name. Mirrors
+  /// python/user_model.py auto_limits: both run
+  /// python/tests/data/budget_auto_limit_contract.json.
+  static Map<String, ({double limit, String source})> autoLimits({
+    required List<Map<String, dynamic>> stats,
+    required List<String> cardNames,
+    required Map<String, ({double limit, String source})> previous,
+    required String month,
+  }) {
+    final cardKeys = {for (final n in cardNames) normalizeCategoryKey(n)};
+    final withSpending = {
+      for (final s in stats)
+        if ((double.tryParse('${s['spent']}') ?? 0) > 0) '${s['month']}',
+    };
+    final months = [
+      for (final m in previousMonths(month, autoLimitHistoryMonths))
+        if (withSpending.contains(m)) m,
+    ];
+    final totals = <String, double>{};
+    for (final s in stats) {
+      final m = '${s['month']}';
+      if (!months.contains(m)) continue;
+      final key = cardKeyForBucket(
+        normalizeCategoryKey('${s['category']}'),
+        cardKeys,
+      );
+      totals['$m|$key'] =
+          (totals['$m|$key'] ?? 0) + (double.tryParse('${s['spent']}') ?? 0);
+    }
+    final out = <String, ({double limit, String source})>{};
+    for (final name in cardNames) {
+      final key = normalizeCategoryKey(name);
+      final prev = previous[key];
+      if (prev != null && prev.source == 'user') {
+        out[name] = (limit: prev.limit, source: 'user');
+        continue;
+      }
+      if (months.length >= _autoLimitMinMonths) {
+        final spend = [
+          for (final m in months)
+            ((totals['$m|$key'] ?? 0) * 100).roundToDouble() / 100,
+        ];
+        final limit = (_trimmedMean(spend) / 5 + 0.5).floorToDouble() * 5;
+        if (limit > 0) {
+          out[name] = (limit: limit, source: 'auto');
+          continue;
+        }
+      }
+      out[name] = (limit: prev?.limit ?? 0, source: 'auto');
+    }
+    return out;
   }
 
   Future<void> updateBudgetLimit(
@@ -76,11 +247,14 @@ class BudgetService {
   ) async {
     if (monthlyLimit < 0) return;
     if (budgetId.startsWith('preset_')) return;
-    await AppSupabase.client
-        .from('budgets')
-        .update({'monthly_limit': monthlyLimit})
-        .eq('id', budgetId)
-        .eq('user_id', userId);
+    await _writeUserLimit(
+      (values) => AppSupabase.client
+          .from('budgets')
+          .update(values)
+          .eq('id', budgetId)
+          .eq('user_id', userId),
+      {'monthly_limit': monthlyLimit},
+    );
   }
 
   Future<void> upsertMonthlyBudgetByCategoryTitle({
@@ -136,21 +310,42 @@ class BudgetService {
         .whereType<Map<String, dynamic>>()
         .toList();
     if (existing.isNotEmpty) {
-      await AppSupabase.client
-          .from('budgets')
-          .update({'monthly_limit': monthlyLimit})
-          .eq('id', '${existing.first['id']}')
-          .eq('user_id', userId);
+      await _writeUserLimit(
+        (values) => AppSupabase.client
+            .from('budgets')
+            .update(values)
+            .eq('id', '${existing.first['id']}')
+            .eq('user_id', userId),
+        {'monthly_limit': monthlyLimit},
+      );
       return;
     }
 
-    await AppSupabase.client.from('budgets').insert({
-      'user_id': userId,
-      'category_id': categoryId,
-      'monthly_limit': monthlyLimit,
-      'rollover_amount': 0,
-      _budgetMonthColumn: monthYear,
-    });
+    await _writeUserLimit(
+      (values) => AppSupabase.client.from('budgets').insert(values),
+      {
+        'user_id': userId,
+        'category_id': categoryId,
+        'monthly_limit': monthlyLimit,
+        'rollover_amount': 0,
+        _budgetMonthColumn: monthYear,
+      },
+    );
+  }
+
+  /// A limit the user typed (or accepted) is theirs: limit_source 'user', so it
+  /// carries into the next month. Retried without the column before
+  /// migration 015.
+  Future<void> _writeUserLimit(
+    Future<dynamic> Function(Map<String, dynamic> values) write,
+    Map<String, dynamic> values,
+  ) async {
+    try {
+      await write({...values, 'limit_source': 'user'});
+    } on PostgrestException catch (error) {
+      if (!error.message.contains('limit_source')) rethrow;
+      await write(values);
+    }
   }
 
   List<BudgetCategoryProgress> buildProgressFromRows({

@@ -143,8 +143,9 @@ class _BudgetSuggestionsCardState extends State<BudgetSuggestionsCard> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Based on your typical month, leaving out your highest and '
-            'lowest. Nothing changes unless you accept.',
+            'This limit is below what you usually spend. Your usual month '
+            'leaves out your highest and lowest. Nothing changes unless you '
+            'accept.',
             style: TextStyle(
               fontSize: 12,
               color: Colors.black.withValues(alpha: 0.6),
@@ -173,7 +174,11 @@ class _BudgetSuggestionsCardState extends State<BudgetSuggestionsCard> {
           ),
           if (item.months.isNotEmpty)
             Text(
-              'From ${item.months.length} months of spending',
+              item.monthsOver > 0
+                  ? 'Your usual month. Over budget in ${item.monthsOver} of '
+                        'the last ${item.months.length} months'
+                  : 'Your usual month, from ${item.months.length} months '
+                        'of spending',
               style: TextStyle(
                 fontSize: 12,
                 color: Colors.black.withValues(alpha: 0.55),

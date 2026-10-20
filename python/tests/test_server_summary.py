@@ -121,6 +121,7 @@ class ContextTests(unittest.TestCase):
         with (
             mock.patch.object(server_summary, "_load", side_effect=fake_load),
             mock.patch("user_model.fetch_budget_rows", return_value=[]),
+            mock.patch.object(server_summary, "fetch_alert_history", return_value=[]),
         ):
             first = server_summary.summary_for("cache-user", context)
             second = server_summary.summary_for("cache-user", context)
@@ -129,6 +130,74 @@ class ContextTests(unittest.TestCase):
         self.assertIs(first, second)
         self.assertEqual(loads, ["cache-user", "cache-user"])
         self.assertEqual(first["month_index"]["2026-10"]["card_payments_out"], 500)
+
+
+class AlertHistoryTests(unittest.TestCase):
+    def test_reads_recent_unresolved_alerts_newest_first(self):
+        from fake_supabase import FakeSupabase
+
+        def alert(month, category, kind="over_budget", resolved=None):
+            return {
+                "user_id": "u1",
+                "month": month,
+                "category": category,
+                "kind": kind,
+                "spent": 120,
+                "limit_amount": 100,
+                "resolved_at": resolved,
+            }
+
+        db = FakeSupabase(
+            {
+                "budget_alerts": [
+                    alert("2026-03", "Food"),  # older than 6 months
+                    alert("2026-08", "Food"),
+                    alert("2026-09", "Shopping"),
+                    alert("2026-09", "Transport", resolved="2026-09-20"),
+                    alert("2026-10", "Food", kind="projected_over"),
+                    {**alert("2026-09", "Food"), "user_id": "someone-else"},
+                ]
+            }
+        )
+        with mock.patch("supabase_repo.supabase", db):
+            history = server_summary.fetch_alert_history("u1", "2026-10")
+        self.assertEqual(
+            [(h["month"], h["category"], h["kind"]) for h in history],
+            [
+                ("2026-10", "Food", "projected_over"),
+                ("2026-09", "Shopping", "over_budget"),
+                ("2026-08", "Food", "over_budget"),
+            ],
+        )
+
+    def test_prompt_context_names_the_overruns(self):
+        from ai.chat_service import ChatService
+        from ai.validators import sanitize_spending_summary
+
+        summary = sanitize_spending_summary(
+            {
+                "totals": {"expenses_30d": 500},
+                "alert_history": [
+                    {
+                        "month": "2026-09",
+                        "category": "Food",
+                        "kind": "over_budget",
+                        "spent": 1349,
+                        "limit": 810,
+                    },
+                    {
+                        "month": "2026-10",
+                        "category": "Food",
+                        "kind": "approaching",
+                        "spent": 10,
+                        "limit": 20,
+                    },
+                ],
+            }
+        )
+        text = ChatService(lambda *a, **k: "", lambda _u: "")._summary_to_text(summary)
+        self.assertIn("months that ended over budget: 2026-09 Food $1349 of $810 limit", text)
+        self.assertNotIn("approaching", text)
 
 
 def _write_expected():

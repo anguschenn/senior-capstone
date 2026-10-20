@@ -1,0 +1,269 @@
+{
+  "description": "Shared by python/tests/test_user_model.py and ssdemo_1/test/services/budget_auto_limit_contract_test.dart: limits for a new month's budget rows (user_model.auto_limits / BudgetService.autoLimits). `previous` is keyed by normalized card name.",
+  "cases": [
+    {
+      "description": "history, carried user limits, folding into Other, rounding",
+      "month": "2026-11",
+      "cards": [
+        "Food",
+        "Shopping",
+        "Transport",
+        "Health",
+        "Other",
+        "Housing"
+      ],
+      "previous": {
+        "food": {
+          "limit": 100,
+          "source": "auto"
+        },
+        "shopping": {
+          "limit": 400,
+          "source": "user"
+        },
+        "housing": {
+          "limit": 1500,
+          "source": "user"
+        },
+        "other": {
+          "limit": 25,
+          "source": "auto"
+        }
+      },
+      "stats": [
+        {
+          "month": "2026-05",
+          "category": "Food",
+          "spent": 500
+        },
+        {
+          "month": "2026-06",
+          "category": "Food",
+          "spent": 600
+        },
+        {
+          "month": "2026-07",
+          "category": "Food",
+          "spent": 700
+        },
+        {
+          "month": "2026-08",
+          "category": "Food",
+          "spent": 800
+        },
+        {
+          "month": "2026-09",
+          "category": "Food",
+          "spent": 900
+        },
+        {
+          "month": "2026-10",
+          "category": "Food",
+          "spent": 1000
+        },
+        {
+          "month": "2026-05",
+          "category": "Shopping",
+          "spent": 200
+        },
+        {
+          "month": "2026-06",
+          "category": "Shopping",
+          "spent": 250
+        },
+        {
+          "month": "2026-07",
+          "category": "Shopping",
+          "spent": 260
+        },
+        {
+          "month": "2026-08",
+          "category": "Shopping",
+          "spent": 240
+        },
+        {
+          "month": "2026-09",
+          "category": "Shopping",
+          "spent": 900
+        },
+        {
+          "month": "2026-10",
+          "category": "Shopping",
+          "spent": 100
+        },
+        {
+          "month": "2026-05",
+          "category": "Transport",
+          "spent": 40
+        },
+        {
+          "month": "2026-06",
+          "category": "Transport",
+          "spent": 55
+        },
+        {
+          "month": "2026-07",
+          "category": "Transport",
+          "spent": 35
+        },
+        {
+          "month": "2026-08",
+          "category": "Transport",
+          "spent": 60
+        },
+        {
+          "month": "2026-09",
+          "category": "Transport",
+          "spent": 45
+        },
+        {
+          "month": "2026-10",
+          "category": "Transport",
+          "spent": 50
+        },
+        {
+          "month": "2026-09",
+          "category": "Health",
+          "spent": 12.5
+        },
+        {
+          "month": "2026-10",
+          "category": "Health",
+          "spent": 30
+        },
+        {
+          "month": "2026-07",
+          "category": "Travel",
+          "spent": 300
+        },
+        {
+          "month": "2026-08",
+          "category": "Other",
+          "spent": 20
+        },
+        {
+          "month": "2026-10",
+          "category": "Travel",
+          "spent": 40
+        },
+        {
+          "month": "2026-04",
+          "category": "Food",
+          "spent": 5000
+        }
+      ],
+      "expected": {
+        "Food": {
+          "limit": 750.0,
+          "source": "auto"
+        },
+        "Shopping": {
+          "limit": 400.0,
+          "source": "user"
+        },
+        "Transport": {
+          "limit": 50.0,
+          "source": "auto"
+        },
+        "Health": {
+          "limit": 5.0,
+          "source": "auto"
+        },
+        "Other": {
+          "limit": 15.0,
+          "source": "auto"
+        },
+        "Housing": {
+          "limit": 1500.0,
+          "source": "user"
+        }
+      }
+    },
+    {
+      "description": "under 3 months of history: last month's limit, else $0",
+      "month": "2026-11",
+      "cards": [
+        "Food",
+        "Shopping",
+        "Health"
+      ],
+      "previous": {
+        "food": {
+          "limit": 300,
+          "source": "auto"
+        },
+        "shopping": {
+          "limit": 0,
+          "source": "user"
+        }
+      },
+      "stats": [
+        {
+          "month": "2026-09",
+          "category": "Food",
+          "spent": 410
+        },
+        {
+          "month": "2026-10",
+          "category": "Food",
+          "spent": 380
+        }
+      ],
+      "expected": {
+        "Food": {
+          "limit": 300.0,
+          "source": "auto"
+        },
+        "Shopping": {
+          "limit": 0.0,
+          "source": "user"
+        },
+        "Health": {
+          "limit": 0.0,
+          "source": "auto"
+        }
+      }
+    },
+    {
+      "description": "January looks back across the year boundary; months without spending don't count",
+      "month": "2027-01",
+      "cards": [
+        "Food"
+      ],
+      "previous": {},
+      "stats": [
+        {
+          "month": "2026-07",
+          "category": "Food",
+          "spent": 100
+        },
+        {
+          "month": "2026-09",
+          "category": "Food",
+          "spent": 232.4
+        },
+        {
+          "month": "2026-11",
+          "category": "Food",
+          "spent": 250
+        },
+        {
+          "month": "2026-12",
+          "category": "Food",
+          "spent": 300
+        },
+        {
+          "month": "2026-06",
+          "category": "Food",
+          "spent": 999
+        }
+      ],
+      "expected": {
+        "Food": {
+          "limit": 240.0,
+          "source": "auto"
+        }
+      }
+    }
+  ]
+}

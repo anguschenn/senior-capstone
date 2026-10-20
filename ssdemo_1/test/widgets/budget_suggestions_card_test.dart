@@ -27,6 +27,7 @@ BudgetSuggestion _food() => BudgetSuggestion.fromRow({
   'suggested_limit': '240.00',
   'basis': {
     'months': ['2026-04', '2026-05', '2026-06'],
+    'months_over': 2,
   },
 })!;
 
@@ -56,7 +57,10 @@ void main() {
     final service = _FakeService([_food()]);
     final updates = await _pump(tester, service);
     expect(find.text('Food: \$300.00 → \$240.00'), findsOneWidget);
-    expect(find.text('From 3 months of spending'), findsOneWidget);
+    expect(
+      find.text('Your usual month. Over budget in 2 of the last 3 months'),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('Accept'));
     await tester.pumpAndSettle();

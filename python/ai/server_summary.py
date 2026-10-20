@@ -719,9 +719,47 @@ def summary_for(user_id: str, context: dict, tx_rows=None) -> dict:
         account_type=types.pop() if account_ids and len(types) == 1 else "",
         tz_name=context["tz"],
     )
+    if not account_ids:
+        # Alerts are per user (all accounts), so only the all-accounts view gets them.
+        summary["alert_history"] = fetch_alert_history(user_id, context["month"])
     with _cache_lock:
         _cache[key] = (now_ts + _CACHE_TTL_SECONDS, summary)
     return summary
+
+
+ALERT_HISTORY_MONTHS = 6
+
+
+def fetch_alert_history(user_id: str, month: str) -> list[dict]:
+    """Budget alerts for `month` and the ALERT_HISTORY_MONTHS before it, newest first: the
+    finished months' month-end overruns and this month's open alerts. [] on any error."""
+    from supabase_repo import supabase
+    from user_model import previous_months
+
+    months = previous_months(month, ALERT_HISTORY_MONTHS) + [month]
+    try:
+        rows = (
+            supabase.table("budget_alerts")
+            .select("month,category,kind,spent,limit_amount,resolved_at")
+            .eq("user_id", user_id)
+            .gte("month", months[0])
+            .lte("month", month)
+            .execute()
+        ).data or []
+    except Exception as error:
+        print(f"alert history skipped for user {user_id}: {type(error).__name__}")
+        return []
+    return [
+        {
+            "month": r["month"],
+            "category": r["category"],
+            "kind": r["kind"],
+            "spent": float(r.get("spent") or 0),
+            "limit": float(r.get("limit_amount") or 0),
+        }
+        for r in sorted(rows, key=lambda r: (r["month"], r["category"]), reverse=True)
+        if not r.get("resolved_at")
+    ]
 
 
 def invalidate(user_id: str) -> None:
