@@ -154,6 +154,9 @@ class AiSummaryService {
     Map<String, dynamic>? precomputedSummary,
     Map<String, String> reviewedCategoryByTxId = const <String, String>{},
     DateTime? focusMonth,
+    // Every managed account's transactions, for the budgets' total spent when
+    // one account is selected. Defaults to [transactions].
+    List<AppTransaction>? budgetTransactions,
     // Tests only: a fixed clock (the shared contract with the backend).
     DateTime? now,
   }) {
@@ -479,6 +482,21 @@ class AiSummaryService {
                   {'category': b.title, 'spent': b.spent, 'limit': b.limit},
             ],
     };
+    if ((budgets['items'] as List).isNotEmpty) {
+      // The Budget tab's "Left to spend" subtracts all of the month's spending
+      // so far, budgeted category or not.
+      final today = DateTime(now.year, now.month, now.day);
+      var spentTotal = 0.0;
+      for (final tx in budgetTransactions ?? transactions) {
+        if (tx.date.year != anchor.year || tx.date.month != anchor.month) {
+          continue;
+        }
+        final day = DateTime(tx.date.year, tx.date.month, tx.date.day);
+        if (day.isAfter(today)) continue;
+        spentTotal += tx.expenseAmount;
+      }
+      budgets['spent_total'] = (spentTotal * 100).roundToDouble() / 100;
+    }
 
     final annualTopCategories = annualCategoryTotals.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));

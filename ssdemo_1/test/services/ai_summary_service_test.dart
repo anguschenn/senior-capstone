@@ -111,6 +111,7 @@ void main() {
         'items': [
           {'category': 'Food', 'spent': 516.44, 'limit': 100.0},
         ],
+        'spent_total': 0.0,
       });
     });
 

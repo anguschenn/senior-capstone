@@ -958,7 +958,8 @@
               "spent": 120,
               "limit": 100
             }
-          ]
+          ],
+          "spent_total": 173.74
         },
         "annual_summary": {
           "year": 2026,
@@ -1778,7 +1779,8 @@
               "spent": 15.49,
               "limit": 50
             }
-          ]
+          ],
+          "spent_total": 225.89
         },
         "annual_summary": {
           "year": 2026,

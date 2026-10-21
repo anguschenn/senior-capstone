@@ -1077,6 +1077,10 @@ def _outside_summary_spec(text, summary, scope):
             )
             else "share"
             if re.search(r"\b(portion|share|percent|percentage|how much of)\b", text)
+            # "how much budget is left": the month's budgets minus all its spending,
+            # the Budget tab's "Left to spend"
+            else "left"
+            if re.search(r"\b(left|remaining|remain)\b", text)
             else "yes_no"
             if re.match(r"^(am|is|are|was|were|did|do|have|has)\b.*\bover\b", text)
             else "",
@@ -5564,6 +5568,8 @@ def _month_outlook_spec(text, summary, scope):
         return None
     if not re.search(r"\b(will|am i going to|gonna|going to|would|have|got)\b", text):
         return None
+    if _BUDGET_STATUS_RE.search(text):
+        return None  # "how much budget do I have left" is the budget's total left
     return QuerySpec(
         task_type="month_outlook",
         metric="net",

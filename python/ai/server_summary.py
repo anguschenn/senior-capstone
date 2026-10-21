@@ -291,9 +291,11 @@ def build_summary(
     scope_label: str,
     account_type: str = "",
     tz_name: str = "",
+    budget_transactions: list[Tx] | None = None,
 ) -> dict:
     """focus_month is 'YYYY-MM' (for all_year, any month of that year). `now` is the user's
-    local time, naive."""
+    local time, naive. budget_transactions are every managed account's transactions, for
+    the budgets' total spent when one account is selected (defaults to `transactions`)."""
     year, mon = (int(p) for p in focus_month.split("-"))
     if all_year:
         mon = 1
@@ -469,6 +471,17 @@ def build_summary(
             if float(b["limit"]) > 0
         ],
     }
+    if budgets["items"]:
+        # The Budget tab's "Left to spend" subtracts all of the month's spending so far,
+        # budgeted category or not.
+        budgets["spent_total"] = round(
+            sum(
+                tx.expense_amount
+                for tx in (transactions if budget_transactions is None else budget_transactions)
+                if _month_key(tx.date) == budgets["month"] and tx.date <= now.date()
+            ),
+            2,
+        )
 
     month_keys = sorted(month_totals)[-36:]
     month_index = {}
@@ -760,6 +773,9 @@ def summary_for(user_id: str, context: dict, tx_rows=None) -> dict:
     summary = build_summary(
         txs,
         progress,
+        budget_transactions=build_transactions(rows, account_meta, rules, None)
+        if account_ids and progress
+        else None,
         # Noon: the app's windows run from "now" minus N days, and any time after midnight
         # puts the same calendar days inside them.
         now=dt.datetime.combine(context["today"], dt.time(12, 0)),

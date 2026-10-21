@@ -1529,3 +1529,24 @@ class TestChatServiceV2Regression(unittest.TestCase):
         self.assertIn("haven't set any budget limits", none_set)
         older_app = self._ask_with("Am I over budget?", self._round2_summary())["reply"]
         self.assertIn("doesn't get your budget limits", older_app)
+
+    def test_budget_left_is_the_budget_tabs_left_to_spend(self):
+        summary = self._budget_summary()
+        # $800 of limits minus all of May's spending, unbudgeted categories too
+        summary["budgets"]["spent_total"] = 620.0
+        for prompt in (
+            "How much budget do I have left this month?",
+            "How much is left in my budget?",
+            "How much did I spend in May and how much budget is left?",
+            "how much budget is remaining",
+        ):
+            with self.subTest(prompt=prompt):
+                reply = self._ask_with(prompt, summary)["reply"]
+                self.assertIn("spent $620 of your $800 budget, so $180 is left", reply)
+                self.assertIn("Over budget: Food ($400 of $300)", reply)
+        summary["budgets"]["spent_total"] = 900.0
+        over = self._ask_with("How much budget do I have left?", summary)["reply"]
+        self.assertIn("you're $100 over", over)
+        # one category's budget still answers for that category
+        shopping = self._ask_with("How much is left of my shopping budget?", summary)["reply"]
+        self.assertIn("Shopping budget is $500.00", shopping)

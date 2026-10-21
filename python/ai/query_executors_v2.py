@@ -3647,6 +3647,27 @@ def _budget_status(query_spec, summary):
 
     over = [i for i in items if float(i["spent"]) > float(i["limit"])]
     heading = [i for i in items if progress and i not in over and pace(i) > float(i["limit"])]
+    spent_total = budgets.get("spent_total")
+    if query_spec.compare_to == "left" and isinstance(spent_total, (int, float)):
+        # The Budget tab's "Left to spend": every limit minus all of the month's
+        # spending, budgeted category or not, across all accounts.
+        limit = sum(float(i["limit"]) for i in items)
+        left = limit - float(spent_total)
+        reply = (
+            f"For {month} you've spent ${float(spent_total):,.0f} of your ${limit:,.0f} "
+            f"budget, so "
+            + (f"${left:,.0f} is left to spend." if left >= 0 else f"you're ${-left:,.0f} over.")
+        )
+        if over:
+            reply += (
+                " Over budget: "
+                + ", ".join(
+                    f"{i['category']} (${float(i['spent']):,.0f} of ${float(i['limit']):,.0f})"
+                    for i in over
+                )
+                + "."
+            )
+        return answer(reply, "Ask how much is left of one category's budget.")
     parts = []
     if over:
         parts.append(

@@ -381,6 +381,8 @@ def sanitize_spending_summary(summary):
                 spent = max(0.0, to_float(item.get("spent", 0)))
                 items.append({"category": name, "spent": spent, "limit": limit})
         cleaned["budgets"] = {"month": clamp_str(budgets.get("month", ""), 16), "items": items}
+        if isinstance(budgets.get("spent_total"), (int, float)):
+            cleaned["budgets"]["spent_total"] = to_float(budgets["spent_total"])
 
     alert_history = summary.get("alert_history")
     if isinstance(alert_history, list):

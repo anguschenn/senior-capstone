@@ -200,6 +200,9 @@ class HiddenAccountTests(unittest.TestCase):
         self.assertEqual(
             summary["budgets"]["items"], [{"category": "Food", "spent": 50.0, "limit": 100.0}]
         )
+        # "Left to spend" counts the card's spending too, though checking spent nothing.
+        self.assertEqual(summary["month_index"]["2026-10"]["expenses"], 0)
+        self.assertEqual(summary["budgets"]["spent_total"], 50.0)
 
 
 class AlertHistoryTests(unittest.TestCase):

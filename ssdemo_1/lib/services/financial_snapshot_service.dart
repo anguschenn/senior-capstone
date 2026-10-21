@@ -183,6 +183,7 @@ class FinancialSnapshotService {
                       'Account ${_endingForId(targetAccountId)}')
                 : 'Account ••••${_endingForId(targetAccountId)}'),
       focusMonth: focusMonth,
+      budgetTransactions: budgetTransactions,
     );
 
     return FinancialSnapshot(
