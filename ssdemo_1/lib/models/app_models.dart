@@ -12,7 +12,7 @@ enum TxKind {
   /// Money earned or received from someone else.
   income,
 
-  /// Money moving between the user's own accounts (savings transfers, card
+  /// Money moving between two linked accounts (savings transfers, card
   /// payments): shown in the list but never counted.
   internal,
 
@@ -93,16 +93,17 @@ class AppTransaction {
   );
 
   /// Kinds for the loaded transactions, set by [classifyTransactions] so
-  /// remembered rules and refund matching apply. Ids missing here fall back to
-  /// [ownKind].
+  /// remembered rules, own-account pairing and refund matching apply. Ids
+  /// missing here fall back to [ownKind].
   static Map<String, TxKind> kindById = const {};
 
   TxKind get kind => kindById[id] ?? ownKind();
 
   /// Spending contributed by this transaction: negative for a refund, so it
-  /// nets against its category. Transfers between the user's own accounts
-  /// (a card payment, a savings transfer) count as nothing:
-  /// the purchases already count when they happen.
+  /// nets against its category. Money moved between two linked accounts (a
+  /// card payment, a savings transfer) counts as nothing: the purchases
+  /// already count when they happen. Money sent to an account the app doesn't
+  /// have is spending, like cash.
   double get expenseAmount => switch (kind) {
     TxKind.spend => displayAmount,
     TxKind.refund => -displayAmount,
@@ -122,34 +123,9 @@ class AppTransaction {
       if (isExpense) return TxKind.spend;
       return userCategory == 'Income' ? TxKind.income : TxKind.refund;
     }
-    if (isCreditCardPayment || isCardPaymentCredit) return TxKind.internal;
-    if (isOwnAccountTransferBySignals(
-      name: name,
-      description: description,
-      pfcDetailed: rawPfcDetailed,
-    )) {
-      return TxKind.internal;
-    }
     if (isExpense) return TxKind.spend;
     if (_isRefundLike() || isSpendingPfc(rawPfcPrimary)) return TxKind.refund;
     return TxKind.income;
-  }
-
-  /// Money moved to or from one of the user's own accounts. Person-to-person
-  /// apps (Zelle, Venmo...) are real payments, so they still count. Cash isn't
-  /// tracked, so a withdrawal counts as spending and a cash deposit as income.
-  /// The user can mark any of them as Internal Transfer.
-  static bool isOwnAccountTransferBySignals({
-    required String name,
-    required String description,
-    required String pfcDetailed,
-  }) {
-    final text = '$name $description'.toLowerCase();
-    if (isPeerToPeer(text)) return false;
-    final detailed = pfcDetailed.toUpperCase();
-    if (_ownTransferPfc.any(detailed.contains)) return true;
-    // Banks shorten it: "GOLDMAN SACHS BA TRANS", "ONLINE XFER TO SAV".
-    return RegExp(r'\b(transfer|trans|xfer|trnsfr)\b').hasMatch(text);
   }
 
   static bool isPeerToPeer(String text) =>
@@ -161,15 +137,6 @@ class AppTransaction {
     'paypal',
     'cash app',
     'apple cash',
-  ];
-
-  static const _ownTransferPfc = [
-    'TRANSFER_IN_ACCOUNT_TRANSFER',
-    'TRANSFER_OUT_ACCOUNT_TRANSFER',
-    'TRANSFER_IN_SAVINGS',
-    'TRANSFER_OUT_SAVINGS',
-    'TRANSFER_IN_INVESTMENT_AND_RETIREMENT_FUNDS',
-    'TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS',
   ];
 
   /// Plaid groups that are things you buy: money back in one is a refund.
@@ -631,6 +598,7 @@ classifyTransactions(
     }
     kinds[tx.id] = kind;
   }
+  _pairOwnTransfers(transactions, userCategoryById, kinds);
   for (final tx in transactions) {
     final kind = kinds[tx.id];
     if (kind != TxKind.income && kind != TxKind.refund) continue;
@@ -647,6 +615,73 @@ classifyTransactions(
     purchaseIdByRefundId[tx.id] = purchase.id;
   }
   return (kinds: kinds, purchaseIdByRefundId: purchaseIdByRefundId);
+}
+
+/// Money leaving one linked account and the same amount arriving in another
+/// linked account within 5 days is a move between the user's own accounts.
+/// The app only manages linked accounts, so money to or from any other
+/// account counts as spending or income.
+/// Only transfer- or payment-looking rows pair, so a purchase never pairs with
+/// an unrelated deposit; person-to-person payments never pair.
+void _pairOwnTransfers(
+  List<AppTransaction> transactions,
+  Map<String, String> userCategoryById,
+  Map<String, TxKind> kinds,
+) {
+  bool candidate(AppTransaction tx) {
+    if (tx.accountId.isEmpty) return false;
+    final userCategory = userCategoryById[tx.id] ?? '';
+    if (userCategory.isNotEmpty && userCategory != 'Fees & Transfers') {
+      return false;
+    }
+    final kind = kinds[tx.id];
+    if (kind != TxKind.spend && kind != TxKind.income) return false;
+    if (AppTransaction.isPeerToPeer('${tx.name} ${tx.description}')) {
+      return false;
+    }
+    return looksLikeTransfer(
+      tx.name,
+      tx.description,
+      tx.rawPfcPrimary,
+      tx.rawPfcDetailed,
+    );
+  }
+
+  final outflows = transactions
+      .where((tx) => tx.amount > 0 && candidate(tx))
+      .toList();
+  final inflows = transactions
+      .where((tx) => tx.amount < 0 && candidate(tx))
+      .toList();
+  final paired = <String>{};
+  for (final out in outflows) {
+    for (final into in inflows) {
+      if (paired.contains(into.id) || into.accountId == out.accountId) {
+        continue;
+      }
+      if ((into.displayAmount - out.displayAmount).abs() >= 0.005) continue;
+      if (into.date.difference(out.date).inDays.abs() > 5) continue;
+      paired.addAll([out.id, into.id]);
+      kinds[out.id] = TxKind.internal;
+      kinds[into.id] = TxKind.internal;
+      break;
+    }
+  }
+}
+
+/// A row a bank would use for moving money: Plaid's transfer and loan
+/// payment groups, or the usual words.
+bool looksLikeTransfer(
+  String name,
+  String description,
+  String pfcPrimary,
+  String pfcDetailed,
+) {
+  final pfc = '$pfcPrimary $pfcDetailed'.toUpperCase();
+  if (pfc.contains('TRANSFER') || pfc.contains('LOAN_')) return true;
+  return RegExp(
+    r'\b(transfer|trans|xfer|trnsfr|payment|deposit|withdrawal|online)\b',
+  ).hasMatch('$name $description'.toLowerCase());
 }
 
 /// A merchant name without digits, punctuation or extra spaces.

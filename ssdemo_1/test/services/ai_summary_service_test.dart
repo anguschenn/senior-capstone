@@ -13,11 +13,12 @@ AppTransaction _tx({
   String rawPfcPrimary = '',
   String rawPfcDetailed = '',
   String accountType = 'depository',
+  String accountId = 'acc-1',
 }) {
   return AppTransaction(
     dedupeKey: id,
     id: id,
-    accountId: 'acc-1',
+    accountId: accountId,
     accountName: 'Checking',
     name: name,
     description: name,
@@ -50,8 +51,16 @@ void main() {
       final now = DateTime.now();
       final result = AiSummaryService.instance.build(
         transactions: [
-          _tx(id: 'a1', date: now.subtract(const Duration(days: 2)), amount: 50),
-          _tx(id: 'a2', date: now.subtract(const Duration(days: 1)), amount: 20),
+          _tx(
+            id: 'a1',
+            date: now.subtract(const Duration(days: 2)),
+            amount: 50,
+          ),
+          _tx(
+            id: 'a2',
+            date: now.subtract(const Duration(days: 1)),
+            amount: 20,
+          ),
         ],
         budgetProgress: const [],
         stats: _stats(),
@@ -115,6 +124,7 @@ void main() {
         rawPfcPrimary: 'LOAN_DISBURSEMENTS',
         rawPfcDetailed: 'LOAN_DISBURSEMENTS_OTHER_DISBURSEMENT',
         accountType: 'credit',
+        accountId: 'card-1',
       );
       final cardRefund = _tx(
         id: 'p2',
@@ -122,6 +132,7 @@ void main() {
         amount: -20,
         name: 'Store refund',
         accountType: 'credit',
+        accountId: 'card-1',
       );
       final bankPayment = _tx(
         id: 'p3',
@@ -132,6 +143,14 @@ void main() {
         rawPfcDetailed: 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT',
       );
       final paycheck = _tx(id: 'p4', date: now, amount: -1000, name: 'Payroll');
+      // Both sides are linked, so the payment pairs up as a move.
+      AppTransaction.kindById = classifyTransactions([
+        cardPayment,
+        cardRefund,
+        bankPayment,
+        paycheck,
+      ], const {}).kinds;
+      addTearDown(() => AppTransaction.kindById = const {});
 
       expect(cardPayment.incomeAmount, 0);
       expect(cardPayment.cardPaymentAmount, 500);
@@ -161,7 +180,11 @@ void main() {
       final now = DateTime.now();
       final result = AiSummaryService.instance.build(
         transactions: [
-          _tx(id: 'k1', date: now.subtract(const Duration(days: 1)), amount: 30),
+          _tx(
+            id: 'k1',
+            date: now.subtract(const Duration(days: 1)),
+            amount: 30,
+          ),
         ],
         budgetProgress: const [],
         stats: _stats(),
@@ -181,8 +204,16 @@ void main() {
         transactions: [
           _tx(id: 'id_2', date: sameDay, amount: 10, name: 'Second'),
           _tx(id: 'id_9', date: sameDay, amount: 15, name: 'FirstById'),
-          _tx(id: 'id_1', date: now.subtract(const Duration(days: 2)), amount: 20),
-          _tx(id: 'id_0', date: now.subtract(const Duration(days: 3)), amount: 25),
+          _tx(
+            id: 'id_1',
+            date: now.subtract(const Duration(days: 2)),
+            amount: 20,
+          ),
+          _tx(
+            id: 'id_0',
+            date: now.subtract(const Duration(days: 3)),
+            amount: 25,
+          ),
         ],
         budgetProgress: const [],
         stats: _stats(),
@@ -190,7 +221,8 @@ void main() {
         scopeLabel: 'All',
       );
 
-      final recent = (result['recent_transactions'] as List).cast<Map<String, dynamic>>();
+      final recent = (result['recent_transactions'] as List)
+          .cast<Map<String, dynamic>>();
       expect(recent.length, 4);
       expect(recent[0]['id'], 'id_9');
       expect(recent[1]['id'], 'id_2');
@@ -222,7 +254,12 @@ void main() {
           category: 'Transfer',
           name: 'Transfer to savings',
         ),
-        _tx(id: 't4', date: now.subtract(const Duration(days: 2)), amount: 10, category: 'Food'),
+        _tx(
+          id: 't4',
+          date: now.subtract(const Duration(days: 2)),
+          amount: 10,
+          category: 'Food',
+        ),
       ];
       final result = AiSummaryService.instance.build(
         transactions: transactions,
@@ -266,9 +303,25 @@ void main() {
       final now = DateTime.now();
       final result = AiSummaryService.instance.build(
         transactions: [
-          _tx(id: 'n1', date: now.subtract(const Duration(days: 1)), amount: 12.5, category: 'Food'),
-          _tx(id: 'n2', date: now.subtract(const Duration(days: 8)), amount: 30, category: 'Transport'),
-          _tx(id: 'n3', date: now.subtract(const Duration(days: 20)), amount: -2000, category: 'Income', transactionType: 'income'),
+          _tx(
+            id: 'n1',
+            date: now.subtract(const Duration(days: 1)),
+            amount: 12.5,
+            category: 'Food',
+          ),
+          _tx(
+            id: 'n2',
+            date: now.subtract(const Duration(days: 8)),
+            amount: 30,
+            category: 'Transport',
+          ),
+          _tx(
+            id: 'n3',
+            date: now.subtract(const Duration(days: 20)),
+            amount: -2000,
+            category: 'Income',
+            transactionType: 'income',
+          ),
         ],
         budgetProgress: const [],
         stats: _stats(),
@@ -307,9 +360,24 @@ void main() {
       final now = DateTime.now();
       final result = AiSummaryService.instance.build(
         transactions: [
-          _tx(id: 'd1', date: now.subtract(const Duration(days: 1)), amount: 18, category: 'Food'),
-          _tx(id: 'd2', date: now.subtract(const Duration(days: 2)), amount: 22, category: 'Transport'),
-          _tx(id: 'd3', date: now.subtract(const Duration(days: 10)), amount: 35, category: 'Food'),
+          _tx(
+            id: 'd1',
+            date: now.subtract(const Duration(days: 1)),
+            amount: 18,
+            category: 'Food',
+          ),
+          _tx(
+            id: 'd2',
+            date: now.subtract(const Duration(days: 2)),
+            amount: 22,
+            category: 'Transport',
+          ),
+          _tx(
+            id: 'd3',
+            date: now.subtract(const Duration(days: 10)),
+            amount: 35,
+            category: 'Food',
+          ),
         ],
         budgetProgress: const [],
         stats: _stats(),
@@ -374,34 +442,60 @@ void main() {
       expect(rolling30['expenses'], 40.0);
     });
 
-    test('current month: 30-day totals stop at 30 days, not last month start', () {
-      final now = DateTime.now();
-      final result = AiSummaryService.instance.build(
-        transactions: [
-          _tx(id: 'old', date: now.subtract(const Duration(days: 40)), amount: 100),
-          _tx(id: 'new', date: now.subtract(const Duration(days: 2)), amount: 10),
-        ],
-        budgetProgress: const [],
-        stats: _stats(),
-        selectedAccountId: kAllAccountsId,
-        scopeLabel: 'All',
-        focusMonth: DateTime(now.year, now.month, 1),
-      );
+    test(
+      'current month: 30-day totals stop at 30 days, not last month start',
+      () {
+        final now = DateTime.now();
+        final result = AiSummaryService.instance.build(
+          transactions: [
+            _tx(
+              id: 'old',
+              date: now.subtract(const Duration(days: 40)),
+              amount: 100,
+            ),
+            _tx(
+              id: 'new',
+              date: now.subtract(const Duration(days: 2)),
+              amount: 10,
+            ),
+          ],
+          budgetProgress: const [],
+          stats: _stats(),
+          selectedAccountId: kAllAccountsId,
+          scopeLabel: 'All',
+          focusMonth: DateTime(now.year, now.month, 1),
+        );
 
-      final totals = result['totals'] as Map<String, dynamic>;
-      final top = (result['top_expense_categories'] as List)
-          .cast<Map<String, dynamic>>();
-      expect(totals['expenses_30d'], 10.0);
-      expect(top.single['amount'], 10.0);
-    });
+        final totals = result['totals'] as Map<String, dynamic>;
+        final top = (result['top_expense_categories'] as List)
+            .cast<Map<String, dynamic>>();
+        expect(totals['expenses_30d'], 10.0);
+        expect(top.single['amount'], 10.0);
+      },
+    );
 
     test('month_index lists spend per category for each month', () {
       final month = DateTime(2026, 3, 1);
       final result = AiSummaryService.instance.build(
         transactions: [
-          _tx(id: 'f1', date: DateTime(2026, 3, 4), amount: 12, category: 'Food'),
-          _tx(id: 'f2', date: DateTime(2026, 3, 9), amount: 8, category: 'Food'),
-          _tx(id: 't1', date: DateTime(2026, 3, 5), amount: 30, category: 'Transport'),
+          _tx(
+            id: 'f1',
+            date: DateTime(2026, 3, 4),
+            amount: 12,
+            category: 'Food',
+          ),
+          _tx(
+            id: 'f2',
+            date: DateTime(2026, 3, 9),
+            amount: 8,
+            category: 'Food',
+          ),
+          _tx(
+            id: 't1',
+            date: DateTime(2026, 3, 5),
+            amount: 30,
+            category: 'Transport',
+          ),
         ],
         budgetProgress: const [],
         stats: _stats(),
@@ -459,4 +553,3 @@ void main() {
     });
   });
 }
-

@@ -77,6 +77,9 @@ void main() {
         final rows = (spec['transactions'] as List)
             .cast<Map<String, dynamic>>();
         final txs = rows.map(AppTransaction.fromMap).toList();
+        // Like sync: pair moves between linked accounts, match refunds.
+        AppTransaction.kindById = classifyTransactions(txs, const {}).kinds;
+        addTearDown(() => AppTransaction.kindById = const {});
         final reviewed = {
           for (var i = 0; i < rows.length; i++) txs[i].id: _bucketFor(rows[i]),
         };

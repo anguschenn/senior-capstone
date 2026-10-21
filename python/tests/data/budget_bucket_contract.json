@@ -43,7 +43,7 @@
       }
     },
     {
-      "description": "credit card payment",
+      "description": "card payment with no linked card on the other side: spending",
       "row": {
         "plaid_transaction_id": "tx-3",
         "date": "2026-09-10",
@@ -57,7 +57,8 @@
         "rule_key": "payment thank you|loan payments|loan payments credit card payment",
         "bucket": "Fees & Transfers",
         "is_expense": true,
-        "counts_as_spending": false
+        "counts_as_spending": true,
+        "kind": "spend"
       }
     },
     {
@@ -297,7 +298,7 @@
       }
     },
     {
-      "description": "card payment from checking: not spending (purchases already counted on the card)",
+      "description": "card payment from checking, card not linked: spending (pairs with the card side when both are linked)",
       "row": {
         "plaid_transaction_id": "tx-17",
         "date": "2026-09-10",
@@ -311,7 +312,8 @@
         "rule_key": "payment to chase card ending in 4191 09/03|loan payments|loan payments credit card payment",
         "bucket": "Fees & Transfers",
         "is_expense": true,
-        "counts_as_spending": false
+        "counts_as_spending": true,
+        "kind": "spend"
       }
     },
     {
@@ -351,7 +353,7 @@
       }
     },
     {
-      "description": "transfer to own savings at another bank: not spending",
+      "description": "transfer to an account that is not linked (e.g. Goldman savings): spending",
       "row": {
         "plaid_transaction_id": "tx-k1",
         "date": "2026-10-14",
@@ -365,8 +367,8 @@
         "rule_key": "goldman sachs ba transfer 123|transfer out|transfer out account transfer",
         "bucket": "Fees & Transfers",
         "is_expense": true,
-        "counts_as_spending": false,
-        "kind": "internal"
+        "counts_as_spending": true,
+        "kind": "spend"
       }
     },
     {
@@ -491,6 +493,7 @@
     "transactions": [
       {
         "plaid_transaction_id": "tx-1",
+        "plaid_account_id": "acc-checking",
         "date": "2026-09-10",
         "name": "Starbucks",
         "merchant_name": "Starbucks",
@@ -500,6 +503,7 @@
       },
       {
         "plaid_transaction_id": "tx-2",
+        "plaid_account_id": "acc-checking",
         "date": "2026-09-10",
         "name": "Venmo payment",
         "merchant_name": "Venmo",
@@ -509,6 +513,7 @@
       },
       {
         "plaid_transaction_id": "tx-3",
+        "plaid_account_id": "acc-checking",
         "date": "2026-09-10",
         "name": "Payment Thank You",
         "merchant_name": null,
@@ -517,7 +522,18 @@
         "pfc_detailed": "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT"
       },
       {
+        "plaid_transaction_id": "tx-3b",
+        "plaid_account_id": "acc-card",
+        "date": "2026-09-11",
+        "name": "Payment Thank You",
+        "merchant_name": null,
+        "amount": -300,
+        "pfc_primary": "LOAN_PAYMENTS",
+        "pfc_detailed": "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT"
+      },
+      {
         "plaid_transaction_id": "tx-4",
+        "plaid_account_id": "acc-checking",
         "date": "2026-09-10",
         "name": "Netflix.com",
         "merchant_name": "Netflix",
@@ -527,6 +543,7 @@
       },
       {
         "plaid_transaction_id": "tx-5",
+        "plaid_account_id": "acc-checking",
         "date": "2026-09-10",
         "name": "Trader Joes",
         "merchant_name": "Trader Joe's",
@@ -536,6 +553,7 @@
       },
       {
         "plaid_transaction_id": "tx-6",
+        "plaid_account_id": "acc-checking",
         "date": "2026-09-10",
         "name": "Starbucks Shell",
         "merchant_name": "Shell",
@@ -545,6 +563,7 @@
       },
       {
         "plaid_transaction_id": "tx-7",
+        "plaid_account_id": "acc-checking",
         "date": "2026-09-10",
         "name": "Joe's Garage",
         "merchant_name": "Joe's Garage",
@@ -554,6 +573,7 @@
       },
       {
         "plaid_transaction_id": "tx-8",
+        "plaid_account_id": "acc-checking",
         "date": "2026-09-10",
         "name": "Costco",
         "merchant_name": "Costco",
@@ -563,6 +583,7 @@
       },
       {
         "plaid_transaction_id": "tx-9",
+        "plaid_account_id": "acc-checking",
         "date": "2026-09-10",
         "name": null,
         "merchant_name": "Target",
@@ -573,6 +594,7 @@
       },
       {
         "plaid_transaction_id": "tx-10",
+        "plaid_account_id": "acc-checking",
         "date": "2026-09-10",
         "name": "",
         "merchant_name": "Target",
@@ -583,6 +605,7 @@
       },
       {
         "plaid_transaction_id": "tx-11",
+        "plaid_account_id": "acc-checking",
         "date": "2026-09-10",
         "name": "ACME PAYROLL",
         "merchant_name": null,
@@ -592,6 +615,7 @@
       },
       {
         "plaid_transaction_id": "tx-12",
+        "plaid_account_id": "acc-checking",
         "date": "2026-09-10",
         "name": "Amazon refund",
         "merchant_name": "Amazon",
@@ -601,6 +625,7 @@
       },
       {
         "plaid_transaction_id": "tx-13",
+        "plaid_account_id": "acc-checking",
         "date": "2026-09-10",
         "name": "Uber",
         "merchant_name": "Uber",
@@ -610,6 +635,7 @@
       },
       {
         "plaid_transaction_id": "tx-14",
+        "plaid_account_id": "acc-checking",
         "date": "2026-09-10",
         "name": "ATM FEE",
         "merchant_name": null,
@@ -619,6 +645,7 @@
       },
       {
         "plaid_transaction_id": "tx-15",
+        "plaid_account_id": "acc-checking",
         "date": "2026-09-10",
         "name": "PG&E",
         "merchant_name": "PG&E",
@@ -628,6 +655,7 @@
       },
       {
         "plaid_transaction_id": "tx-16",
+        "plaid_account_id": "acc-checking",
         "date": "2026-09-10",
         "name": "Rent payment",
         "merchant_name": null,
@@ -637,6 +665,7 @@
       },
       {
         "plaid_transaction_id": "tx-17",
+        "plaid_account_id": "acc-checking",
         "date": "2026-09-10",
         "name": "Payment to Chase card ending in 4191 09/03",
         "merchant_name": null,
@@ -646,6 +675,7 @@
       },
       {
         "plaid_transaction_id": "tx-18",
+        "plaid_account_id": "acc-card",
         "date": "2026-09-10",
         "name": "Payment Thank You-Mobile",
         "merchant_name": null,
@@ -655,6 +685,7 @@
       },
       {
         "plaid_transaction_id": "tx-19",
+        "plaid_account_id": "acc-checking",
         "date": "2026-09-10",
         "name": "Zelle payment to Ryan JPM99cuy38dm",
         "merchant_name": null,
@@ -664,6 +695,7 @@
       },
       {
         "plaid_transaction_id": "tx-aug",
+        "plaid_account_id": "acc-checking",
         "date": "2026-08-31",
         "name": "Starbucks",
         "merchant_name": "Starbucks",
@@ -673,6 +705,7 @@
       },
       {
         "plaid_transaction_id": "tx-oct",
+        "plaid_account_id": "acc-checking",
         "date": "2026-10-01",
         "name": "Uber",
         "merchant_name": "Uber",

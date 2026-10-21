@@ -39,7 +39,7 @@ AppTransaction _tx({
 void main() {
   tearDown(() => AppTransaction.kindById = const {});
 
-  test('a transfer to own savings is neither spending nor income', () {
+  test('money sent to an account that is not linked is spending', () {
     final tx = _tx(
       id: 't1',
       amount: 100,
@@ -48,18 +48,20 @@ void main() {
       pfcDetailed: 'TRANSFER_OUT_ACCOUNT_TRANSFER',
       accountType: 'depository',
     );
-    expect(tx.kind, TxKind.internal);
-    expect(tx.expenseAmount, 0);
-    expect(tx.incomeAmount, 0);
+    final kinds = classifyTransactions([tx], const {}).kinds;
+    expect(kinds['t1'], TxKind.spend);
+    expect(tx.expenseAmount, 100);
   });
 
-  test('both sides of a card payment count as nothing', () {
+  test('a card payment between two linked accounts counts as nothing', () {
     final bankSide = _tx(
       id: 't1',
       amount: 330,
       name: 'Payment to Chase card ending in 4191',
+      date: DateTime(2026, 10, 19),
       pfcPrimary: 'LOAN_PAYMENTS',
       pfcDetailed: 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT',
+      accountId: 'acc-checking',
       accountType: 'depository',
     );
     final cardSide = _tx(
@@ -68,9 +70,16 @@ void main() {
       name: 'Payment Thank You-Mobile',
       pfcPrimary: 'LOAN_DISBURSEMENTS',
     );
+    AppTransaction.kindById = classifyTransactions([
+      bankSide,
+      cardSide,
+    ], const {}).kinds;
     expect(bankSide.kind, TxKind.internal);
     expect(cardSide.kind, TxKind.internal);
     expect(cardSide.inflowLabel, kInternalTransfer);
+    // With only the checking account linked, the payment is spending.
+    AppTransaction.kindById = classifyTransactions([bankSide], const {}).kinds;
+    expect(bankSide.expenseAmount, 330);
   });
 
   test('Zelle with a person and cash deposits still count', () {
@@ -177,4 +186,55 @@ void main() {
       expect(kinds['s'], TxKind.spend);
     },
   );
+
+  test('the same amount leaving one linked account and arriving in another '
+      'is a move between own accounts', () {
+    final out = _tx(
+      id: 'out',
+      amount: 300,
+      name: 'WITHDRAWAL 10/14',
+      date: DateTime(2026, 10, 14),
+      pfcPrimary: 'TRANSFER_OUT',
+      pfcDetailed: 'TRANSFER_OUT_WITHDRAWAL',
+      accountId: 'checking',
+      accountType: 'depository',
+    );
+    final into = _tx(
+      id: 'in',
+      amount: -300,
+      name: 'DEPOSIT',
+      date: DateTime(2026, 10, 15),
+      pfcPrimary: 'TRANSFER_IN',
+      pfcDetailed: 'TRANSFER_IN_DEPOSIT',
+      accountId: 'savings',
+      accountType: 'depository',
+    );
+    final lunch = _tx(
+      id: 'lunch',
+      amount: 20,
+      name: 'Chipotle',
+      date: DateTime(2026, 10, 14),
+      pfcPrimary: 'FOOD_AND_DRINK',
+      accountId: 'checking',
+    );
+    final friend = _tx(
+      id: 'friend',
+      amount: -20,
+      name: 'Zelle payment from ALICE HU',
+      date: DateTime(2026, 10, 14),
+      pfcPrimary: 'TRANSFER_IN',
+      accountId: 'savings',
+      accountType: 'depository',
+    );
+    final kinds = classifyTransactions([
+      out,
+      into,
+      lunch,
+      friend,
+    ], const {}).kinds;
+    expect(kinds['out'], TxKind.internal);
+    expect(kinds['in'], TxKind.internal);
+    expect(kinds['lunch'], TxKind.spend);
+    expect(kinds['friend'], TxKind.income);
+  });
 }

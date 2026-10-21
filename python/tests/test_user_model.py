@@ -69,6 +69,12 @@ OCTOBER = [
     shop("2026-10-03", 120),  # Shopping 120 > 100
     other("2026-10-04", 15),  # Other 15 -> projects 46.5, >= 90% of 50
     {**food("2026-10-05", 40), "pfc_detailed": "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT"},
+    {  # the card side of that payment: the two pair up and count as nothing
+        **food("2026-10-06", -40, name="Payment Thank You"),
+        "plaid_account_id": "acc-card",
+        "pfc_primary": "LOAN_PAYMENTS",
+        "pfc_detailed": "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT",
+    },
 ]
 
 
@@ -85,6 +91,12 @@ class CategoryMonthStatsTests(unittest.TestCase):
     def test_card_payments_and_inflows_are_not_spending(self):
         rows = [
             {**food("2026-10-05", 40), "pfc_detailed": "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT"},
+            {
+                **food("2026-10-05", -40, name="Payment Thank You"),
+                "plaid_account_id": "acc-card",
+                "pfc_primary": "LOAN_PAYMENTS",
+                "pfc_detailed": "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT",
+            },
             food("2026-10-06", -25),
         ]
         self.assertEqual(user_model.build_category_month_stats(rows, {}), [])

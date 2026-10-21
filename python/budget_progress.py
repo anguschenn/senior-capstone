@@ -221,14 +221,6 @@ def counts_as_spending(row: dict) -> bool:
 INTERNAL_TRANSFER = "Internal Transfer"
 
 _PEER_TO_PEER = ("zelle", "venmo", "paypal", "cash app", "apple cash")
-_OWN_TRANSFER_PFC = (
-    "TRANSFER_IN_ACCOUNT_TRANSFER",
-    "TRANSFER_OUT_ACCOUNT_TRANSFER",
-    "TRANSFER_IN_SAVINGS",
-    "TRANSFER_OUT_SAVINGS",
-    "TRANSFER_IN_INVESTMENT_AND_RETIREMENT_FUNDS",
-    "TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS",
-)
 _SPENDING_PFC = {
     "FOOD_AND_DRINK",
     "GENERAL_MERCHANDISE",
@@ -249,18 +241,6 @@ def is_peer_to_peer(text: str) -> bool:
     return any(n in lowered for n in _PEER_TO_PEER)
 
 
-def is_own_account_transfer(name: str, description: str, pfc_detailed: str) -> bool:
-    """Money moved to or from one of the user's own accounts. Person-to-person apps are real
-    payments; cash isn't tracked, so withdrawals are spending and cash deposits income."""
-    text = f"{name} {description}".lower()
-    if is_peer_to_peer(text):
-        return False
-    if any(n in pfc_detailed.upper() for n in _OWN_TRANSFER_PFC):
-        return True
-    # Banks shorten it: "GOLDMAN SACHS BA TRANS", "ONLINE XFER TO SAV".
-    return re.search(r"\b(transfer|trans|xfer|trnsfr)\b", text) is not None
-
-
 def _row_fields(row: dict) -> tuple[str, str, str, str]:
     """(name, description, pfc_primary, pfc_detailed) as AppTransaction.fromMap reads them."""
     name_raw = row.get("name")
@@ -275,30 +255,6 @@ def _row_fields(row: dict) -> tuple[str, str, str, str]:
     detailed = _coalesce(row.get("pfc_detailed"), row.get("category")).strip()
     primary = _coalesce(row.get("pfc_primary")).strip()
     return name, description, primary, detailed
-
-
-def _is_card_payment_credit(
-    amount: float, name: str, description: str, primary: str, detailed: str, account_type: str
-) -> bool:
-    """AppTransaction.isCardPaymentCredit: the card side of paying off a card."""
-    if amount >= 0:
-        return False
-    if "CREDIT_CARD_PAYMENT" in f"{detailed} {primary}".upper():
-        return True
-    text = f"{name.lower()} {description.lower()}"
-    kind = account_type.lower().strip()
-    if not kind:
-        return "payment thank you" in text
-    if kind != "credit" or _is_refund_like(text, primary, detailed):
-        return False
-    pfc = f"{primary} {detailed}".upper()
-    return (
-        "LOAN_DISBURSEMENTS" in pfc
-        or "LOAN_PAYMENTS" in pfc
-        or "TRANSFER_IN" in pfc
-        or "payment" in text
-        or "autopay" in text
-    )
 
 
 def _is_refund_like(text: str, primary: str, detailed: str) -> bool:
@@ -326,12 +282,6 @@ def kind_of(
         if amount > 0:
             return "spend"
         return "income" if user_category == "Income" else "refund"
-    if "CREDIT_CARD_PAYMENT" in f"{pfc_detailed} {pfc_primary}".upper():
-        return "internal"
-    if _is_card_payment_credit(amount, name, description, pfc_primary, pfc_detailed, account_type):
-        return "internal"
-    if is_own_account_transfer(name, description, pfc_detailed):
-        return "internal"
     if amount > 0:
         return "spend"
     text = f"{name.lower()} {description.lower()}"
@@ -387,13 +337,16 @@ def classify_rows(
             day = _dt.date.fromisoformat(str(row.get("date") or "")[:10])
         except ValueError:
             day = None
-        name, description, _, _ = _row_fields(row)
+        name, description, primary, detailed = _row_fields(row)
         try:
-            amount = abs(float(row.get("amount") or 0))
+            signed = float(row.get("amount") or 0)
         except (TypeError, ValueError):
-            amount = 0.0
+            signed = 0.0
+        amount = abs(signed)
         parsed.append(
             {
+                "transfer_like": looks_like_transfer(name, description, primary, detailed),
+                "signed": signed,
                 "id": row_id(row),
                 "kind": kind,
                 "bucket": budget_bucket_for_row(row, remembered_rules),
@@ -405,6 +358,7 @@ def classify_rows(
                 "p2p": is_peer_to_peer(f"{name} {description}"),
             }
         )
+    _pair_own_transfers(parsed)
     purchases: dict[str, list[dict]] = {}
     for item in parsed:
         if item["kind"] == "spend":
@@ -426,6 +380,48 @@ def classify_rows(
             bucket = INTERNAL_TRANSFER
         out[item["id"]] = (kind, bucket)
     return out
+
+
+def looks_like_transfer(name: str, description: str, pfc_primary: str, pfc_detailed: str) -> bool:
+    """A row a bank would use for moving money (looksLikeTransfer)."""
+    pfc = f"{pfc_primary} {pfc_detailed}".upper()
+    if "TRANSFER" in pfc or "LOAN_" in pfc:
+        return True
+    return (
+        re.search(
+            r"\b(transfer|trans|xfer|trnsfr|payment|deposit|withdrawal|online)\b",
+            f"{name} {description}".lower(),
+        )
+        is not None
+    )
+
+
+def _pair_own_transfers(parsed: list[dict]) -> None:
+    """Money leaving one linked account and the same amount arriving in another within 5
+    days is a move between own accounts (_pairOwnTransfers). Money to or from an account the
+    app doesn't have counts as spending or income."""
+
+    def candidate(item: dict) -> bool:
+        if not item["account"] or item["day"] is None:
+            return False
+        if item["user_category"] and item["user_category"] != "Fees & Transfers":
+            return False
+        return item["kind"] in ("spend", "income") and not item["p2p"] and item["transfer_like"]
+
+    outflows = [i for i in parsed if i["signed"] > 0 and candidate(i)]
+    inflows = [i for i in parsed if i["signed"] < 0 and candidate(i)]
+    paired: set[str] = set()
+    for out in outflows:
+        for into in inflows:
+            if into["id"] in paired or into["account"] == out["account"]:
+                continue
+            if abs(into["amount"] - out["amount"]) >= 0.005:
+                continue
+            if abs((into["day"] - out["day"]).days) > 5:
+                continue
+            paired.update((out["id"], into["id"]))
+            out["kind"] = into["kind"] = "internal"
+            break
 
 
 def _matching_purchase(refund: dict, purchases: list[dict]) -> dict | None:
@@ -557,7 +553,8 @@ def _fetch_month_transactions(user_id: str, month: str) -> list[dict]:
         page = (
             supabase.table("transactions")
             .select(
-                "plaid_transaction_id,amount,date,name,merchant_name,category,pfc_primary,pfc_detailed"
+                "plaid_transaction_id,plaid_account_id,amount,date,name,merchant_name,category,"
+                "pfc_primary,pfc_detailed"
             )
             .eq("user_id", user_id)
             .gte("date", f"{_months_before(month, REFUND_LOOKBACK_MONTHS)}-01")

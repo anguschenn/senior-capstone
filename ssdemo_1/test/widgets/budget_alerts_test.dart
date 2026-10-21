@@ -192,12 +192,27 @@ void main() {
   test('card payments carry no spending, so they never reach a breakdown', () {
     final payment = AppTransaction.fromMap({
       'plaid_transaction_id': 'pay',
+      'plaid_account_id': 'checking',
       'name': 'Payment to Chase card ending in 4191',
       'amount': 1000,
       'date': '2026-09-03',
       'pfc_primary': 'LOAN_PAYMENTS',
       'pfc_detailed': 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT',
     });
+    final cardSide = AppTransaction.fromMap({
+      'plaid_transaction_id': 'thanks',
+      'plaid_account_id': 'card',
+      'name': 'Payment Thank You-Mobile',
+      'amount': -1000,
+      'date': '2026-09-04',
+      'pfc_primary': 'LOAN_PAYMENTS',
+      'pfc_detailed': 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT',
+    });
+    AppTransaction.kindById = classifyTransactions([
+      payment,
+      cardSide,
+    ], const {}).kinds;
+    addTearDown(() => AppTransaction.kindById = const {});
     expect(payment.isExpense, isTrue);
     expect(payment.expenseAmount, 0);
   });

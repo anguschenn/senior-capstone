@@ -63,3 +63,33 @@ class BudgetBucketContractTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OwnTransferPairingTests(unittest.TestCase):
+    def test_same_amount_between_linked_accounts_is_internal(self):
+        from budget_progress import classify_rows
+
+        def row(tid, account, amount, name, primary, day):
+            return {
+                "plaid_transaction_id": tid,
+                "plaid_account_id": account,
+                "amount": amount,
+                "date": day,
+                "name": name,
+                "merchant_name": None,
+                "pfc_primary": primary,
+                "pfc_detailed": "",
+            }
+
+        rows = [
+            row("out", "checking", 300, "WITHDRAWAL 10/14", "TRANSFER_OUT", "2026-10-14"),
+            row("in", "savings", -300, "DEPOSIT", "TRANSFER_IN", "2026-10-15"),
+            row("lunch", "checking", 20, "Chipotle", "FOOD_AND_DRINK", "2026-10-14"),
+            row(
+                "friend", "savings", -20, "Zelle payment from ALICE HU", "TRANSFER_IN", "2026-10-14"
+            ),
+        ]
+        kinds = {k: v[0] for k, v in classify_rows(rows, {}).items()}
+        self.assertEqual(
+            kinds, {"out": "internal", "in": "internal", "lunch": "spend", "friend": "income"}
+        )
