@@ -416,7 +416,11 @@ class SegmentedTabs<T> extends StatelessWidget {
                 if (selected >= 0)
                   AnimatedPositioned(
                     duration: const Duration(milliseconds: 320),
-                    curve: Curves.easeOutBack,
+                    // Springy between segments, but no overshoot into the
+                    // track's round ends.
+                    curve: selected == 0 || selected == keys.length - 1
+                        ? Curves.easeOutCubic
+                        : Curves.easeOutBack,
                     left: width * selected,
                     top: 0,
                     bottom: 0,
