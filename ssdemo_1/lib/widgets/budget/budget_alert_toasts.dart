@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/app_theme.dart';
 import '../../models/app_models.dart';
 import '../../utils/app_helpers.dart';
+import '../common/ui.dart';
 
 /// "79% used · $789.33 of $1000.00" — shared by the alerts and the banner.
 String budgetAlertUsageText(BudgetCategoryProgress item) {
@@ -18,9 +19,10 @@ String? budgetAlertPaceText(BudgetCategoryProgress item) => item.paceApplies
     ? 'Pace: ~${formatMoney(item.projectedMonthEnd, signed: false)} by month end'
     : null;
 
-/// Stack of small light-red alerts, one per category whose burn rate projects
-/// an overspend. Floats in the page corner; tap one to jump to its budget card,
-/// or dismiss it with the close button.
+/// Overspend alert shown like an iPhone notification: one banner at the top
+/// in the category's own colour, with any other alerts stacked behind it
+/// (like the wallet cards). Tap it to jump to the budget card; × shows the
+/// next one.
 class BudgetAlertToasts extends StatelessWidget {
   const BudgetAlertToasts({
     super.key,
@@ -33,40 +35,63 @@ class BudgetAlertToasts extends StatelessWidget {
   final ValueChanged<BudgetCategoryProgress> onTap;
   final ValueChanged<BudgetCategoryProgress> onDismiss;
 
+  static const double _peek = 7;
+
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) return const SizedBox.shrink();
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 320),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          for (final item in items)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: _BudgetAlertToast(
-                key: ValueKey(item.budgetId),
-                item: item,
-                onTap: () => onTap(item),
-                onDismiss: () => onDismiss(item),
+    final c = context.colors;
+    final front = items.first;
+    final behind = (items.length - 1).clamp(0, 2);
+    return Stack(
+      children: [
+        // Edges of the waiting alerts peek out under the front banner.
+        for (var i = behind; i >= 1; i--)
+          Positioned(
+            left: 10.0 * i,
+            right: 10.0 * i,
+            top: 24,
+            bottom: (behind - i) * _peek,
+            child: Container(
+              decoration: BoxDecoration(
+                color: i == 1 ? c.raised : c.line,
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    color: c.cardShadow,
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
             ),
-        ],
-      ),
+          ),
+        Padding(
+          padding: EdgeInsets.only(bottom: behind * _peek),
+          child: _BudgetAlertBanner(
+            key: ValueKey(front.budgetId),
+            item: front,
+            more: items.length - 1,
+            onTap: () => onTap(front),
+            onDismiss: () => onDismiss(front),
+          ),
+        ),
+      ],
     );
   }
 }
 
-class _BudgetAlertToast extends StatelessWidget {
-  const _BudgetAlertToast({
+class _BudgetAlertBanner extends StatelessWidget {
+  const _BudgetAlertBanner({
     super.key,
     required this.item,
+    required this.more,
     required this.onTap,
     required this.onDismiss,
   });
 
   final BudgetCategoryProgress item;
+  final int more;
   final VoidCallback onTap;
   final VoidCallback onDismiss;
 
@@ -74,85 +99,98 @@ class _BudgetAlertToast extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final over = item.isOverBudget;
-    final tint = over ? c.bad : c.warn;
     final title = over
         ? '${item.title} is over budget'
         : '${item.title} on track to overspend';
     final usage = budgetAlertUsageText(item);
     final pace = budgetAlertPaceText(item);
 
-    // Slides in from the right and fades up the first time it appears.
+    // Slides down from the top and fades in, like a notification.
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
-      duration: const Duration(milliseconds: 280),
-      curve: Curves.easeOut,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutCubic,
       builder: (context, t, child) => Opacity(
         opacity: t,
         child: Transform.translate(
-          offset: Offset((1 - t) * 24, 0),
+          offset: Offset(0, (t - 1) * 28),
           child: child,
         ),
       ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
-            decoration: BoxDecoration(
-              color: c.card,
-              borderRadius: BorderRadius.circular(12),
-              border: Border(left: BorderSide(color: tint, width: 4)),
-              boxShadow: [
-                BoxShadow(
-                  color: c.cardShadow,
-                  blurRadius: 14,
-                  offset: const Offset(0, 5),
-                ),
-              ],
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: c.cardShadow,
+              blurRadius: 18,
+              offset: const Offset(0, 6),
             ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  over ? Icons.error_outline : Icons.trending_up,
-                  size: 20,
-                  color: tint,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          color: c.text,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        usage,
-                        style: TextStyle(fontSize: 12, color: c.muted),
-                      ),
-                      if (pace != null)
-                        Text(
-                          pace,
-                          style: TextStyle(fontSize: 12, color: c.muted),
-                        ),
-                    ],
+          ],
+        ),
+        child: Material(
+          color: c.card,
+          borderRadius: BorderRadius.circular(18),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 4, 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CategoryDot(
+                    color: colorForDetailedCategory(item.title),
+                    icon: iconForBudgetCategory(item.title),
+                    size: 38,
                   ),
-                ),
-                IconButton(
-                  tooltip: 'Dismiss',
-                  visualDensity: VisualDensity.compact,
-                  iconSize: 18,
-                  onPressed: onDismiss,
-                  icon: Icon(Icons.close, color: c.muted),
-                ),
-              ],
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: c.text,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          usage,
+                          style: TextStyle(fontSize: 12.5, color: c.muted),
+                        ),
+                        if (pace != null)
+                          Text(
+                            pace,
+                            style: TextStyle(fontSize: 12.5, color: c.muted),
+                          ),
+                        if (more > 0)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              '+$more more',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: c.text,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Dismiss',
+                    visualDensity: VisualDensity.compact,
+                    iconSize: 18,
+                    onPressed: onDismiss,
+                    icon: Icon(Icons.close, color: c.muted),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

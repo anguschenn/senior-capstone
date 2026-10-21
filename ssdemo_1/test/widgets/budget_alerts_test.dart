@@ -44,15 +44,17 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    // One banner at a time; the others wait behind it.
     expect(find.text('Food is over budget'), findsOneWidget);
     expect(find.text('137% used · \$1,113.69 of \$810.00'), findsOneWidget);
-    expect(find.text('Transport on track to overspend'), findsOneWidget);
-    expect(find.textContaining('Pace: ~\$'), findsNWidgets(2));
+    expect(find.textContaining('Pace: ~\$'), findsOneWidget);
+    expect(find.text('+1 more'), findsOneWidget);
+    expect(find.text('Transport on track to overspend'), findsNothing);
 
     await tester.tap(find.text('Food is over budget'));
-    await tester.tap(find.byTooltip('Dismiss').last);
+    await tester.tap(find.byTooltip('Dismiss'));
     expect(tapped, ['Food']);
-    expect(dismissed, ['Transport']);
+    expect(dismissed, ['Food']);
   });
 
   testWidgets('no alerts renders nothing', (tester) async {

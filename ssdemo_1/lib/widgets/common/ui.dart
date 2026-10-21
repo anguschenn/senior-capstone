@@ -499,77 +499,93 @@ Future<T?> showOptionSheet<T>({
   required String Function(T value) labelOf,
   required T? selected,
 }) {
+  // A floating rounded panel like iOS menus: inset from the edges, same
+  // card colour and corners as the page, one list with no inner frame.
   return showModalBottomSheet<T>(
     context: context,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-    ),
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    elevation: 0,
     builder: (context) {
       final c = context.colors;
+      final maxHeight = MediaQuery.sizeOf(context).height * 0.62;
       return SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Container(
-              width: 36,
-              height: 5,
-              decoration: BoxDecoration(
-                color: c.line,
-                borderRadius: BorderRadius.circular(99),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
+        minimum: const EdgeInsets.only(bottom: 8),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 0),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: maxHeight),
+            child: Material(
+              color: c.card,
+              borderRadius: BorderRadius.circular(24),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 8),
+                  Container(
+                    width: 36,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: c.line,
+                      borderRadius: BorderRadius.circular(99),
+                    ),
                   ),
-                ),
-              ),
-            ),
-            Flexible(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                child: Material(
-                  color: c.card,
-                  borderRadius: BorderRadius.circular(14),
-                  clipBehavior: Clip.antiAlias,
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    padding: EdgeInsets.zero,
-                    itemCount: values.length,
-                    separatorBuilder: (_, _) =>
-                        Divider(height: 0.5, thickness: 0.5, color: c.line),
-                    itemBuilder: (context, i) {
-                      final v = values[i];
-                      final isSelected = v == selected;
-                      return ListTile(
-                        dense: true,
-                        title: Text(
-                          labelOf(v),
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: isSelected
-                                ? FontWeight.w600
-                                : FontWeight.w400,
-                          ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 6),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
                         ),
-                        trailing: isSelected
-                            ? Icon(Icons.check_rounded, color: c.text)
-                            : null,
-                        onTap: () => Navigator.of(context).pop(v),
-                      );
-                    },
+                      ),
+                    ),
                   ),
-                ),
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.only(bottom: 10),
+                      itemCount: values.length,
+                      separatorBuilder: (_, _) => Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Divider(
+                          height: 0.5,
+                          thickness: 0.5,
+                          color: c.line,
+                        ),
+                      ),
+                      itemBuilder: (context, i) {
+                        final v = values[i];
+                        final isSelected = v == selected;
+                        return ListTile(
+                          dense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                          ),
+                          title: Text(
+                            labelOf(v),
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: isSelected
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
+                            ),
+                          ),
+                          trailing: isSelected
+                              ? Icon(Icons.check_rounded, color: c.text)
+                              : null,
+                          onTap: () => Navigator.of(context).pop(v),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
       );
     },

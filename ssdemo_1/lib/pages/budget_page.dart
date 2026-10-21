@@ -292,12 +292,13 @@ class _BudgetPageState extends State<BudgetPage> {
       child: Stack(
         children: [
           _budgetListView(context),
-          // One floating alert per category on pace to overspend. They sit at
-          // the bottom, above the tab bar, so the title, the Month/Year
-          // controls and the "Left to spend" total stay readable.
+          // One floating alert per category on pace to overspend. Like an
+          // iPhone notification they drop in at the top, over the title, and
+          // fold away after a few seconds.
           Positioned(
-            bottom: 12,
-            right: 12,
+            top: 8,
+            left: 16,
+            right: 16,
             child: BudgetAlertToasts(
               items: alerts,
               onTap: (c) => _scrollToBudgetCategory(c.budgetId),
@@ -407,7 +408,12 @@ class _BudgetPageState extends State<BudgetPage> {
         if (activeBudgetProgress.isNotEmpty)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
-            child: _editing ? _budgetList(context) : _budgetStack(context),
+            child: _editing
+                ? _budgetList(context)
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [_statusLegend(context), _budgetStack(context)],
+                  ),
           ),
         if (_editing)
           Padding(
@@ -606,6 +612,31 @@ class _BudgetPageState extends State<BudgetPage> {
           ),
         if (unset.isNotEmpty) _unsetBudgetsRow(context, unset),
       ],
+    );
+  }
+
+  /// What the dots on the category cards mean.
+  Widget _statusLegend(BuildContext context) {
+    final c = context.colors;
+    Widget entry(Color color, String label) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        BudgetStatusDot(color: color, size: 10),
+        const SizedBox(width: 6),
+        Text(label, style: TextStyle(fontSize: 12.5, color: c.muted)),
+      ],
+    );
+    return Padding(
+      key: const ValueKey('budget-legend'),
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
+      child: Wrap(
+        spacing: 16,
+        runSpacing: 6,
+        children: [
+          entry(BudgetStatusDot.over, 'Over budget or pace'),
+          entry(BudgetStatusDot.high, 'High usage'),
+        ],
+      ),
     );
   }
 

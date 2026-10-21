@@ -483,33 +483,6 @@ class WalletCardStack extends StatelessWidget {
       );
     }
 
-    // Page dots under the stack: one per account, the selected one long, so
-    // it's clear the front card can be swiped.
-    final dots = ids.length < 2
-        ? null
-        : Padding(
-            key: const ValueKey('wallet-dots'),
-            padding: const EdgeInsets.only(top: 10),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                for (final id in ids)
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    margin: const EdgeInsets.symmetric(horizontal: 3),
-                    width: id == selected ? 16 : 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: id == selected
-                          ? c.text
-                          : c.muted.withValues(alpha: 0.45),
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                  ),
-              ],
-            ),
-          );
-
     return AnimatedSize(
       duration: const Duration(milliseconds: 200),
       child: Padding(
@@ -574,7 +547,6 @@ class WalletCardStack extends StatelessWidget {
                 ],
               ),
             ),
-            ?dots,
           ],
         ),
       ),

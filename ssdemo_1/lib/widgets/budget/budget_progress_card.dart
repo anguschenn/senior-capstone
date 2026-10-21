@@ -113,12 +113,15 @@ class BudgetProgressCard extends StatelessWidget {
                         ),
                       ),
                       if (!expanded && isWarning) ...[
-                        _Badge(
-                          label: _shortStatus(item),
-                          alarming: alarming,
-                          calm: !isWarning,
+                        Tooltip(
+                          message: _shortStatus(item),
+                          child: BudgetStatusDot(
+                            color: alarming
+                                ? BudgetStatusDot.over
+                                : BudgetStatusDot.high,
+                          ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 10),
                       ],
                       Text(
                         amount,
@@ -341,7 +344,8 @@ class _TransactionBreakdown extends StatelessWidget {
   }
 }
 
-/// Status pill on a category card, e.g. "High usage".
+/// Status on an open category card: the same dot as the closed card, with
+/// the status spelled out next to it.
 class _Badge extends StatelessWidget {
   const _Badge({
     required this.label,
@@ -353,27 +357,53 @@ class _Badge extends StatelessWidget {
   final bool alarming;
   final bool calm;
 
-  static const _highUsage = Color(0xFFE2B04E);
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (!calm || alarming) ...[
+          BudgetStatusDot(
+            color: alarming ? BudgetStatusDot.over : BudgetStatusDot.high,
+          ),
+          const SizedBox(width: 6),
+        ],
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w700,
+            color: AppPalette.ink,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Small status dot on a budget card: red = over budget or on pace to go
+/// over, amber = high usage. The legend above the cards explains them.
+class BudgetStatusDot extends StatelessWidget {
+  const BudgetStatusDot({super.key, required this.color, this.size = 12});
+
+  static const over = Color(0xFFB4382A);
+  static const high = Color(0xFFE2B04E);
+
+  final Color color;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      width: size,
+      height: size,
       decoration: BoxDecoration(
-        // Red for over budget / over pace, ochre for high usage.
-        color: alarming
-            ? BudgetProgressCard._overInk
-            : calm
-            ? Colors.white.withValues(alpha: 0.35)
-            : _highUsage,
-        borderRadius: BorderRadius.circular(99),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 11.5,
-          fontWeight: FontWeight.w700,
-          color: alarming ? const Color(0xFFFBF8F2) : AppPalette.ink,
+        color: color,
+        shape: BoxShape.circle,
+        // A light ring keeps the dot visible on every category colour.
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.85),
+          width: 2,
         ),
       ),
     );
