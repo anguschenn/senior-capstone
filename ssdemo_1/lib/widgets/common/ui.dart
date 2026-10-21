@@ -357,6 +357,7 @@ class ScopeLine extends StatelessWidget {
     this.actions = const [],
     this.onPrevious,
     this.onNext,
+    this.showSteps = false,
     this.padding = const EdgeInsets.fromLTRB(20, 0, 20, 2),
   });
 
@@ -373,6 +374,9 @@ class ScopeLine extends StatelessWidget {
   /// that arrow is greyed out (no earlier/later period).
   final VoidCallback? onPrevious;
   final VoidCallback? onNext;
+
+  /// Show the arrows even when both are greyed (a single period).
+  final bool showSteps;
   final EdgeInsetsGeometry padding;
 
   @override
@@ -413,7 +417,7 @@ class ScopeLine extends StatelessWidget {
           if (trailing != null)
             Text(trailing!, style: style.copyWith(fontSize: 13)),
           ...actions,
-          if (onPrevious != null || onNext != null) ...[
+          if (showSteps || onPrevious != null || onNext != null) ...[
             _StepArrow(
               key: const ValueKey('scope-previous'),
               icon: Icons.chevron_left_rounded,

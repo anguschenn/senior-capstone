@@ -61,6 +61,7 @@ class BudgetScopeSelector extends StatelessWidget {
         label: monthOptionLabel(monthSelectionValue),
         onPrevious: monthStep(-1),
         onNext: monthStep(1),
+        showSteps: true,
         padding: const EdgeInsets.fromLTRB(20, 0, 14, 2),
         onTap: () async {
           final picked = await showOptionSheet<DateTime>(
@@ -77,6 +78,7 @@ class BudgetScopeSelector extends StatelessWidget {
         label: '${selectedMonth.year}',
         onPrevious: yearStep(-1),
         onNext: yearStep(1),
+        showSteps: true,
         padding: const EdgeInsets.fromLTRB(20, 0, 14, 2),
         onTap: () async {
           final picked = await showOptionSheet<int>(

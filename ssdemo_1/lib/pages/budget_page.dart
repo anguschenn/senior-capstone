@@ -740,7 +740,7 @@ class _BudgetPageState extends State<BudgetPage> {
               size: dot,
               ring: false,
             ),
-            _showsCurrentMonth ? 'Near limit or heading there' : 'Near limit',
+            'Near limit',
           ),
           // Healthy cards carry no dot: an empty ring stands for that.
           entry(
