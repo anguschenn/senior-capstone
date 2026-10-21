@@ -498,26 +498,24 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
               ),
 
               // Suggestions fill the box; nothing is sent until send is tapped.
-              SizedBox(
-                height: 38,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+              // They wrap onto a second line instead of running off the edge.
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
                   children: [
                     for (final s in _suggestions)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8, bottom: 6),
-                        child: ActionChip(
-                          label: Text(s),
-                          labelStyle: TextStyle(fontSize: 13, color: c.text),
-                          backgroundColor: c.card,
-                          side: BorderSide.none,
-                          shape: const StadiumBorder(),
-                          visualDensity: VisualDensity.compact,
-                          onPressed: _sending
-                              ? null
-                              : () => setState(() => _controller.text = s),
-                        ),
+                      ActionChip(
+                        label: Text(s),
+                        labelStyle: TextStyle(fontSize: 13, color: c.text),
+                        backgroundColor: c.card,
+                        side: BorderSide.none,
+                        shape: const StadiumBorder(),
+                        visualDensity: VisualDensity.compact,
+                        onPressed: _sending
+                            ? null
+                            : () => setState(() => _controller.text = s),
                       ),
                   ],
                 ),

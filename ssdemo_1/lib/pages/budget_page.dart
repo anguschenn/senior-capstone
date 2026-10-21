@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../app/app_theme.dart';
@@ -76,6 +78,25 @@ class _BudgetPageState extends State<BudgetPage> {
   // Alert popups the user closed, keyed by month + budget so a new month
   // shows them again.
   final Set<String> _dismissedAlertKeys = <String>{};
+
+  /// Hides the popups a few seconds after they first show on screen, so they
+  /// don't sit over the category amounts. The insight box keeps the details.
+  Timer? _toastTimer;
+  static const _toastLifetime = Duration(seconds: 6);
+
+  @override
+  void dispose() {
+    _toastTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startToastTimer(List<BudgetCategoryProgress> shown) {
+    _toastTimer = Timer(_toastLifetime, () {
+      if (!mounted) return;
+      setState(() => _dismissedAlertKeys.addAll(shown.map(_alertKey)));
+      _toastTimer = null;
+    });
+  }
 
   bool _loadingAi = false;
   String _aiError = '';
@@ -258,6 +279,10 @@ class _BudgetPageState extends State<BudgetPage> {
         .where((c) => !_dismissedAlertKeys.contains(_alertKey(c)))
         .take(4)
         .toList();
+    // Tabs stay alive in the background: only count time while visible.
+    if (alerts.isNotEmpty && _toastTimer == null && TickerMode.of(context)) {
+      _startToastTimer(alerts);
+    }
     return SafeArea(
       bottom: false,
       child: Stack(

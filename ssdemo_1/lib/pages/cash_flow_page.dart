@@ -321,7 +321,18 @@ class _CashFlowPageState extends State<CashFlowPage> {
 
   // Produces the short trend summary sentence shown below the chart.
   String _monthCompareText() {
-    final series = _activeSeries;
+    var series = _activeSeries;
+    // Weeks or months still in the future are empty: compare the latest two
+    // that have started, or the summary claims there was no spending.
+    final now = DateTime.now();
+    final focus = _focusMonth;
+    if (viewMode == FlowViewMode.month &&
+        focus.year == now.year &&
+        focus.month == now.month) {
+      series = series.take(((now.day - 1) ~/ 7).clamp(0, 4) + 1).toList();
+    } else if (viewMode == FlowViewMode.year && focus.year == now.year) {
+      series = series.take(now.month).toList();
+    }
     if (series.length < 2) {
       return '• Not enough history to compare trend yet';
     }
@@ -329,10 +340,10 @@ class _CashFlowPageState extends State<CashFlowPage> {
     final previous = series[series.length - 2].expenses;
     if (previous <= 0 && current <= 0) {
       if (viewMode == FlowViewMode.month && !isAllYearOption(_focusMonth)) {
-        return '• No expense activity in the latest 2 months';
+        return '• No expense activity in the latest 2 weeks';
       }
       if (viewMode == FlowViewMode.year) {
-        return '• No expense activity in the latest 2 periods';
+        return '• No expense activity in the latest 2 months';
       }
       return '• No expense activity in the latest 2 months';
     }

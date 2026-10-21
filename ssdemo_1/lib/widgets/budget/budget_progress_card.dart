@@ -46,7 +46,10 @@ class BudgetProgressCard extends StatelessWidget {
     final c = context.colors;
     final icon = iconForBudgetCategory(item.title);
     final tone = colorForDetailedCategory(item.title);
-    final amount = expanded
+    // Spending with no budget set: show what was spent, not "$112 / $0".
+    final amount = !item.hasLimit
+        ? '${dollars(item.spent, decimals: expanded ? 2 : 0)} · no budget'
+        : expanded
         ? '${formatMoney(item.spent, signed: false)} / ${formatMoney(item.limit, signed: false)}'
         : '${dollars(item.spent, decimals: 0)} / ${dollars(item.limit, decimals: 0)}';
     final progress = item.ratio;
@@ -143,15 +146,16 @@ class BudgetProgressCard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(99),
-                    child: LinearProgressIndicator(
-                      value: progress.isFinite ? progress.clamp(0, 1) : 0,
-                      minHeight: 7,
-                      color: alarming ? _overInk : _ink,
-                      backgroundColor: Colors.white.withValues(alpha: 0.35),
+                  if (item.hasLimit)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(99),
+                      child: LinearProgressIndicator(
+                        value: progress.isFinite ? progress.clamp(0, 1) : 0,
+                        minHeight: 7,
+                        color: alarming ? _overInk : _ink,
+                        backgroundColor: Colors.white.withValues(alpha: 0.35),
+                      ),
                     ),
-                  ),
                   if (expanded) ...[
                     const SizedBox(height: 10),
                     Row(
