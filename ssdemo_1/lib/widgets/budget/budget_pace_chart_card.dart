@@ -420,7 +420,7 @@ class BudgetPaceMiniChart extends StatelessWidget {
           labelColor: c.muted,
           dotFill: c.card,
           showAxis: false,
-          strokeScale: 0.7,
+          strokeScale: 0.85,
         ),
       ),
     );

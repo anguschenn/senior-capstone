@@ -691,7 +691,18 @@ class _FlowThumbnail extends StatelessWidget {
                     ],
                   ),
                 ),
-                BudgetPaceMiniChart(snapshot: snapshot),
+                // The chart takes the right half and matches the height of
+                // the numbers beside it, on a phone or a wider window.
+                const SizedBox(width: 12),
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, box) => BudgetPaceMiniChart(
+                      snapshot: snapshot,
+                      width: box.maxWidth,
+                      height: 96,
+                    ),
+                  ),
+                ),
               ],
             ),
           ],
