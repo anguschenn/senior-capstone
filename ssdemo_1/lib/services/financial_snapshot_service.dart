@@ -212,8 +212,15 @@ class FinancialSnapshotService {
     final names = {
       for (final c in controller.liveCategoryOptions) c.id: c.name,
     };
-    final known = controller.liveBudgetProgress
-        .map((b) => b.categoryId)
+    // The same category can exist under two ids (a shared default and the
+    // user's own copy), so match by name too, or it shows up twice.
+    final limitByName = <String, double>{
+      for (final entry in limits.entries)
+        if (names[entry.key] != null)
+          normalizeCategoryKey(names[entry.key]!): entry.value,
+    };
+    final knownNames = controller.liveBudgetProgress
+        .map((b) => normalizeCategoryKey(b.title))
         .toSet();
     return [
       for (final b in controller.liveBudgetProgress)
@@ -222,11 +229,15 @@ class FinancialSnapshotService {
           categoryId: b.categoryId,
           title: b.title,
           spent: 0,
-          limit: limits[b.categoryId] ?? 0,
+          limit:
+              limits[b.categoryId] ??
+              limitByName[normalizeCategoryKey(b.title)] ??
+              0,
         ),
       // Categories budgeted that month but not in the loaded month.
       for (final entry in limits.entries)
-        if (!known.contains(entry.key) && names[entry.key] != null)
+        if (names[entry.key] != null &&
+            !knownNames.contains(normalizeCategoryKey(names[entry.key]!)))
           BudgetCategoryProgress(
             budgetId: 'month-${entry.key}',
             categoryId: entry.key,

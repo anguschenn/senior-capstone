@@ -35,6 +35,7 @@ Map<String, dynamic> _tx(
 RawSyncData _raw({
   Map<String, Map<String, String>> rules = const {},
   List<Map<String, dynamic>>? budgets,
+  List<Map<String, dynamic>> extraTx = const [],
 }) {
   return RawSyncData(
     userId: 'user-a',
@@ -83,6 +84,7 @@ RawSyncData _raw({
         detailed: 'INCOME_WAGES',
       ),
       _tx('t4', '2026-08-30', 25),
+      ...extraTx,
     ],
     rememberedRules: rules,
   );
@@ -108,6 +110,44 @@ void main() {
       expect(result.accountOptions.single.label, 'Checking ••••5973');
       expect(result.accountOptions.single.txCount, 4);
       expect(result.hasData, isTrue);
+    });
+
+    test('a card payment between linked accounts keeps its own category', () {
+      final pay = {
+        ..._tx(
+          'pay',
+          '2026-09-12',
+          330,
+          primary: 'LOAN_PAYMENTS',
+          detailed: 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT',
+        ),
+        'name': 'Payment to Chase card ending in 4191',
+        'merchant_name': null,
+      };
+      final thanks = {
+        ..._tx(
+          'thanks',
+          '2026-09-12',
+          -330,
+          primary: 'LOAN_DISBURSEMENTS',
+          detailed: 'LOAN_DISBURSEMENTS_OTHER_DISBURSEMENT',
+        ),
+        'plaid_account_id': 'acc2',
+        'name': 'Payment Thank You-Mobile',
+        'merchant_name': null,
+      };
+      final result = service.buildResult(
+        _raw(extraTx: [pay, thanks]),
+        const {},
+        asOf: _asOf,
+      );
+      addTearDown(() => AppTransaction.kindById = const {});
+      expect(AppTransaction.kindById['pay'], TxKind.internal);
+      // Hiding the card later turns the payment into spending: it must land
+      // in Fees & Transfers then, not Other.
+      expect(result.autoReviewedCategoryByTxId['pay'], 'Fees & Transfers');
+      expect(result.autoReviewedCategoryByTxId['thanks'], 'Income');
+      expect(result.autoLowConfidenceReviewTxIds, isNot(contains('pay')));
     });
 
     test('builds monthly and yearly budget progress from the rows', () {
@@ -168,8 +208,16 @@ void main() {
       categories: base.categories,
       budgetRows: base.budgetRows,
       yearBudgetRows: const [
-        {'category_id': 'c-food', 'monthly_limit': 300, 'month_year': '2026-08'},
-        {'category_id': 'c-food', 'monthly_limit': 200, 'month_year': '2026-09'},
+        {
+          'category_id': 'c-food',
+          'monthly_limit': 300,
+          'month_year': '2026-08',
+        },
+        {
+          'category_id': 'c-food',
+          'monthly_limit': 200,
+          'month_year': '2026-09',
+        },
       ],
       subscriptionRows: base.subscriptionRows,
       txRows: base.txRows,

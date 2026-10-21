@@ -221,4 +221,24 @@ void main() {
     final july = FinancialSnapshotService.instance.build(controller);
     expect(_food(july).limit, 0);
   });
+
+  test('a category under two ids shows once, with its limit', () {
+    final controller =
+        _controllerWith(
+            selectedAccountId: kAllAccountsId,
+            selectedMonth: focusMonth,
+          )
+          ..liveCategoryOptions = const [
+            CategoryOption(id: 'c1', name: 'Food'),
+            CategoryOption(id: 'c1-own', name: 'Food'),
+          ]
+          ..liveBudgetLimitsByMonth = const {
+            '2026-09': {'c1-own': 250},
+          };
+    final snapshot = FinancialSnapshotService.instance.build(controller);
+    final food = snapshot.budgetProgress.where((b) => b.title == 'Food');
+    expect(food.length, 1);
+    expect(food.single.limit, 250);
+    expect(food.single.spent, 42);
+  });
 }

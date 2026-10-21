@@ -5,7 +5,6 @@ import 'package:http/http.dart' as http;
 
 import '../core/config/api_config.dart';
 import '../core/config/env_config.dart';
-import '../constants/app_constants.dart';
 import '../core/config/supabase_client.dart';
 import '../models/app_models.dart';
 import '../utils/app_helpers.dart';
@@ -390,12 +389,6 @@ class SyncService {
         autoReviewedCategoryByTxId[tx.id] = remembered;
         continue;
       }
-      // Money between the user's own accounts isn't something to guess a
-      // category for.
-      if (tx.kind == TxKind.internal) {
-        autoReviewedCategoryByTxId[tx.id] = kInternalTransfer;
-        continue;
-      }
       final decision = CategoryService.instance.classifyByPfcSignals(
         pfcPrimary: ((txRows[i]['pfc_primary'] as String?) ?? '').trim(),
         pfcDetailed:
@@ -413,9 +406,16 @@ class SyncService {
       // Money in that counts as income reads as Income; the review queue
       // still offers it when the signals were weak (a friend paying back a
       // dinner belongs in Food).
-      autoReviewedCategoryByTxId[tx.id] = tx.kind == TxKind.income
+      // A move between own accounts still gets the category it would have
+      // on its own (pages show it as Internal Transfer while it is one), so
+      // hiding the other account turns a card payment into Fees & Transfers,
+      // not Other.
+      autoReviewedCategoryByTxId[tx.id] =
+          tx.kind == TxKind.income ||
+              (tx.kind == TxKind.internal && !tx.isExpense)
           ? 'Income'
           : decision.category;
+      if (tx.kind == TxKind.internal) continue;
       // Money from a person may be a payback for something you bought
       // (then it belongs in that category), so it's always offered for review.
       if (decision.confidence == 'low' ||
