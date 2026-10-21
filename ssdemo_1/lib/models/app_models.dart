@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import '../constants/app_constants.dart';
 import '../utils/app_helpers.dart';
 
@@ -375,18 +377,30 @@ class DetectedSubscription {
     }
   }
 
-  DateTime get effectiveNextChargeDate {
-    final interval = switch (frequency) {
-      'weekly' => const Duration(days: 7),
-      'annual' => const Duration(days: 365),
-      _ => const Duration(days: 30),
-    };
-    var date = nextChargeDate;
-    final today = DateTime.now();
-    while (date.isBefore(today)) {
-      date = date.add(interval);
+  DateTime get effectiveNextChargeDate => nextChargeDateAfter(DateTime.now());
+
+  // Rolls a past renewal forward. Monthly and annual bills keep their day of
+  // the month (clamped to the month's last day), so Oct 18 renews Nov 18.
+  DateTime nextChargeDateAfter(DateTime today) {
+    final start = nextChargeDate;
+    final todayDay = DateTime(today.year, today.month, today.day);
+    var date = start;
+    var step = 0;
+    while (date.isBefore(todayDay)) {
+      step++;
+      date = switch (frequency) {
+        'weekly' => start.add(Duration(days: 7 * step)),
+        'annual' => _sameDayInMonth(start, 12 * step),
+        _ => _sameDayInMonth(start, step),
+      };
     }
     return date;
+  }
+
+  static DateTime _sameDayInMonth(DateTime from, int months) {
+    final first = DateTime(from.year, from.month + months);
+    final lastDay = DateTime(first.year, first.month + 1, 0).day;
+    return DateTime(first.year, first.month, math.min(from.day, lastDay));
   }
 }
 

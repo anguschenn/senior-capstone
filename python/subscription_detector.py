@@ -1,5 +1,6 @@
 """Detect recurring charges from transaction history and sync to subscriptions table."""
 
+import calendar
 import datetime as dt
 import re
 from collections import defaultdict
@@ -121,7 +122,12 @@ def _next_charge_date(last_date, frequency):
             return last_date.replace(year=last_date.year + 1)
         except ValueError:
             return last_date + dt.timedelta(days=365)
-    return last_date + dt.timedelta(days=30)
+    # Monthly bills recur on the same day of the month, clamped to the
+    # month's last day (Jan 31 -> Feb 28).
+    year = last_date.year + last_date.month // 12
+    month = last_date.month % 12 + 1
+    day = min(last_date.day, calendar.monthrange(year, month)[1])
+    return dt.date(year, month, day)
 
 
 def _needs_confirmation(norm_merchant, pfc_detailed_list):
