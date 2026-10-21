@@ -51,13 +51,16 @@ class FinancialSnapshotService {
               .where((tx) => selectedAccountIds.contains(tx.accountId))
               .toList();
     final visibleSubscriptions = controller.liveSubscriptions;
-    // The server has no per-account filter (python/budget_progress.py sums
-    // every transaction), so its numbers are only correct for "All Accounts"
-    // on the exact month it was computed for. Everything else -- a specific
-    // account, Year/All-time view, or no server data yet -- falls back to
-    // the existing Dart computation, unchanged.
+    // Budgets are set for the household, not per account: progress always
+    // counts every account, whichever one is selected.
+    final budgetTransactions = controller.liveTransactions;
+    // The server's numbers are only correct on the exact month it was
+    // computed for. Year/All-time view, or no server data yet, falls back to
+    // the Dart computation.
     final serverMonth = controller.serverBudgetProgressMonth;
+    // The server counts every account, so not when the user hid one.
     final serverForFocus =
+        controller.hiddenAccountIds.isEmpty &&
         !isAllYearOption(focusMonth) &&
         controller.serverBudgetProgress != null &&
         serverMonth != null &&
@@ -68,10 +71,7 @@ class FinancialSnapshotService {
     // rather than this month's limits applied to it.
     final noBudgetsThisMonth =
         serverForFocus && controller.serverBudgetProgress!.isEmpty;
-    final useServerBudgetProgress =
-        targetAccountId == kAllAccountsId &&
-        serverForFocus &&
-        !noBudgetsThisMonth;
+    final useServerBudgetProgress = serverForFocus && !noBudgetsThisMonth;
     // Every category card, with this month's spending and no limit: fills in
     // categories the month has no budget row for.
     List<BudgetCategoryProgress> spendOnly() => _rebaseProgressFromTemplate(
@@ -85,7 +85,7 @@ class FinancialSnapshotService {
             limit: 0,
           ),
       ],
-      txs: visibleTransactions,
+      txs: budgetTransactions,
       focusMonth: focusMonth,
       yearly: false,
       allTime: false,
@@ -118,7 +118,7 @@ class FinancialSnapshotService {
                   ]
                 : _monthTemplate(controller, focusMonth) ??
                       controller.liveBudgetProgress,
-            txs: visibleTransactions,
+            txs: budgetTransactions,
             focusMonth: focusMonth,
             yearly: isAllYearOption(focusMonth),
             allTime: false,
@@ -126,7 +126,7 @@ class FinancialSnapshotService {
           );
     final visibleBudgetProgressYear = _rebaseProgressFromTemplate(
       template: controller.liveBudgetProgressYear,
-      txs: visibleTransactions,
+      txs: budgetTransactions,
       focusMonth: focusMonth,
       yearly: true,
       allTime: false,
@@ -134,7 +134,7 @@ class FinancialSnapshotService {
     );
     final visibleBudgetProgressAll = _rebaseProgressFromTemplate(
       template: controller.liveBudgetProgressAll,
-      txs: visibleTransactions,
+      txs: budgetTransactions,
       focusMonth: focusMonth,
       yearly: false,
       allTime: true,

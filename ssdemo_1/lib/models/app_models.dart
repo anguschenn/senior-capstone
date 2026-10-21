@@ -148,7 +148,8 @@ class AppTransaction {
     if (isPeerToPeer(text)) return false;
     final detailed = pfcDetailed.toUpperCase();
     if (_ownTransferPfc.any(detailed.contains)) return true;
-    return RegExp(r'\btransfer\b').hasMatch(text);
+    // Banks shorten it: "GOLDMAN SACHS BA TRANS", "ONLINE XFER TO SAV".
+    return RegExp(r'\b(transfer|trans|xfer|trnsfr)\b').hasMatch(text);
   }
 
   static bool isPeerToPeer(String text) =>

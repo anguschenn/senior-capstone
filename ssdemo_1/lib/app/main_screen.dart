@@ -108,6 +108,7 @@ class _MainScreenState extends State<MainScreen> {
         selectedMonth: c.selectedMonth,
         initialPrompt: prompt,
         contextLabel: contextLabel,
+        someAccountsHidden: c.hiddenAccountIds.isNotEmpty,
       ),
     );
   }
@@ -152,6 +153,12 @@ class _MainScreenState extends State<MainScreen> {
       return SettingsPage(
         email: AuthService.instance.currentUser?.email,
         accountOptions: c.liveAccountOptions,
+        hiddenAccounts: [
+          for (final a in c.allAccountOptions)
+            if (c.hiddenAccountIds.contains(a.accountId)) a,
+        ],
+        onHideAccount: (a) => c.setAccountHidden(a.accountId, true),
+        onShowAccount: (a) => c.setAccountHidden(a.accountId, false),
         loginRequired: c.loginRequired,
         syncing: c.syncing,
         bankSyncBusy: c.refreshingInBackground,
@@ -182,6 +189,15 @@ class _MainScreenState extends State<MainScreen> {
       targetMonth: c.selectedMonth,
     );
     final visibleTransactions = snapshot.transactions;
+    // Budgets are for every account together, whichever one is selected.
+    final oneAccount = c.selectedAccountId != kAllAccountsId;
+    final household = oneAccount
+        ? FinancialSnapshotService.instance.buildForAccount(
+            c,
+            kAllAccountsId,
+            targetMonth: c.selectedMonth,
+          )
+        : snapshot;
     final visibleSubscriptions = snapshot.subscriptions;
     // Unconfirmed ("needs review") subscriptions belong in the Subscriptions
     // tab's review queue, not in the dashboard preview or the monthly total —
@@ -245,7 +261,7 @@ class _MainScreenState extends State<MainScreen> {
       ),
       BudgetPage(
         isVisible: c.tabIndex == 2,
-        stats: snapshot.stats,
+        stats: household.stats,
         budgetProgress: snapshot.budgetProgress,
         budgetProgressYear: snapshot.budgetProgressYear,
         budgetProgressAll: snapshot.budgetProgressAll,
@@ -256,7 +272,8 @@ class _MainScreenState extends State<MainScreen> {
         selectedMonth: c.selectedMonth,
         monthOptions: monthOptions,
         onMonthChanged: c.selectMonth,
-        transactions: visibleTransactions,
+        scopeNote: oneAccount ? 'Budgets cover all accounts' : null,
+        transactions: household.transactions,
         reviewedCategoryByTxId: c.reviewedCategoryByTxId,
         onAsk: _openAsk,
       ),

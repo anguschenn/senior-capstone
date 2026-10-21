@@ -34,6 +34,7 @@ class BudgetPage extends StatefulWidget {
     required this.selectedMonth,
     required this.monthOptions,
     required this.onMonthChanged,
+    this.scopeNote,
     this.transactions = const [],
     this.reviewedCategoryByTxId = const {},
     this.onAsk,
@@ -52,6 +53,10 @@ class BudgetPage extends StatefulWidget {
   final DateTime selectedMonth;
   final List<DateTime> monthOptions;
   final ValueChanged<DateTime> onMonthChanged;
+
+  /// Shown under the month when one account is selected: budgets are for
+  /// every account together.
+  final String? scopeNote;
 
   /// Visible transactions, for the per-category breakdown on each card.
   final List<AppTransaction> transactions;
@@ -359,6 +364,15 @@ class _BudgetPageState extends State<BudgetPage> {
             onTap: (c) => _scrollToBudgetCategory(c.budgetId),
           ),
         ),
+        if (widget.scopeNote != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
+            child: Text(
+              widget.scopeNote!,
+              key: const ValueKey('budget-scope-note'),
+              style: TextStyle(fontSize: 12, color: context.colors.muted),
+            ),
+          ),
         _budgetHeader(context),
         // Lists overspending categories; tap a name to jump to its card.
         Padding(

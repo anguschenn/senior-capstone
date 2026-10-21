@@ -21,6 +21,9 @@ class SettingsPage extends StatelessWidget {
     this.bankSyncBusy = false,
     this.subscriptionCount = 0,
     this.onOpenSubscriptions,
+    this.hiddenAccounts = const [],
+    this.onHideAccount,
+    this.onShowAccount,
   });
 
   final String? email;
@@ -38,6 +41,13 @@ class SettingsPage extends StatelessWidget {
   final VoidCallback onClear;
   final Future<void> Function() onSignOut;
   final VoidCallback? onOpenSubscriptions;
+
+  /// Accounts the user hid; listed so they can be shown again.
+  final List<AccountOption> hiddenAccounts;
+
+  /// Swipe a bank row left to hide it. Nothing is deleted.
+  final ValueChanged<AccountOption>? onHideAccount;
+  final ValueChanged<AccountOption>? onShowAccount;
 
   static String appearanceLabel(ThemeMode mode) => switch (mode) {
     ThemeMode.light => 'Light',
@@ -152,20 +162,25 @@ class SettingsPage extends StatelessWidget {
             label('BANKS'),
             group([
               for (final a in accountOptions)
-                row(
-                  icon: Icons.account_balance_outlined,
-                  title: a.label,
-                  subtitle: loginRequired ? 'Reconnect needed' : 'Connected',
-                  trailing: loginRequired
-                      ? Text(
-                          'Reconnect',
-                          style: TextStyle(
-                            color: c.bad,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        )
-                      : null,
-                  onTap: loginRequired && !busy ? onReconnect : null,
+                _SwipeToHide(
+                  key: ValueKey('settings-account-${a.accountId}'),
+                  enabled: onHideAccount != null,
+                  onHide: () => onHideAccount?.call(a),
+                  child: row(
+                    icon: Icons.account_balance_outlined,
+                    title: a.label,
+                    subtitle: loginRequired ? 'Reconnect needed' : 'Connected',
+                    trailing: loginRequired
+                        ? Text(
+                            'Reconnect',
+                            style: TextStyle(
+                              color: c.bad,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          )
+                        : null,
+                    onTap: loginRequired && !busy ? onReconnect : null,
+                  ),
                 ),
               row(
                 key: const ValueKey('settings-add-bank'),
@@ -190,6 +205,24 @@ class SettingsPage extends StatelessWidget {
                 chevron: false,
               ),
             ]),
+            if (hiddenAccounts.isNotEmpty) ...[
+              label('HIDDEN'),
+              group([
+                for (final a in hiddenAccounts)
+                  row(
+                    key: ValueKey('settings-hidden-${a.accountId}'),
+                    icon: Icons.visibility_off_outlined,
+                    title: a.label,
+                    trailing: TextButton(
+                      onPressed: onShowAccount == null
+                          ? null
+                          : () => onShowAccount!(a),
+                      child: const Text('Show'),
+                    ),
+                    chevron: false,
+                  ),
+              ]),
+            ],
             label('APP'),
             group([
               row(
@@ -394,6 +427,105 @@ class AppearancePage extends StatelessWidget {
           },
         ),
       ),
+    );
+  }
+}
+
+/// Swipe left to reveal Hide, like iOS Mail: a short swipe opens it, a tap
+/// hides. A long swipe hides straight away.
+class _SwipeToHide extends StatefulWidget {
+  const _SwipeToHide({
+    super.key,
+    required this.child,
+    required this.onHide,
+    this.enabled = true,
+  });
+
+  final Widget child;
+  final VoidCallback onHide;
+  final bool enabled;
+
+  @override
+  State<_SwipeToHide> createState() => _SwipeToHideState();
+}
+
+class _SwipeToHideState extends State<_SwipeToHide> {
+  static const _actionWidth = 84.0;
+  double _offset = 0;
+  bool _dragging = false;
+
+  void _settle(double width) {
+    setState(() {
+      _dragging = false;
+      if (_offset < -width * 0.6) {
+        _offset = 0;
+        widget.onHide();
+      } else {
+        _offset = _offset < -_actionWidth / 2 ? -_actionWidth : 0;
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.enabled) return widget.child;
+    final c = context.colors;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        return GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onHorizontalDragStart: (_) => setState(() => _dragging = true),
+          onHorizontalDragUpdate: (d) => setState(
+            () => _offset = (_offset + d.delta.dx).clamp(-width, 0.0),
+          ),
+          onHorizontalDragEnd: (_) => _settle(width),
+          child: ClipRect(
+            child: Stack(
+              children: [
+                if (_offset < 0)
+                  Positioned.fill(
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: SizedBox(
+                        width: (-_offset).clamp(0.0, width),
+                        child: Material(
+                          color: c.bad,
+                          child: InkWell(
+                            key: const ValueKey('settings-hide-account'),
+                            onTap: () {
+                              setState(() => _offset = 0);
+                              widget.onHide();
+                            },
+                            child: const Center(
+                              child: Text(
+                                'Hide',
+                                maxLines: 1,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                AnimatedContainer(
+                  duration: _dragging
+                      ? Duration.zero
+                      : const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  transform: Matrix4.translationValues(_offset, 0, 0),
+                  color: c.card,
+                  child: widget.child,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

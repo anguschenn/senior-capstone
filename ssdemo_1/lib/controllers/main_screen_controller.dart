@@ -7,6 +7,7 @@ import '../models/app_models.dart';
 import '../services/auth_service.dart';
 import '../services/budget_service.dart';
 import '../services/category_service.dart';
+import '../services/hidden_accounts_store.dart';
 import '../services/plaid_service.dart';
 import '../services/subscription_service.dart';
 import '../services/sync_service.dart';
@@ -200,6 +201,7 @@ class MainScreenController extends ChangeNotifier {
   Future<void> loadCachedThenRefresh() async {
     if (syncing || refreshingInBackground) return;
     refreshingInBackground = true;
+    unawaited(_loadHiddenAccounts());
     try {
       final cached = await _sync.loadCachedResult(
         reviewedCategoryByTxId,
@@ -523,8 +525,92 @@ class MainScreenController extends ChangeNotifier {
     }).kinds;
   }
 
+  // --- Hidden accounts ---
+
+  /// Accounts hidden in Settings: left out of every page and total until
+  /// shown again. Nothing is deleted.
+  Set<String> hiddenAccountIds = const {};
+
+  List<AppTransaction> _allTransactions = const [];
+  List<AccountOption> _allAccountOptions = const [];
+  DashboardStats _allStats = liveStatsEmpty;
+
+  static const liveStatsEmpty = DashboardStats(
+    totalBalance: 0,
+    monthlyIncome: 0,
+    monthlyExpenses: 0,
+    netThisMonth: 0,
+  );
+
+  /// Every connected account, hidden ones included (for Settings).
+  List<AccountOption> get allAccountOptions => _allAccountOptions;
+
+  Future<void> _loadHiddenAccounts() async {
+    final Set<String> ids;
+    try {
+      ids = await HiddenAccountsStore.instance.load(
+        AuthService.instance.currentUserId,
+      );
+    } catch (_) {
+      return; // signed out or no session yet: nothing hidden
+    }
+    if (_isDisposed || ids.isEmpty) return;
+    hiddenAccountIds = ids;
+    _applyHiddenAccounts();
+    _reclassify();
+    _rebuildBudgetProgress();
+    _notifyListenersSafe();
+  }
+
+  Future<void> setAccountHidden(String accountId, bool hidden) async {
+    final next = Set<String>.from(hiddenAccountIds);
+    hidden ? next.add(accountId) : next.remove(accountId);
+    hiddenAccountIds = next;
+    _applyHiddenAccounts();
+    _reclassify();
+    _rebuildBudgetProgress();
+    _notifyListenersSafe();
+    await HiddenAccountsStore.instance.save(
+      AuthService.instance.currentUserId,
+      next,
+    );
+  }
+
+  void _applyHiddenAccounts() {
+    final hiddenOptions = _allAccountOptions
+        .where((a) => hiddenAccountIds.contains(a.accountId))
+        .toList();
+    if (hiddenOptions.isEmpty) {
+      liveTransactions = _allTransactions;
+      liveAccountOptions = _allAccountOptions;
+      liveStats = _allStats;
+      return;
+    }
+    final hiddenIds = {
+      for (final a in hiddenOptions) ...{a.accountId, ...a.linkedAccountIds},
+    };
+    liveTransactions = _allTransactions
+        .where((tx) => !hiddenIds.contains(tx.accountId))
+        .toList();
+    liveAccountOptions = _allAccountOptions
+        .where((a) => !hiddenAccountIds.contains(a.accountId))
+        .toList();
+    liveStats = DashboardStats(
+      totalBalance: liveAccountOptions.fold(0.0, (sum, a) => sum + a.balance),
+      monthlyIncome: _allStats.monthlyIncome,
+      monthlyExpenses: _allStats.monthlyExpenses,
+      netThisMonth: _allStats.netThisMonth,
+    );
+    if (hiddenAccountIds.contains(selectedAccountId)) {
+      selectedAccountId = kAllAccountsId;
+    }
+  }
+
   void _applySyncResult(SyncResult result) {
     final txIdSet = result.transactions.map((e) => e.id).toSet();
+    _allTransactions = result.transactions;
+    _allAccountOptions = result.accountOptions;
+    _allStats = result.stats;
     liveTransactions = result.transactions;
     liveSubscriptions = result.subscriptions;
     liveBudgetProgress = result.budgetProgress;
@@ -552,6 +638,7 @@ class MainScreenController extends ChangeNotifier {
     // even after a remembered rule now classifies them confidently.
     lowConfidenceReviewTxIds = {...result.autoLowConfidenceReviewTxIds};
     _ruleCategoryByTxId = result.ruleCategoryByTxId;
+    _applyHiddenAccounts();
     _reclassify();
     _applyManualLimitOverrides();
     if (selectedAccountId != kAllAccountsId &&

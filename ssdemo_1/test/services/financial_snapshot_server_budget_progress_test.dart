@@ -100,7 +100,7 @@ void main() {
   );
 
   test(
-    'a specific account selected: ignores server data, uses the Dart recomputation',
+    'a specific account selected: budgets still cover every account (server data)',
     () {
       final controller = _controllerWith(
         selectedAccountId: _acctA,
@@ -109,7 +109,7 @@ void main() {
         serverBudgetProgressMonth: focusMonth,
       );
       final snapshot = FinancialSnapshotService.instance.build(controller);
-      expect(_food(snapshot).spent, 42);
+      expect(_food(snapshot).spent, 999);
     },
   );
 

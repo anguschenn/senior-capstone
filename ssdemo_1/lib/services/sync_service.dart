@@ -416,7 +416,11 @@ class SyncService {
       autoReviewedCategoryByTxId[tx.id] = tx.kind == TxKind.income
           ? 'Income'
           : decision.category;
-      if (decision.confidence == 'low') {
+      // Money from a person may be a payback for something you bought
+      // (then it belongs in that category), so it's always offered for review.
+      if (decision.confidence == 'low' ||
+          (tx.kind == TxKind.income &&
+              AppTransaction.isPeerToPeer('${tx.name} ${tx.description}'))) {
         autoLowConfidenceReviewTxIds.add(tx.id);
       }
     }

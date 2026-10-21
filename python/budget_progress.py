@@ -257,7 +257,8 @@ def is_own_account_transfer(name: str, description: str, pfc_detailed: str) -> b
         return False
     if any(n in pfc_detailed.upper() for n in _OWN_TRANSFER_PFC):
         return True
-    return re.search(r"\btransfer\b", text) is not None
+    # Banks shorten it: "GOLDMAN SACHS BA TRANS", "ONLINE XFER TO SAV".
+    return re.search(r"\b(transfer|trans|xfer|trnsfr)\b", text) is not None
 
 
 def _row_fields(row: dict) -> tuple[str, str, str, str]:
