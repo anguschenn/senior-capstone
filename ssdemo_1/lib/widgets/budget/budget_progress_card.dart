@@ -58,9 +58,6 @@ class BudgetProgressCard extends StatelessWidget {
     final spent = item.spent;
     final remaining = (limit - spent).clamp(-999999, 999999);
     final alarming = item.isBurnRateHigh || item.isOverBudget;
-    // Text on the coloured card stays dark ink (red-on-orange was hard to
-    // read); the red "Over" badge and bar carry the warning.
-    final muted = _ink.withValues(alpha: 0.75);
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
