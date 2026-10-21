@@ -163,7 +163,10 @@ class HomePage extends StatelessWidget {
     return SafeArea(
       bottom: false,
       child: ListView(
-        padding: const EdgeInsets.only(bottom: 24),
+        // Clears the floating tab bar.
+        padding: EdgeInsets.only(
+          bottom: 24 + MediaQuery.paddingOf(context).bottom,
+        ),
         children: [
           LargeTitle(
             'SmartSpend',

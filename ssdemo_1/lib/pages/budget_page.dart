@@ -312,7 +312,10 @@ class _BudgetPageState extends State<BudgetPage> {
 
   Widget _budgetListView(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.only(bottom: 32),
+      // Clears the floating tab bar.
+      padding: EdgeInsets.only(
+        bottom: 32 + MediaQuery.paddingOf(context).bottom,
+      ),
       children: [
         LargeTitle(
           'Budget',

@@ -534,7 +534,13 @@ class _TransactionsPageState extends State<TransactionsPage> {
                 else
                   // Main activity list with inline re-categorization for spending rows.
                   SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                    // Clears the floating tab bar.
+                    padding: EdgeInsets.fromLTRB(
+                      16,
+                      0,
+                      16,
+                      24 + MediaQuery.paddingOf(context).bottom,
+                    ),
                     sliver: SliverList.list(children: rows),
                   ),
               ],

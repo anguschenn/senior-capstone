@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 
 import '../app/app_theme.dart';
@@ -267,6 +269,8 @@ class _MainScreenState extends State<MainScreen> {
     ];
 
     return Scaffold(
+      // Pages scroll under the floating glass tab bar.
+      extendBody: true,
       body: Column(
         children: [
           if (c.loginRequired)
@@ -318,8 +322,10 @@ class _MainScreenState extends State<MainScreen> {
   }
 }
 
-/// Wallet / Activity / Ask / Budget / Subs. Ask is a raised round button in
-/// the middle that opens the AI panel instead of switching tabs.
+/// Wallet / Activity / Ask / Budget / Subs, as a floating glass capsule
+/// over the page (blurred, translucent), like iOS 26 tab bars. The chosen
+/// tab sits in a lighter capsule that slides between tabs. Ask is a round
+/// button in the middle that opens the AI panel instead of switching tabs.
 class _TabBar extends StatelessWidget {
   const _TabBar({
     required this.index,
@@ -338,88 +344,132 @@ class _TabBar extends StatelessWidget {
     (Icons.autorenew_rounded, 'Subs'),
   ];
 
+  /// Tabs 0-1 sit left of Ask, 2-3 right of it.
+  static int _slotOf(int tab) => tab < 2 ? tab : tab + 1;
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    final dark = Theme.of(context).brightness == Brightness.dark;
     Widget item(int i) {
       final (icon, label) = _items[i];
       final selected = i == index;
       final color = selected ? c.text : c.muted;
       return Expanded(
-        child: InkWell(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
           onTap: () => onSelect(i),
-          child: Padding(
-            padding: const EdgeInsets.only(top: 8, bottom: 4),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, color: color, size: 24),
-                const SizedBox(height: 3),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 10.5,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    color: color,
-                  ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: color, size: 23),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  color: color,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       );
     }
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: c.background,
-        border: Border(top: BorderSide(color: c.line, width: 0.5)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 58,
-          child: Row(
-            children: [
-              item(0),
-              item(1),
-              // Raised Ask button with its own label, like the other tabs.
-              Expanded(
-                child: InkWell(
-                  key: const ValueKey('tab-ask'),
-                  onTap: onAsk,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Material(
-                        color: c.button,
-                        shape: const CircleBorder(),
-                        elevation: 3,
-                        shadowColor: c.cardShadow,
-                        child: SizedBox(
-                          width: 40,
-                          height: 40,
-                          child: Center(
-                            child: AskMark(size: 21, color: c.onButton),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Ask',
-                        style: TextStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w700,
-                          color: c.text,
-                        ),
-                      ),
-                    ],
+    return SafeArea(
+      top: false,
+      minimum: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: DecoratedBox(
+          decoration: ShapeDecoration(
+            shape: const StadiumBorder(),
+            shadows: [
+              BoxShadow(
+                color: c.cardShadow,
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: ClipPath(
+            clipper: const ShapeBorderClipper(shape: StadiumBorder()),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+              child: Container(
+                height: 62,
+                padding: const EdgeInsets.all(4),
+                decoration: ShapeDecoration(
+                  color: c.card.withValues(alpha: dark ? 0.62 : 0.70),
+                  // A faint light rim, like glass catching light.
+                  shape: StadiumBorder(
+                    side: BorderSide(
+                      color: dark
+                          ? const Color(0x24FFFFFF)
+                          : const Color(0x99FFFFFF),
+                      width: 0.8,
+                    ),
                   ),
                 ),
+                child: LayoutBuilder(
+                  builder: (context, box) {
+                    final slot = box.maxWidth / 5;
+                    return Stack(
+                      children: [
+                        AnimatedPositioned(
+                          duration: const Duration(milliseconds: 360),
+                          curve: Curves.easeOutBack,
+                          left: slot * _slotOf(index),
+                          top: 0,
+                          bottom: 0,
+                          width: slot,
+                          child: DecoratedBox(
+                            decoration: ShapeDecoration(
+                              color: dark
+                                  ? const Color(0x1FFFFFFF)
+                                  : const Color(0x14000000),
+                              shape: const StadiumBorder(),
+                            ),
+                          ),
+                        ),
+                        Row(
+                          children: [
+                            item(0),
+                            item(1),
+                            Expanded(
+                              child: Center(
+                                child: Material(
+                                  key: const ValueKey('tab-ask'),
+                                  color: c.button,
+                                  shape: const CircleBorder(),
+                                  child: InkWell(
+                                    customBorder: const CircleBorder(),
+                                    onTap: onAsk,
+                                    child: SizedBox.square(
+                                      dimension: 46,
+                                      child: Center(
+                                        child: AskMark(
+                                          size: 22,
+                                          color: c.onButton,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            item(2),
+                            item(3),
+                          ],
+                        ),
+                      ],
+                    );
+                  },
+                ),
               ),
-              item(2),
-              item(3),
-            ],
+            ),
           ),
         ),
       ),
