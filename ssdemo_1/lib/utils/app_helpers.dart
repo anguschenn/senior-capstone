@@ -56,9 +56,12 @@ Color colorForDetailedCategory(String detailedCategory) {
   if (has(['shopping', 'retail', 'merchandise'])) {
     return AppPalette.shopping;
   }
-  if (has(['subscription', 'entertainment', 'streaming', 'music'])) {
-    return AppPalette.subscriptions;
+  if (has(['subscription', 'streaming'])) return AppPalette.subscriptions;
+  if (has(['entertainment', 'music', 'movie', 'game', 'recreation'])) {
+    return AppPalette.entertainment;
   }
+  if (has(['fee', 'transfer', 'loan'])) return AppPalette.fees;
+  if (has(['cash', 'atm'])) return AppPalette.cash;
   if (has(['bill', 'utilit'])) return AppPalette.bills;
   if (has(['housing', 'rent', 'mortgage'])) return AppPalette.housing;
   if (has(['health', 'medical', 'pharmac'])) return AppPalette.health;

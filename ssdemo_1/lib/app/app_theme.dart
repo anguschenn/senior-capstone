@@ -6,15 +6,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 class AppPalette {
   static const ink = Color(0xFF1C1B1F);
 
-  static const food = Color(0xFFD28A5A);
-  static const transport = Color(0xFF7E9DB5);
-  static const shopping = Color(0xFFC98D97);
-  static const bills = Color(0xFF94AE87);
-  static const subscriptions = Color(0xFFA897BC);
-  static const housing = Color(0xFFC4A066);
-  static const health = Color(0xFF8FB0A0);
-  static const other = Color(0xFFBFB4A2);
-  static const income = Color(0xFF8DB580);
+  // Every category has its own colour, so no two cards look alike.
+  static const food = Color(0xFFD28A5A); // terracotta
+  static const transport = Color(0xFF7E9DB5); // slate blue
+  static const shopping = Color(0xFFC98D97); // dusty rose
+  static const bills = Color(0xFFB5BE78); // pistachio
+  static const subscriptions = Color(0xFFA897BC); // lavender
+  static const entertainment = Color(0xFFDDB45C); // mustard
+  static const housing = Color(0xFFA97C5E); // walnut
+  static const health = Color(0xFF7DB2AC); // teal
+  static const fees = Color(0xFF9C8C7C); // mocha
+  static const cash = Color(0xFFE3B8A0); // peach
+  static const other = Color(0xFFBFB4A2); // stone
+  static const income = Color(0xFF7DAE6E); // leaf green
 
   /// Wallet card colours, in the order accounts are listed.
   static const walletCards = <Color>[
