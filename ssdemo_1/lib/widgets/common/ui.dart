@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../app/app_theme.dart';
@@ -630,7 +631,19 @@ class StatusPill extends StatelessWidget {
   }
 }
 
-/// Bottom sheet listing options with a check on the current one.
+/// Where the last finger or click went down, so pickers can open as a
+/// pull-down menu right under the control that was tapped.
+Offset? _lastPointerDown;
+
+/// Call once at startup; records each tap's position for [showOptionSheet].
+void trackPointerForMenus() {
+  GestureBinding.instance.pointerRouter.addGlobalRoute((event) {
+    if (event is PointerDownEvent) _lastPointerDown = event.position;
+  });
+}
+
+/// Pull-down menu listing options with a check on the current one, opened
+/// under the tapped control like an iOS menu.
 Future<T?> showOptionSheet<T>({
   required BuildContext context,
   required String title,
@@ -638,95 +651,61 @@ Future<T?> showOptionSheet<T>({
   required String Function(T value) labelOf,
   required T? selected,
 }) {
-  // A floating rounded panel like iOS menus: inset from the edges, same
-  // card colour and corners as the page, one list with no inner frame.
-  return showModalBottomSheet<T>(
+  final c = context.colors;
+  final overlay =
+      Navigator.of(context).overlay!.context.findRenderObject()! as RenderBox;
+  final size = overlay.size;
+  final tap = _lastPointerDown == null
+      ? Offset(size.width / 2, size.height / 3)
+      : overlay.globalToLocal(_lastPointerDown!);
+  // Opens just below the tap, kept inside the screen.
+  final left = (tap.dx - 24).clamp(8.0, size.width - 228);
+  final top = tap.dy + 14;
+  return showMenu<T>(
     context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    elevation: 0,
-    builder: (context) {
-      final c = context.colors;
-      final maxHeight = MediaQuery.sizeOf(context).height * 0.75;
-      return SafeArea(
-        minimum: const EdgeInsets.only(bottom: 8),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 0, 8, 0),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: maxHeight),
-            child: Material(
-              color: c.card,
-              borderRadius: BorderRadius.circular(24),
-              clipBehavior: Clip.antiAlias,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const SizedBox(height: 8),
-                  Container(
-                    width: 36,
-                    height: 5,
-                    decoration: BoxDecoration(
-                      color: c.line,
-                      borderRadius: BorderRadius.circular(99),
-                    ),
+    position: RelativeRect.fromLTRB(
+      left,
+      top,
+      size.width - left - 220,
+      size.height - top,
+    ),
+    initialValue: selected,
+    color: c.card,
+    surfaceTintColor: Colors.transparent,
+    elevation: 10,
+    shadowColor: c.cardShadow,
+    constraints: BoxConstraints(
+      minWidth: 220,
+      maxWidth: 260,
+      maxHeight: size.height * 0.6,
+    ),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+    menuPadding: const EdgeInsets.symmetric(vertical: 4),
+    semanticLabel: title,
+    items: [
+      for (final v in values)
+        PopupMenuItem<T>(
+          value: v,
+          height: 44,
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  labelOf(v),
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: c.text,
+                    fontWeight: v == selected
+                        ? FontWeight.w600
+                        : FontWeight.w400,
                   ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 6),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        title,
-                        style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Flexible(
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      padding: const EdgeInsets.only(bottom: 10),
-                      itemCount: values.length,
-                      separatorBuilder: (_, _) => Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: Divider(
-                          height: 0.5,
-                          thickness: 0.5,
-                          color: c.line,
-                        ),
-                      ),
-                      itemBuilder: (context, i) {
-                        final v = values[i];
-                        final isSelected = v == selected;
-                        return ListTile(
-                          dense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                          ),
-                          title: Text(
-                            labelOf(v),
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: isSelected
-                                  ? FontWeight.w600
-                                  : FontWeight.w400,
-                            ),
-                          ),
-                          trailing: isSelected
-                              ? Icon(Icons.check_rounded, color: c.text)
-                              : null,
-                          onTap: () => Navigator.of(context).pop(v),
-                        );
-                      },
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
+              if (v == selected)
+                Icon(Icons.check_rounded, size: 18, color: c.text),
+            ],
           ),
         ),
-      );
-    },
+    ],
   );
 }
