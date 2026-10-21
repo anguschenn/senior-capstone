@@ -1,4 +1,5 @@
 import 'package:flutter/gestures.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/material.dart';
 
 import '../../app/app_theme.dart';
@@ -631,19 +632,39 @@ class StatusPill extends StatelessWidget {
   }
 }
 
-/// Where the last finger or click went down, so pickers can open as a
-/// pull-down menu right under the control that was tapped.
-Offset? _lastPointerDown;
+/// The control under the last finger or click (screen coordinates), so
+/// pickers can open as a pull-down menu lined up under it.
+Rect? _lastTappedRect;
 
-/// Call once at startup; records each tap's position for [showOptionSheet].
+/// Call once at startup; records each tapped control for [showOptionSheet].
 void trackPointerForMenus() {
   GestureBinding.instance.pointerRouter.addGlobalRoute((event) {
-    if (event is PointerDownEvent) _lastPointerDown = event.position;
+    if (event is! PointerDownEvent) return;
+    final result = HitTestResult();
+    RendererBinding.instance.hitTestInView(
+      result,
+      event.position,
+      event.viewId,
+    );
+    // The innermost gesture listener is the button that was tapped.
+    for (final entry in result.path) {
+      final target = entry.target;
+      if (target is RenderPointerListener && target.hasSize) {
+        _lastTappedRect = target.localToGlobal(Offset.zero) & target.size;
+        return;
+      }
+    }
+    _lastTappedRect = Rect.fromCenter(
+      center: event.position,
+      width: 0,
+      height: 0,
+    );
   });
 }
 
-/// Pull-down menu listing options with a check on the current one, opened
-/// under the tapped control like an iOS menu.
+/// Pull-down menu listing options with a check on the current one. It drops
+/// straight down from the tapped control, its text lined up with the
+/// control's left edge.
 Future<T?> showOptionSheet<T>({
   required BuildContext context,
   required String title,
@@ -651,33 +672,36 @@ Future<T?> showOptionSheet<T>({
   required String Function(T value) labelOf,
   required T? selected,
 }) {
+  const width = 260.0;
+  const itemInset = 12.0;
   final c = context.colors;
   final overlay =
       Navigator.of(context).overlay!.context.findRenderObject()! as RenderBox;
   final size = overlay.size;
-  final tap = _lastPointerDown == null
-      ? Offset(size.width / 2, size.height / 3)
-      : overlay.globalToLocal(_lastPointerDown!);
-  // Opens just below the tap, kept inside the screen.
-  final left = (tap.dx - 24).clamp(8.0, size.width - 268);
-  final top = tap.dy + 14;
+  final anchor = _lastTappedRect == null
+      ? Rect.fromLTWH(size.width / 2 - width / 2, size.height / 3, 0, 0)
+      : Rect.fromPoints(
+          overlay.globalToLocal(_lastTappedRect!.topLeft),
+          overlay.globalToLocal(_lastTappedRect!.bottomRight),
+        );
+  final left = (anchor.left - itemInset).clamp(8.0, size.width - width - 8);
+  final top = anchor.bottom + 4;
   return showMenu<T>(
     context: context,
     position: RelativeRect.fromLTRB(
       left,
       top,
-      size.width - left - 260,
+      size.width - left - width,
       size.height - top,
     ),
-    initialValue: selected,
     color: c.card,
     surfaceTintColor: Colors.transparent,
     elevation: 10,
     shadowColor: c.cardShadow,
     constraints: BoxConstraints(
       // One width for every menu so they all look alike.
-      minWidth: 260,
-      maxWidth: 260,
+      minWidth: width,
+      maxWidth: width,
       maxHeight: size.height * 0.6,
     ),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -688,6 +712,7 @@ Future<T?> showOptionSheet<T>({
         PopupMenuItem<T>(
           value: v,
           height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: itemInset),
           child: Row(
             children: [
               Expanded(
