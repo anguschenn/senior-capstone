@@ -4,6 +4,7 @@ import '../app/app_theme.dart';
 import '../constants/app_constants.dart';
 import '../models/app_models.dart';
 import '../services/ai_api_client.dart';
+import '../widgets/common/ui.dart';
 
 // Re-export formatters so existing imports keep working.
 export 'formatters.dart';
@@ -336,9 +337,8 @@ Future<void> showTransactionCategoryPicker({
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
-                              Icons.auto_awesome,
-                              size: 14,
+                            AskMark(
+                              size: 15,
                               color: sheetContext.colors.onButton,
                             ),
                             const SizedBox(width: 4),

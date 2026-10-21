@@ -439,7 +439,7 @@ class _InkAskChip extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.auto_awesome, size: 13, color: AppPalette.ink),
+              const AskMark(size: 14, color: AppPalette.ink),
               const SizedBox(width: 5),
               Text(
                 label,

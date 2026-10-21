@@ -16,6 +16,7 @@ import '../services/auth_service.dart';
 import '../services/financial_snapshot_service.dart';
 import '../utils/app_helpers.dart';
 import '../widgets/ai_assistant/ai_assistant_panel.dart';
+import '../widgets/common/ui.dart';
 
 /// Opens the AI panel, optionally with a question filled in and a note on
 /// where it was opened from (the ✦ chips on Budget and Cash Flow).
@@ -398,10 +399,8 @@ class _TabBar extends StatelessWidget {
                         child: SizedBox(
                           width: 40,
                           height: 40,
-                          child: Icon(
-                            Icons.auto_awesome,
-                            color: c.onButton,
-                            size: 19,
+                          child: Center(
+                            child: AskMark(size: 21, color: c.onButton),
                           ),
                         ),
                       ),

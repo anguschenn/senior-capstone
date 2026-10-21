@@ -130,21 +130,77 @@ class BackLink extends StatelessWidget {
   }
 }
 
+/// SmartSpend's assistant mark: a speech bubble with a small spending line
+/// rising inside it, drawn in [color]. Used wherever the app offers to ask.
+class AskMark extends StatelessWidget {
+  const AskMark({super.key, this.size = 18, this.color});
+
+  final double size;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final ink = color ?? IconTheme.of(context).color ?? context.colors.text;
+    return SizedBox.square(
+      dimension: size,
+      child: CustomPaint(painter: _AskMarkPainter(ink)),
+    );
+  }
+}
+
+class _AskMarkPainter extends CustomPainter {
+  _AskMarkPainter(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final s = size.width;
+    final stroke = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = s * 0.095
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    // Bubble: a soft rounded square with a short tail at the bottom left.
+    final body = RRect.fromLTRBR(
+      s * 0.08,
+      s * 0.08,
+      s * 0.92,
+      s * 0.74,
+      Radius.circular(s * 0.24),
+    );
+    final bubble = Path()
+      ..addRRect(body)
+      ..moveTo(s * 0.26, s * 0.74)
+      ..lineTo(s * 0.18, s * 0.94)
+      ..lineTo(s * 0.44, s * 0.74);
+    canvas.drawPath(bubble, stroke);
+    // A small spending line climbing to a dot: money, talked through.
+    final line = Path()
+      ..moveTo(s * 0.27, s * 0.55)
+      ..lineTo(s * 0.44, s * 0.40)
+      ..lineTo(s * 0.56, s * 0.49)
+      ..lineTo(s * 0.70, s * 0.30);
+    canvas.drawPath(line, stroke..strokeWidth = s * 0.085);
+    canvas.drawCircle(
+      Offset(s * 0.70, s * 0.30),
+      s * 0.07,
+      Paint()..color = color,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_AskMarkPainter old) => old.color != color;
+}
+
 /// Card corner radius: large, on a continuous iOS-style curve.
 const double cardRadius = 22;
 
-/// Card outline: continuous corners plus a hairline edge that catches the
-/// light, so cards read as raised panels like iOS ones.
-ShapeBorder cardShape(BuildContext context, {double radius = cardRadius}) {
-  final dark = Theme.of(context).brightness == Brightness.dark;
-  return RoundedSuperellipseBorder(
-    borderRadius: BorderRadius.circular(radius),
-    side: BorderSide(
-      color: dark ? const Color(0x17FFFFFF) : const Color(0x12000000),
-      width: 0.8,
-    ),
-  );
-}
+/// Card outline: continuous (iOS squircle) corners, no border; the card's
+/// own fill sets it off the page.
+ShapeBorder cardShape(BuildContext context, {double radius = cardRadius}) =>
+    RoundedSuperellipseBorder(borderRadius: BorderRadius.circular(radius));
 
 /// [cardShape] filled with the card colour, for a Container.
 ShapeDecoration cardDecoration(
@@ -660,7 +716,7 @@ class AskChip extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.auto_awesome, size: 13, color: c.text),
+              AskMark(size: 14, color: c.text),
               const SizedBox(width: 5),
               Text(
                 label,
@@ -687,12 +743,16 @@ class StatusPill extends StatelessWidget {
     required this.background,
     required this.foreground,
     this.icon,
+    this.leading,
   });
 
   final String label;
   final Color background;
   final Color foreground;
   final IconData? icon;
+
+  /// Drawn before the label in place of [icon], e.g. an [AskMark].
+  final Widget? leading;
 
   @override
   Widget build(BuildContext context) {
@@ -705,7 +765,10 @@ class StatusPill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (icon != null) ...[
+          if (leading != null) ...[
+            leading!,
+            const SizedBox(width: 4),
+          ] else if (icon != null) ...[
             Icon(icon, size: 13, color: foreground),
             const SizedBox(width: 4),
           ],

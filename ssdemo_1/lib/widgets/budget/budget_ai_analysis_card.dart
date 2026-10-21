@@ -88,7 +88,7 @@ class BudgetAiAnalysisCard extends StatelessWidget {
                         height: 14,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.auto_awesome, size: 16),
+                    : const AskMark(size: 16),
                 label: Text(showSuggestion ? 'Generate again' : 'Generate'),
               ),
             ],

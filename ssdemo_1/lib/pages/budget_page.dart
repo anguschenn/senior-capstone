@@ -661,43 +661,47 @@ class _BudgetPageState extends State<BudgetPage> {
     return Padding(
       key: const ValueKey('budget-legend'),
       padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
-      child: Wrap(
-        alignment: WrapAlignment.center,
-        spacing: 16,
-        runSpacing: 6,
-        children: [
-          // Red: spent more than the limit, or (this month only) the pace
-          // ends over it.
-          entry(
-            const BudgetStatusDot(
-              color: BudgetStatusDot.over,
-              size: dot,
-              ring: false,
-            ),
-            _showsCurrentMonth ? 'Over or will go over' : 'Over budget',
-          ),
-          // Amber: 80% used, or this month's pace ends at 90% or more.
-          entry(
-            const BudgetStatusDot(
-              color: BudgetStatusDot.high,
-              size: dot,
-              ring: false,
-            ),
-            'Near limit',
-          ),
-          // Healthy cards carry no dot: an empty ring stands for that.
-          entry(
-            Container(
-              width: dot,
-              height: dot,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: c.muted, width: 1.5),
+      // Full width, so the centred Wrap is centred on the page.
+      child: SizedBox(
+        width: double.infinity,
+        child: Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 16,
+          runSpacing: 6,
+          children: [
+            // Red: spent more than the limit, or (this month only) the pace
+            // ends over it.
+            entry(
+              const BudgetStatusDot(
+                color: BudgetStatusDot.over,
+                size: dot,
+                ring: false,
               ),
+              _showsCurrentMonth ? 'Over or will go over' : 'Over budget',
             ),
-            'On track',
-          ),
-        ],
+            // Amber: 80% used, or this month's pace ends at 90% or more.
+            entry(
+              const BudgetStatusDot(
+                color: BudgetStatusDot.high,
+                size: dot,
+                ring: false,
+              ),
+              'Near limit',
+            ),
+            // Healthy cards carry no dot: an empty ring stands for that.
+            entry(
+              Container(
+                width: dot,
+                height: dot,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: c.muted, width: 1.5),
+                ),
+              ),
+              'On track',
+            ),
+          ],
+        ),
       ),
     );
   }

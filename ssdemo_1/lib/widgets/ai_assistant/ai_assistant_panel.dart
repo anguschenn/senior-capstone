@@ -473,7 +473,7 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
                       label: widget.contextLabel!,
                       background: c.card,
                       foreground: c.muted,
-                      icon: Icons.auto_awesome,
+                      leading: AskMark(size: 13, color: c.muted),
                     ),
                   ),
                 ),
