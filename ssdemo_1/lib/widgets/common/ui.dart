@@ -285,12 +285,18 @@ class SegmentedTabs<T> extends StatelessWidget {
     required this.segments,
     required this.onChanged,
     this.margin = const EdgeInsets.fromLTRB(16, 6, 16, 4),
+    this.steps = const {},
   });
 
   final T value;
   final Map<T, String> segments;
   final ValueChanged<T> onChanged;
   final EdgeInsetsGeometry margin;
+
+  /// Small ‹ › on a segment's sides that step its period back or forward
+  /// (e.g. one month on Month). They work on the selected segment; a null
+  /// callback greys that arrow (no earlier or later period).
+  final Map<T, ({VoidCallback? previous, VoidCallback? next})> steps;
 
   @override
   Widget build(BuildContext context) {
@@ -329,14 +335,39 @@ class SegmentedTabs<T> extends StatelessWidget {
                         : null,
                   ),
                   alignment: Alignment.center,
-                  child: Text(
-                    entry.value,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: entry.key == value
-                          ? FontWeight.w600
-                          : FontWeight.w500,
-                    ),
+                  child: Row(
+                    children: [
+                      if (steps[entry.key] case final step?)
+                        _StepArrow(
+                          key: ValueKey('step-previous-${entry.key}'),
+                          icon: Icons.chevron_left_rounded,
+                          tooltip: 'Previous',
+                          onTap: entry.key == value ? step.previous : null,
+                        )
+                      else
+                        const SizedBox(width: 30),
+                      Expanded(
+                        child: Text(
+                          entry.value,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: entry.key == value
+                                ? FontWeight.w600
+                                : FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      if (steps[entry.key] case final step?)
+                        _StepArrow(
+                          key: ValueKey('step-next-${entry.key}'),
+                          icon: Icons.chevron_right_rounded,
+                          tooltip: 'Next',
+                          onTap: entry.key == value ? step.next : null,
+                        )
+                      else
+                        const SizedBox(width: 30),
+                    ],
                   ),
                 ),
               ),
@@ -355,9 +386,6 @@ class ScopeLine extends StatelessWidget {
     this.onTap,
     this.trailing,
     this.actions = const [],
-    this.onPrevious,
-    this.onNext,
-    this.showSteps = false,
     this.padding = const EdgeInsets.fromLTRB(20, 0, 20, 2),
   });
 
@@ -369,14 +397,6 @@ class ScopeLine extends StatelessWidget {
 
   /// Small buttons on the right, e.g. the Wallet's bank shortcuts.
   final List<Widget> actions;
-
-  /// Step one period back or forward (‹ ›). Both null: no arrows; one null:
-  /// that arrow is greyed out (no earlier/later period).
-  final VoidCallback? onPrevious;
-  final VoidCallback? onNext;
-
-  /// Show the arrows even when both are greyed (a single period).
-  final bool showSteps;
   final EdgeInsetsGeometry padding;
 
   @override
@@ -417,20 +437,6 @@ class ScopeLine extends StatelessWidget {
           if (trailing != null)
             Text(trailing!, style: style.copyWith(fontSize: 13)),
           ...actions,
-          if (showSteps || onPrevious != null || onNext != null) ...[
-            _StepArrow(
-              key: const ValueKey('scope-previous'),
-              icon: Icons.chevron_left_rounded,
-              tooltip: 'Previous',
-              onTap: onPrevious,
-            ),
-            _StepArrow(
-              key: const ValueKey('scope-next'),
-              icon: Icons.chevron_right_rounded,
-              tooltip: 'Next',
-              onTap: onNext,
-            ),
-          ],
         ],
       ),
     );
@@ -452,27 +458,23 @@ class _StepArrow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    final arrow = SizedBox(
+      width: 30,
+      child: Icon(
+        icon,
+        size: 20,
+        // Faint on an unselected segment or at the end of the range.
+        color: onTap == null ? c.muted.withValues(alpha: 0.35) : c.text,
+      ),
+    );
+    // A disabled arrow lets the tap through to select the segment.
+    if (onTap == null) return arrow;
     return Tooltip(
       message: tooltip,
-      child: TapTarget(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        child: Material(
-          color: c.raised,
-          shape: const CircleBorder(),
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: onTap,
-            child: SizedBox(
-              width: 32,
-              height: 32,
-              child: Icon(
-                icon,
-                size: 22,
-                color: onTap == null ? c.line : c.text,
-              ),
-            ),
-          ),
-        ),
+        child: arrow,
       ),
     );
   }
