@@ -26,25 +26,55 @@ class SmartSpendApp extends StatelessWidget {
   }
 }
 
-/// The app is laid out for a phone. In a wide window (Chrome on a laptop)
-/// keep it phone-width and centred instead of stretching every card.
+/// The app is laid out for a phone. In a big window (Chrome on a laptop)
+/// show it at iPhone size, centred like a phone on the desk, instead of
+/// stretching every card across the screen.
 class _PhoneWidth extends StatelessWidget {
   const _PhoneWidth({required this.child});
 
   final Widget child;
-  static const double _maxWidth = 500;
+
+  // iPhone 15/16 screen in points.
+  static const Size _phone = Size(393, 852);
 
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
-    if (media.size.width <= _maxWidth) return child;
+    final screen = media.size;
+    if (screen.width <= _phone.width + 40) return child;
+    // Use the phone height when the window is tall enough, else fill it.
+    final framed = screen.height >= _phone.height + 40;
+    final size = Size(_phone.width, framed ? _phone.height : screen.height);
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return ColoredBox(
-      color: Theme.of(context).scaffoldBackgroundColor,
+      color: dark ? const Color(0xFF0B0A09) : const Color(0xFFD8D1C6),
       child: Center(
-        child: SizedBox(
-          width: _maxWidth,
+        child: Container(
+          width: size.width,
+          height: size.height,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(framed ? 44 : 0),
+            boxShadow: framed
+                ? const [
+                    BoxShadow(
+                      color: Color(0x55000000),
+                      blurRadius: 40,
+                      offset: Offset(0, 16),
+                    ),
+                  ]
+                : null,
+          ),
           child: MediaQuery(
-            data: media.copyWith(size: Size(_maxWidth, media.size.height)),
+            data: media.copyWith(
+              size: size,
+              padding: framed
+                  ? const EdgeInsets.only(top: 20, bottom: 12)
+                  : media.padding,
+              viewPadding: framed
+                  ? const EdgeInsets.only(top: 20, bottom: 12)
+                  : media.viewPadding,
+            ),
             child: child,
           ),
         ),
