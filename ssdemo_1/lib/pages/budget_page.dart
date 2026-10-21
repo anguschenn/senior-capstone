@@ -650,6 +650,7 @@ class _BudgetPageState extends State<BudgetPage> {
                             txByCategory[normalizeCategoryKey(item.title)] ??
                             const [],
                         highlighted: _highlightedBudgetId == item.budgetId,
+                        showNoBudget: viewMode != BudgetViewMode.all,
                         onTap: () => setState(
                           () => _expandedBudgetId = open ? null : item.budgetId,
                         ),
@@ -873,6 +874,15 @@ class _BudgetPageState extends State<BudgetPage> {
 
   // Short status sentence shown in the warning card near the top of the page.
   String _budgetInsight() {
+    // All time has no limits (budgets are monthly): name the biggest spend.
+    if (viewMode == BudgetViewMode.all) {
+      final spenders = [...activeBudgetProgress.where((b) => b.spent > 0)]
+        ..sort((a, b) => b.spent.compareTo(a.spent));
+      if (spenders.isEmpty) return 'Budget Insight: no spending data yet.';
+      final top = spenders.first;
+      return 'Budget Insight: ${top.title} is your biggest spending category '
+          'all time (${dollars(top.spent, decimals: 0)}).';
+    }
     final unbudgeted = [
       for (final item in activeBudgetProgress)
         if (item.isUnbudgetedSpend) item.title,

@@ -158,6 +158,33 @@ void main() {
     });
   });
 
+  test('the Year view adds up each month\'s real limits', () {
+    final base = _raw();
+    final raw = RawSyncData(
+      userId: base.userId,
+      monthYear: base.monthYear,
+      savedAt: base.savedAt,
+      accountsRows: base.accountsRows,
+      categories: base.categories,
+      budgetRows: base.budgetRows,
+      yearBudgetRows: const [
+        {'category_id': 'c-food', 'monthly_limit': 300, 'month_year': '2026-08'},
+        {'category_id': 'c-food', 'monthly_limit': 200, 'month_year': '2026-09'},
+      ],
+      subscriptionRows: base.subscriptionRows,
+      txRows: base.txRows,
+      rememberedRules: base.rememberedRules,
+    );
+    final year = service.buildResult(raw, const {}, asOf: _asOf);
+    expect(year.budgetProgressYear.single.limit, 500);
+    // Without the year's rows (an older saved copy) it falls back to x12.
+    final old = service.buildResult(_raw(), const {}, asOf: _asOf);
+    expect(old.budgetProgressYear.single.limit, 2400);
+    // The saved copy keeps the year's rows.
+    final again = RawSyncData.fromJson(jsonDecode(jsonEncode(raw.toJson())))!;
+    expect(again.yearBudgetRows, hasLength(2));
+  });
+
   group('saved copy is equivalent to a fresh load', () {
     test('parsing the JSON round-trip gives the same result', () {
       final raw = _raw();

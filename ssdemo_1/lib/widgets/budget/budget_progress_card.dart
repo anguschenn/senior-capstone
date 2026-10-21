@@ -17,6 +17,7 @@ class BudgetProgressCard extends StatelessWidget {
     this.reorderable = false,
     this.onTap,
     this.onAskWhy,
+    this.showNoBudget = true,
   });
 
   final BudgetCategoryProgress item;
@@ -38,6 +39,9 @@ class BudgetProgressCard extends StatelessWidget {
   /// ✦ "Why is Food high?" chip.
   final VoidCallback? onAskWhy;
 
+  /// Off for All Time, where no category has a limit to miss.
+  final bool showNoBudget;
+
   static const _ink = AppPalette.ink;
   static const _overInk = Color(0xFF8A2E22);
 
@@ -47,8 +51,9 @@ class BudgetProgressCard extends StatelessWidget {
     final icon = iconForBudgetCategory(item.title);
     final tone = colorForDetailedCategory(item.title);
     // Spending with no budget set: show what was spent, not "$112 / $0".
+    final spentOnly = dollars(item.spent, decimals: expanded ? 2 : 0);
     final amount = !item.hasLimit
-        ? '${dollars(item.spent, decimals: expanded ? 2 : 0)} · no budget'
+        ? (showNoBudget ? '$spentOnly · no budget' : spentOnly)
         : expanded
         ? '${formatMoney(item.spent, signed: false)} / ${formatMoney(item.limit, signed: false)}'
         : '${dollars(item.spent, decimals: 0)} / ${dollars(item.limit, decimals: 0)}';

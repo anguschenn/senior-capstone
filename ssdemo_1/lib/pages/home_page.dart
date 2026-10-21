@@ -184,26 +184,24 @@ class HomePage extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(20, 0, 14, 4),
             // Bank shortcuts, also in Settings.
             actions: [
-              CircleIconButton(
+              _Shortcut(
                 key: const ValueKey('wallet-add-bank'),
                 icon: Icons.add_rounded,
-                tooltip: 'Add Bank',
+                label: 'Add',
                 onPressed: busy ? null : onAddBank,
               ),
               if (accountOptions.isNotEmpty && onReconnect != null)
-                CircleIconButton(
+                _Shortcut(
                   key: const ValueKey('wallet-reconnect'),
                   icon: Icons.link_rounded,
-                  tooltip: 'Reconnect',
+                  label: 'Reconnect',
                   onPressed: busy ? null : onReconnect,
                 ),
               if (onRefresh != null)
-                CircleIconButton(
+                _Shortcut(
                   key: const ValueKey('wallet-refresh'),
                   icon: Icons.refresh_rounded,
-                  tooltip: syncStatus.isEmpty
-                      ? 'Refresh Data'
-                      : 'Refresh Data · $syncStatus',
+                  label: 'Refresh',
                   onPressed: busy ? null : onRefresh,
                 ),
             ],
@@ -316,6 +314,57 @@ class HomePage extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Small round button with a word under it, so it reads on a phone where
+/// there is no hover tooltip.
+class _Shortcut extends StatelessWidget {
+  const _Shortcut({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final color = onPressed == null ? c.muted : c.text;
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onPressed,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        child: SizedBox(
+          width: 58,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: c.raised,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 19, color: color),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                label,
+                maxLines: 1,
+                style: TextStyle(fontSize: 11, color: c.muted),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

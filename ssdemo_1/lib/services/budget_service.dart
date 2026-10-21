@@ -348,6 +348,23 @@ class BudgetService {
     }
   }
 
+  /// Each category's limits added up over the months that have a row: the
+  /// year's real budget, not one month times 12. A month with no row adds
+  /// nothing.
+  static Map<String, double> yearLimitsByCategoryId(
+    List<Map<String, dynamic>> yearRows,
+  ) {
+    final out = <String, double>{};
+    for (final row in yearRows) {
+      final categoryId = (row['category_id'] as String?)?.trim();
+      if (categoryId == null || categoryId.isEmpty) continue;
+      final raw = row['monthly_limit'];
+      final limit = raw is num ? raw.toDouble() : double.tryParse('$raw') ?? 0;
+      out[categoryId] = (out[categoryId] ?? 0) + limit;
+    }
+    return out;
+  }
+
   List<BudgetCategoryProgress> buildProgressFromRows({
     required List<Map<String, dynamic>> budgetRows,
     required Map<String, String> categoryMap,
@@ -355,6 +372,7 @@ class BudgetService {
     required DateTime now,
     required bool yearly,
     required Map<String, String> reviewedCategoryByTxId,
+    Map<String, double>? yearLimitByCategoryId,
   }) {
     final spentByCategoryName = <String, double>{};
     for (final row in txRows) {
@@ -448,7 +466,11 @@ class BudgetService {
           categoryId: categoryId,
           title: title,
           spent: spentByCard[titleKey] ?? 0,
-          limit: yearly ? monthlyLimit * 12 : monthlyLimit,
+          limit: !yearly
+              ? monthlyLimit
+              : yearLimitByCategoryId == null
+              ? monthlyLimit * 12
+              : yearLimitByCategoryId[categoryId] ?? 0,
         ),
       );
     }

@@ -256,6 +256,19 @@ class SyncService {
         .eq('user_id', userId)
         .eq('month_year', monthYear);
 
+    // The whole year's limits, month by month, for the Year view.
+    List yearBudgetRows;
+    try {
+      yearBudgetRows = await AppSupabase.client
+          .from('budgets')
+          .select('category_id,monthly_limit,month_year')
+          .eq('user_id', userId)
+          .gte('month_year', '${focused.year}-01')
+          .lte('month_year', '${focused.year}-12');
+    } catch (_) {
+      yearBudgetRows = const [];
+    }
+
     final subscriptionRows = await AppSupabase.client
         .from('subscriptions')
         .select(
@@ -297,6 +310,7 @@ class SyncService {
       budgetRows: (budgetRows as List)
           .whereType<Map<String, dynamic>>()
           .toList(),
+      yearBudgetRows: yearBudgetRows.whereType<Map<String, dynamic>>().toList(),
       subscriptionRows: (subscriptionRows as List)
           .whereType<Map<String, dynamic>>()
           .toList(),
@@ -449,6 +463,9 @@ class SyncService {
       now: now,
       yearly: true,
       reviewedCategoryByTxId: effectiveReviewedCategoryByTxId,
+      yearLimitByCategoryId: raw.yearBudgetRows.isEmpty
+          ? null
+          : BudgetService.yearLimitsByCategoryId(raw.yearBudgetRows),
     );
     final effectiveBudgetProgress = budgetProgress.isNotEmpty
         ? budgetProgress

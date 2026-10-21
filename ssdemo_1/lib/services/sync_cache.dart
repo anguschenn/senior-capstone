@@ -17,6 +17,7 @@ class RawSyncData {
     required this.accountsRows,
     required this.categories,
     required this.budgetRows,
+    this.yearBudgetRows = const [],
     required this.subscriptionRows,
     required this.txRows,
     required this.rememberedRules,
@@ -30,6 +31,10 @@ class RawSyncData {
   final List<Map<String, dynamic>> accountsRows;
   final List<CategoryOption> categories;
   final List<Map<String, dynamic>> budgetRows;
+
+  /// Every month's budget rows for [monthYear]'s year; the Year view adds
+  /// them up instead of multiplying one month by 12.
+  final List<Map<String, dynamic>> yearBudgetRows;
   final List<Map<String, dynamic>> subscriptionRows;
   final List<Map<String, dynamic>> txRows;
 
@@ -60,6 +65,7 @@ class RawSyncData {
       for (final c in categories) {'id': c.id, 'name': c.name},
     ],
     'budgetRows': budgetRows,
+    'yearBudgetRows': yearBudgetRows,
     'subscriptionRows': subscriptionRows,
     'txRows': txRows,
     'rememberedRules': rememberedRules,
@@ -86,6 +92,9 @@ class RawSyncData {
             ),
         ],
         budgetRows: rows('budgetRows'),
+        yearBudgetRows: decoded['yearBudgetRows'] == null
+            ? const []
+            : rows('yearBudgetRows'),
         subscriptionRows: rows('subscriptionRows'),
         txRows: rows('txRows'),
         rememberedRules: {

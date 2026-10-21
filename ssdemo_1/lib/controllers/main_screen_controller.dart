@@ -533,6 +533,10 @@ class MainScreenController extends ChangeNotifier {
 
   void _applyManualLimitOverrides() {
     if (_manualMonthlyLimitByCategoryKey.isEmpty) return;
+    final monthBefore = {
+      for (final item in liveBudgetProgress)
+        normalizeCategoryKey(item.title): item.limit,
+    };
     liveBudgetProgress = _withManualLimits(
       liveBudgetProgress,
       yearly: false,
@@ -542,6 +546,7 @@ class MainScreenController extends ChangeNotifier {
       liveBudgetProgressYear,
       yearly: true,
       allTime: false,
+      monthBefore: monthBefore,
     );
     liveBudgetProgressAll = _withManualLimits(
       liveBudgetProgressAll,
@@ -566,12 +571,16 @@ class MainScreenController extends ChangeNotifier {
     List<BudgetCategoryProgress> source, {
     required bool yearly,
     required bool allTime,
+    Map<String, double> monthBefore = const {},
   }) {
     return source.map((item) {
       final key = normalizeCategoryKey(item.title);
       final monthly = _manualMonthlyLimitByCategoryKey[key];
       if (monthly == null) return item;
-      final limit = allTime ? monthly : (yearly ? monthly * 12 : monthly);
+      // The year is the sum of its months: swap in this month's new limit.
+      final limit = allTime
+          ? monthly
+          : (yearly ? item.limit - (monthBefore[key] ?? 0) + monthly : monthly);
       return BudgetCategoryProgress(
         budgetId: item.budgetId,
         categoryId: item.categoryId,
