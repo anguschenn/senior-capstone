@@ -355,6 +355,8 @@ class ScopeLine extends StatelessWidget {
     this.onTap,
     this.trailing,
     this.actions = const [],
+    this.onPrevious,
+    this.onNext,
     this.padding = const EdgeInsets.fromLTRB(20, 0, 20, 2),
   });
 
@@ -366,6 +368,11 @@ class ScopeLine extends StatelessWidget {
 
   /// Small buttons on the right, e.g. the Wallet's bank shortcuts.
   final List<Widget> actions;
+
+  /// Step one period back or forward (‹ ›). Both null: no arrows; one null:
+  /// that arrow is greyed out (no earlier/later period).
+  final VoidCallback? onPrevious;
+  final VoidCallback? onNext;
   final EdgeInsetsGeometry padding;
 
   @override
@@ -406,7 +413,62 @@ class ScopeLine extends StatelessWidget {
           if (trailing != null)
             Text(trailing!, style: style.copyWith(fontSize: 13)),
           ...actions,
+          if (onPrevious != null || onNext != null) ...[
+            _StepArrow(
+              key: const ValueKey('scope-previous'),
+              icon: Icons.chevron_left_rounded,
+              tooltip: 'Previous',
+              onTap: onPrevious,
+            ),
+            _StepArrow(
+              key: const ValueKey('scope-next'),
+              icon: Icons.chevron_right_rounded,
+              tooltip: 'Next',
+              onTap: onNext,
+            ),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+class _StepArrow extends StatelessWidget {
+  const _StepArrow({
+    super.key,
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Tooltip(
+      message: tooltip,
+      child: TapTarget(
+        onTap: onTap,
+        child: Material(
+          color: c.raised,
+          shape: const CircleBorder(),
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onTap,
+            child: SizedBox(
+              width: 32,
+              height: 32,
+              child: Icon(
+                icon,
+                size: 22,
+                color: onTap == null ? c.line : c.text,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

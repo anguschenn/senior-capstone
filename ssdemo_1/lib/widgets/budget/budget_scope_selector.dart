@@ -35,12 +35,33 @@ class BudgetScopeSelector extends StatelessWidget {
                   normalizedSelectedMonth.month,
                   1,
                 ));
+    // Oldest to newest, so ‹ goes back in time and › forward.
+    final months = monthOptions.map(normalizedMonthOption).toSet().toList()
+      ..sort();
+    final monthIndex = months.indexOf(monthSelectionValue);
+    VoidCallback? monthStep(int step) {
+      final i = monthIndex + step;
+      if (monthIndex < 0 || i < 0 || i >= months.length) return null;
+      return () => onMonthChanged(months[i]);
+    }
+
+    final years = [...yearOptions]..sort();
+    final yearIndex = years.indexOf(selectedMonth.year);
+    VoidCallback? yearStep(int step) {
+      final i = yearIndex + step;
+      if (yearIndex < 0 || i < 0 || i >= years.length) return null;
+      return () => onMonthChanged(DateTime(years[i], 1, 2));
+    }
+
     final Widget scope = switch (viewMode) {
       BudgetViewMode.month => ScopeLine(
         key: ValueKey(
           'budget-month-${selectedMonth.year}-${selectedMonth.month}-${selectedMonth.day}',
         ),
         label: monthOptionLabel(monthSelectionValue),
+        onPrevious: monthStep(-1),
+        onNext: monthStep(1),
+        padding: const EdgeInsets.fromLTRB(20, 0, 14, 2),
         onTap: () async {
           final picked = await showOptionSheet<DateTime>(
             context: context,
@@ -54,6 +75,9 @@ class BudgetScopeSelector extends StatelessWidget {
       ),
       BudgetViewMode.year => ScopeLine(
         label: '${selectedMonth.year}',
+        onPrevious: yearStep(-1),
+        onNext: yearStep(1),
+        padding: const EdgeInsets.fromLTRB(20, 0, 14, 2),
         onTap: () async {
           final picked = await showOptionSheet<int>(
             context: context,

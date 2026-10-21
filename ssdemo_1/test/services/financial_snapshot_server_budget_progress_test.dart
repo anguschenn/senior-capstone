@@ -172,4 +172,26 @@ void main() {
       expect(_food(snapshot).limit, 0);
     });
   }
+
+  test('server rows for only some categories: the rest still show their '
+      'spending', () {
+    final controller = _controllerWith(
+      selectedAccountId: kAllAccountsId,
+      selectedMonth: focusMonth,
+      serverBudgetProgress: const [
+        BudgetCategoryProgress(
+          budgetId: 'b2',
+          categoryId: 'c2',
+          title: 'Shopping',
+          spent: 10,
+          limit: 50,
+        ),
+      ],
+      serverBudgetProgressMonth: focusMonth,
+    );
+    final snapshot = FinancialSnapshotService.instance.build(controller);
+    expect(snapshot.budgetProgress.map((b) => b.title), contains('Shopping'));
+    expect(_food(snapshot).spent, 42);
+    expect(_food(snapshot).limit, 0);
+  });
 }

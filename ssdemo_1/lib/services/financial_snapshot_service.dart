@@ -72,8 +72,38 @@ class FinancialSnapshotService {
         targetAccountId == kAllAccountsId &&
         serverForFocus &&
         !noBudgetsThisMonth;
+    // Every category card, with this month's spending and no limit: fills in
+    // categories the month has no budget row for.
+    List<BudgetCategoryProgress> spendOnly() => _rebaseProgressFromTemplate(
+      template: [
+        for (final b in controller.liveBudgetProgress)
+          BudgetCategoryProgress(
+            budgetId: b.budgetId,
+            categoryId: b.categoryId,
+            title: b.title,
+            spent: 0,
+            limit: 0,
+          ),
+      ],
+      txs: visibleTransactions,
+      focusMonth: focusMonth,
+      yearly: false,
+      allTime: false,
+      reviewedCategoryByTxId: controller.reviewedCategoryByTxId,
+    );
     final visibleBudgetProgress = useServerBudgetProgress
-        ? controller.serverBudgetProgress!
+        ? [
+            ...controller.serverBudgetProgress!,
+            // A month with rows for only some categories (e.g. just Food)
+            // still shows the others' spending.
+            for (final b in spendOnly())
+              if (!controller.serverBudgetProgress!.any(
+                (s) =>
+                    normalizeCategoryKey(s.title) ==
+                    normalizeCategoryKey(b.title),
+              ))
+                b,
+          ]
         : _rebaseProgressFromTemplate(
             template: noBudgetsThisMonth
                 ? [
