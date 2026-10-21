@@ -104,6 +104,23 @@ class _TransactionsPageState extends State<TransactionsPage> {
         : (_monthOnlyOptions.isNotEmpty
               ? _monthOnlyOptions.first
               : DateTime(selectedMonth.year, selectedMonth.month, 1));
+    // Oldest to newest, so ‹ goes back in time and › forward.
+    final months = _monthOnlyOptions.toSet().toList()..sort();
+    final monthIndex = months.indexOf(monthSelectionValue);
+    VoidCallback? monthStep(int step) {
+      final i = monthIndex + step;
+      if (monthIndex < 0 || i < 0 || i >= months.length) return null;
+      return () => widget.onMonthChanged(months[i]);
+    }
+
+    final years = [..._yearOptions]..sort();
+    final yearIndex = years.indexOf(selectedMonth.year);
+    VoidCallback? yearStep(int step) {
+      final i = yearIndex + step;
+      if (yearIndex < 0 || i < 0 || i >= years.length) return null;
+      return () => widget.onMonthChanged(DateTime(years[i], 1, 2));
+    }
+
     final periodTransactions = widget.transactions.where((tx) {
       if (viewMode == ActivityViewMode.month) {
         return tx.date.year == selectedMonth.year &&
@@ -383,6 +400,16 @@ class _TransactionsPageState extends State<TransactionsPage> {
                           ActivityViewMode.all: 'All Time',
                         },
                         onChanged: (value) => setState(() => viewMode = value),
+                        steps: {
+                          ActivityViewMode.month: (
+                            previous: monthStep(-1),
+                            next: monthStep(1),
+                          ),
+                          ActivityViewMode.year: (
+                            previous: yearStep(-1),
+                            next: yearStep(1),
+                          ),
+                        },
                       ),
                       switch (viewMode) {
                         ActivityViewMode.month => ScopeLine(

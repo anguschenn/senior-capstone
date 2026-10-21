@@ -42,6 +42,24 @@ class CashFlowRangeSelector extends StatelessWidget {
               ? monthOptions.first
               : DateTime(focusMonth.year, focusMonth.month, 1));
 
+    // Oldest to newest, so ‹ goes back in time and › forward.
+    final months = monthOptions.map(normalizedMonthOption).toSet().toList()
+      ..sort();
+    final monthIndex = months.indexOf(monthSelectionValue);
+    VoidCallback? monthStep(int step) {
+      final i = monthIndex + step;
+      if (monthIndex < 0 || i < 0 || i >= months.length) return null;
+      return () => onMonthChanged(months[i]);
+    }
+
+    final years = [...yearOptions]..sort();
+    final yearIndex = years.indexOf(focusMonth.year);
+    VoidCallback? yearStep(int step) {
+      final i = yearIndex + step;
+      if (yearIndex < 0 || i < 0 || i >= years.length) return null;
+      return () => onYearChanged(years[i]);
+    }
+
     final Widget scope = switch (viewMode) {
       FlowViewMode.month => ScopeLine(
         key: ValueKey(
@@ -122,6 +140,10 @@ class CashFlowRangeSelector extends StatelessWidget {
             FlowViewMode.all: 'All Time',
           },
           onChanged: onViewModeChanged,
+          steps: {
+            FlowViewMode.month: (previous: monthStep(-1), next: monthStep(1)),
+            FlowViewMode.year: (previous: yearStep(-1), next: yearStep(1)),
+          },
         ),
         scope,
       ],

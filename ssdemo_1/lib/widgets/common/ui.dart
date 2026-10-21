@@ -401,6 +401,8 @@ class ScopeLine extends StatelessWidget {
   final List<Widget> actions;
   final EdgeInsetsGeometry padding;
 
+  static const double _inset = 12;
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
@@ -409,12 +411,15 @@ class ScopeLine extends StatelessWidget {
       fontWeight: FontWeight.w500,
       color: c.muted,
     );
+    // The tap box reaches [_inset] past the text on each side, so its
+    // pull-down menu can hang from the box's edge with the text lined up.
     final scope = InkWell(
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(10),
       onTap: onTap,
-      child: ConstrainedBox(
+      child: Container(
         // Tall enough to tap easily; the text itself stays small.
         constraints: const BoxConstraints(minHeight: 40),
+        padding: const EdgeInsets.symmetric(horizontal: _inset),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -429,8 +434,9 @@ class ScopeLine extends StatelessWidget {
         ),
       ),
     );
+    final outer = padding.resolve(Directionality.of(context));
     return Padding(
-      padding: padding,
+      padding: outer.copyWith(left: (outer.left - _inset).clamp(0.0, 99.0)),
       child: Row(
         children: [
           Expanded(
@@ -684,7 +690,9 @@ Future<T?> showOptionSheet<T>({
           overlay.globalToLocal(_lastTappedRect!.topLeft),
           overlay.globalToLocal(_lastTappedRect!.bottomRight),
         );
-  final left = (anchor.left - itemInset).clamp(8.0, size.width - width - 8);
+  // The menu hangs from the control's left edge; controls pad their text by
+  // [itemInset], so the menu's text lines up with theirs.
+  final left = anchor.left.clamp(8.0, size.width - width - 8);
   final top = anchor.bottom + 4;
   return showMenu<T>(
     context: context,
