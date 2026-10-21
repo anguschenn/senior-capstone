@@ -370,6 +370,56 @@ class _Shortcut extends StatelessWidget {
   }
 }
 
+/// The All Accounts card colour: the account cards' colours mixed evenly,
+/// so it reads as all of them together. No accounts: the old green.
+Color _blend(List<Color> colors) {
+  if (colors.isEmpty) return AppPalette.walletAll;
+  double r = 0, g = 0, b = 0;
+  for (final c in colors) {
+    r += c.r;
+    g += c.g;
+    b += c.b;
+  }
+  final n = colors.length;
+  return Color.from(alpha: 1, red: r / n, green: g / n, blue: b / n);
+}
+
+class _ColorCoins extends StatelessWidget {
+  const _ColorCoins({required this.colors, required this.ring});
+
+  final List<Color> colors;
+  final Color ring;
+
+  static const _size = 16.0;
+  static const _step = 10.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final shown = colors.take(5).toList();
+    return SizedBox(
+      width: _size + _step * (shown.length - 1),
+      height: _size,
+      child: Stack(
+        children: [
+          for (final (i, color) in shown.indexed)
+            Positioned(
+              left: _step * i,
+              child: Container(
+                width: _size,
+                height: _size,
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: ring, width: 2),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _RoundIcon extends StatelessWidget {
   const _RoundIcon({required this.icon, required this.color});
 
@@ -423,6 +473,10 @@ class WalletCardStack extends StatelessWidget {
         ? selectedAccountId
         : kAllAccountsId;
     final others = ids.where((id) => id != selected).toList();
+    final accountColors = [
+      for (var i = 0; i < accountOptions.length; i++)
+        AppPalette.walletCards[i % AppPalette.walletCards.length],
+    ];
     // Many accounts would make a very tall stack: show a few, and put the
     // rest behind a "More accounts" strip that opens a list.
     final overflow = others.length > _maxBehind;
@@ -430,7 +484,7 @@ class WalletCardStack extends StatelessWidget {
     final strips = behind.length + (overflow ? 1 : 0);
 
     Color colorFor(String id) {
-      if (id == kAllAccountsId) return AppPalette.walletAll;
+      if (id == kAllAccountsId) return _blend(accountColors);
       final i = accountOptions.indexWhere((a) => a.accountId == id);
       return AppPalette.walletCards[i % AppPalette.walletCards.length];
     }
@@ -471,6 +525,14 @@ class WalletCardStack extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(18, 13, 18, 16),
         decoration: BoxDecoration(
           color: colorFor(id),
+          // All Accounts: the account colours flow into each other.
+          gradient: id == kAllAccountsId && accountColors.length > 1
+              ? LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: accountColors,
+                )
+              : null,
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
@@ -497,6 +559,12 @@ class WalletCardStack extends StatelessWidget {
                       ),
                     ),
                   ),
+                  // All Accounts shows what it is made of: each account's
+                  // colour as overlapping coins.
+                  if (id == kAllAccountsId && accountColors.length > 1) ...[
+                    _ColorCoins(colors: accountColors, ring: colorFor(id)),
+                    const SizedBox(width: 8),
+                  ],
                   Text(
                     detailFor(id),
                     style: TextStyle(
