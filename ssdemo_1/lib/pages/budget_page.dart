@@ -662,6 +662,7 @@ class _BudgetPageState extends State<BudgetPage> {
       key: const ValueKey('budget-legend'),
       padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
       child: Wrap(
+        alignment: WrapAlignment.center,
         spacing: 16,
         runSpacing: 6,
         children: [

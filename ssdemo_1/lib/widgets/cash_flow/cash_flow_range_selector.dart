@@ -90,42 +90,21 @@ class CashFlowRangeSelector extends StatelessWidget {
           if (picked != null) onYearChanged(picked);
         },
       ),
-      FlowViewMode.all => Padding(
-        padding: const EdgeInsets.fromLTRB(20, 4, 12, 6),
-        child: Row(
-          children: [
-            Expanded(
-              child: InkWell(
-                onTap: onPickCustomRange,
-                child: Row(
-                  children: [
-                    Icon(Icons.date_range_rounded, size: 17, color: c.muted),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        customRange == null
-                            ? 'All time · pick a date range'
-                            : '${shortDate(customRange!.start, alwaysShowYear: true)} - ${shortDate(customRange!.end, alwaysShowYear: true)}',
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: c.muted,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+      // Same line as Month and Year, so switching doesn't shift the page.
+      FlowViewMode.all => ScopeLine(
+        label: customRange == null
+            ? 'All time · pick a date range'
+            : '${shortDate(customRange!.start, alwaysShowYear: true)} - ${shortDate(customRange!.end, alwaysShowYear: true)}',
+        onTap: onPickCustomRange,
+        actions: [
+          if (customRange != null)
+            IconButton(
+              tooltip: 'Clear custom range',
+              visualDensity: VisualDensity.compact,
+              onPressed: onClearCustomRange,
+              icon: Icon(Icons.close_rounded, size: 18, color: c.muted),
             ),
-            if (customRange != null)
-              IconButton(
-                tooltip: 'Clear custom range',
-                onPressed: onClearCustomRange,
-                icon: Icon(Icons.close_rounded, size: 18, color: c.muted),
-              ),
-          ],
-        ),
+        ],
       ),
     };
 

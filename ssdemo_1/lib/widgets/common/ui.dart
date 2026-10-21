@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/material.dart';
@@ -381,7 +383,7 @@ class SegmentedTabs<T> extends StatelessWidget {
 }
 
 /// Tappable "October 2026 ⌄" line under a title.
-class ScopeLine extends StatelessWidget {
+class ScopeLine extends StatefulWidget {
   const ScopeLine({
     super.key,
     required this.label,
@@ -392,7 +394,9 @@ class ScopeLine extends StatelessWidget {
   });
 
   final String label;
-  final VoidCallback? onTap;
+
+  /// Opens the picker; the box stays lit until the returned future ends.
+  final FutureOr<void> Function()? onTap;
 
   /// Muted text on the right, e.g. "42 transactions".
   final String? trailing;
@@ -404,8 +408,32 @@ class ScopeLine extends StatelessWidget {
   static const double _inset = 12;
 
   @override
+  State<ScopeLine> createState() => _ScopeLineState();
+}
+
+class _ScopeLineState extends State<ScopeLine> {
+  static const double _inset = ScopeLine._inset;
+
+  /// The picker is open: the box stays lit so its menu hangs from it.
+  bool _open = false;
+
+  Future<void> _tap() async {
+    setState(() => _open = true);
+    try {
+      await widget.onTap!();
+    } finally {
+      if (mounted) setState(() => _open = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    final label = widget.label;
+    final onTap = widget.onTap == null ? null : _tap;
+    final trailing = widget.trailing;
+    final actions = widget.actions;
+    final padding = widget.padding;
     final style = TextStyle(
       fontSize: 14,
       fontWeight: FontWeight.w500,
@@ -414,9 +442,14 @@ class ScopeLine extends StatelessWidget {
     // The tap box reaches [_inset] past the text on each side, so its
     // pull-down menu can hang from the box's edge with the text lined up.
     final scope = InkWell(
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(menuRadius),
       onTap: onTap,
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        decoration: BoxDecoration(
+          color: _open ? c.raised : Colors.transparent,
+          borderRadius: BorderRadius.circular(menuRadius),
+        ),
         // Tall enough to tap easily; the text itself stays small.
         constraints: const BoxConstraints(minHeight: 40),
         padding: const EdgeInsets.symmetric(horizontal: _inset),
@@ -443,7 +476,7 @@ class ScopeLine extends StatelessWidget {
             child: Align(alignment: Alignment.centerLeft, child: scope),
           ),
           if (trailing != null)
-            Text(trailing!, style: style.copyWith(fontSize: 13)),
+            Text(trailing, style: style.copyWith(fontSize: 13)),
           ...actions,
         ],
       ),
@@ -638,6 +671,9 @@ class StatusPill extends StatelessWidget {
   }
 }
 
+/// Corner radius shared by pickers' tap boxes and their pull-down menus.
+const double menuRadius = 12;
+
 /// The control under the last finger or click (screen coordinates), so
 /// pickers can open as a pull-down menu lined up under it.
 Rect? _lastTappedRect;
@@ -693,7 +729,8 @@ Future<T?> showOptionSheet<T>({
   // The menu hangs from the control's left edge; controls pad their text by
   // [itemInset], so the menu's text lines up with theirs.
   final left = anchor.left.clamp(8.0, size.width - width - 8);
-  final top = anchor.bottom + 4;
+  // Directly under the control, so it reads as the box opening downward.
+  final top = anchor.bottom + 2;
   return showMenu<T>(
     context: context,
     position: RelativeRect.fromLTRB(
@@ -714,7 +751,7 @@ Future<T?> showOptionSheet<T>({
     ),
     // A hairline edge keeps the menu visible over the dark page.
     shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(menuRadius),
       side: BorderSide(color: c.line, width: 0.8),
     ),
     menuPadding: const EdgeInsets.symmetric(vertical: 4),

@@ -372,6 +372,9 @@ class SyncService {
         autoReviewedCategoryByTxId[tx.id] = remembered.category;
         continue;
       }
+      // A payment onto a card is a transfer (Fees & Transfers), not
+      // something to guess a category for.
+      if (tx.isCardPaymentCredit) continue;
       final decision = CategoryService.instance.classifyByPfcSignals(
         pfcPrimary: ((txRows[i]['pfc_primary'] as String?) ?? '').trim(),
         pfcDetailed:

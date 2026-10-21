@@ -4,7 +4,7 @@ import '../app/app_theme.dart';
 import '../models/app_models.dart';
 import '../utils/app_helpers.dart';
 import '../widgets/common/ui.dart';
-import 'home_page.dart' show TransactionRow;
+import 'home_page.dart' show TransactionRow, effectiveCategoryFor;
 
 class TransactionsPage extends StatefulWidget {
   const TransactionsPage({
@@ -87,13 +87,9 @@ class _TransactionsPageState extends State<TransactionsPage> {
 
   /// The label on a transaction's category tag; the category filter uses the
   /// same label, so what the filter matches is exactly what the list shows.
-  String _categoryLabel(AppTransaction tx) => tx.isIncome
-      ? tx.inflowLabel
-      : (widget.reviewedCategoryByTxId[tx.id] ??
-            budgetCategoryFromPfc(
-              pfcDetailed: tx.category,
-              pfcPrimary: tx.primaryCategory,
-            ));
+  // Same label as the row's pill, so the filter and the pill always agree.
+  String _categoryLabel(AppTransaction tx) =>
+      effectiveCategoryFor(tx, widget.reviewedCategoryByTxId);
 
   @override
   Widget build(BuildContext context) {
@@ -447,63 +443,39 @@ class _TransactionsPageState extends State<TransactionsPage> {
                             }
                           },
                         ),
-                        ActivityViewMode.all => Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 4, 8, 0),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: InkWell(
-                                  onTap: () async {
-                                    final now = DateTime.now();
-                                    final picked = await showDateRangePicker(
-                                      context: context,
-                                      firstDate: DateTime(now.year - 10, 1, 1),
-                                      lastDate: DateTime(now.year + 1, 12, 31),
-                                      initialDateRange: customRange,
-                                    );
-                                    if (picked == null) return;
-                                    setState(() => customRange = picked);
-                                  },
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 8,
-                                    ),
-                                    child: Text(
-                                      customRange == null
-                                          ? 'All time · pick a date range'
-                                          : '${shortDate(customRange!.start, alwaysShowYear: true)} - ${shortDate(customRange!.end, alwaysShowYear: true)}',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w500,
-                                        color: c.muted,
-                                      ),
-                                    ),
-                                  ),
+                        // Same line as Month and Year, so switching doesn't
+                        // shift the page.
+                        ActivityViewMode.all => ScopeLine(
+                          label: customRange == null
+                              ? 'All time · pick a date range'
+                              : '${shortDate(customRange!.start, alwaysShowYear: true)} - ${shortDate(customRange!.end, alwaysShowYear: true)}',
+                          trailing: countLabel,
+                          padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+                          onTap: () async {
+                            final now = DateTime.now();
+                            final picked = await showDateRangePicker(
+                              context: context,
+                              firstDate: DateTime(now.year - 10, 1, 1),
+                              lastDate: DateTime(now.year + 1, 12, 31),
+                              initialDateRange: customRange,
+                            );
+                            if (picked == null) return;
+                            setState(() => customRange = picked);
+                          },
+                          actions: [
+                            if (customRange != null)
+                              IconButton(
+                                tooltip: 'Clear custom range',
+                                visualDensity: VisualDensity.compact,
+                                onPressed: () =>
+                                    setState(() => customRange = null),
+                                icon: Icon(
+                                  Icons.close_rounded,
+                                  size: 18,
+                                  color: c.muted,
                                 ),
                               ),
-                              if (customRange != null)
-                                IconButton(
-                                  tooltip: 'Clear custom range',
-                                  onPressed: () =>
-                                      setState(() => customRange = null),
-                                  icon: Icon(
-                                    Icons.close_rounded,
-                                    size: 18,
-                                    color: c.muted,
-                                  ),
-                                ),
-                              Padding(
-                                padding: const EdgeInsets.only(right: 12),
-                                child: Text(
-                                  countLabel,
-                                  style: TextStyle(
-                                    color: c.muted,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+                          ],
                         ),
                       },
                       // One filter button opens the full category list with
