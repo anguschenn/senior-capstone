@@ -413,11 +413,9 @@ class _TransactionsPageState extends State<TransactionsPage> {
                           trailing: countLabel,
                           padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
                           onTap: () async {
-                            final picked = await showOptionSheet<DateTime>(
+                            final picked = await showMonthGridPicker(
                               context: context,
-                              title: 'Month',
-                              values: _monthOnlyOptions,
-                              labelOf: monthOptionLabel,
+                              options: _monthOnlyOptions,
                               selected: monthSelectionValue,
                             );
                             if (picked != null) widget.onMonthChanged(picked);
@@ -428,11 +426,9 @@ class _TransactionsPageState extends State<TransactionsPage> {
                           trailing: countLabel,
                           padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
                           onTap: () async {
-                            final picked = await showOptionSheet<int>(
+                            final picked = await showYearGridPicker(
                               context: context,
-                              title: 'Year',
-                              values: _yearOptions,
-                              labelOf: (y) => '$y',
+                              years: _yearOptions,
                               selected: selectedMonth.year,
                             );
                             if (picked != null) {
@@ -449,12 +445,9 @@ class _TransactionsPageState extends State<TransactionsPage> {
                           trailing: countLabel,
                           padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
                           onTap: () async {
-                            final now = DateTime.now();
-                            final picked = await showDateRangePicker(
+                            final picked = await showRangeCalendar(
                               context: context,
-                              firstDate: DateTime(now.year - 10, 1, 1),
-                              lastDate: DateTime(now.year + 1, 12, 31),
-                              initialDateRange: customRange,
+                              initial: customRange,
                             );
                             if (picked == null) return;
                             setState(() => customRange = picked);

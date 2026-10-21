@@ -109,11 +109,9 @@ class HomePage extends StatelessWidget {
   final String? accessToken;
 
   Future<void> _showMonthPicker(BuildContext context) async {
-    final selected = await showOptionSheet<DateTime>(
+    final selected = await showMonthGridPicker(
       context: context,
-      title: 'Select Month',
-      values: monthOptions.map(normalizedMonthOption).toList(),
-      labelOf: monthOptionLabel,
+      options: monthOptions.map(normalizedMonthOption).toList(),
       selected: normalizedMonthOption(selectedMonth),
     );
     if (selected != null) onMonthChanged(selected);

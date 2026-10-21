@@ -845,44 +845,15 @@ Future<T?> showOptionSheet<T>({
   required String Function(T value) labelOf,
   required T? selected,
 }) {
-  const width = 260.0;
   const itemInset = 12.0;
   final c = context.colors;
-  final overlay =
-      Navigator.of(context).overlay!.context.findRenderObject()! as RenderBox;
-  final size = overlay.size;
-  final anchor = _lastTappedRect == null
-      ? Rect.fromLTWH(size.width / 2 - width / 2, size.height / 3, 0, 0)
-      : Rect.fromPoints(
-          overlay.globalToLocal(_lastTappedRect!.topLeft),
-          overlay.globalToLocal(_lastTappedRect!.bottomRight),
-        );
-  // The menu hangs from the control's left edge; controls pad their text by
-  // [itemInset], so the menu's text lines up with theirs.
-  final left = anchor.left.clamp(8.0, size.width - width - 8);
-  // Directly under the control, so it reads as the box opening downward.
-  final top = anchor.bottom + 2;
-  final room = size.height - top - 16;
-  // Opens upward instead when there's little room below.
-  final up = room < 220;
-  final maxHeight = up ? anchor.top - 2 - 16 : room;
-  // Grows out of the tapped control: the scale starts where it was tapped.
-  final originX = ((anchor.left - left) / width).clamp(0.0, 1.0);
-  final origin = Alignment(originX * 2 - 1, up ? 1 : -1);
-  return showGeneralDialog<T>(
+  return _showPopover<T>(
     context: context,
-    barrierDismissible: true,
-    barrierLabel: title,
-    barrierColor: Colors.black.withValues(alpha: 0.16),
-    transitionDuration: const Duration(milliseconds: 280),
-    pageBuilder: (context, animation, _) {
-      final grow = CurvedAnimation(
-        parent: animation,
-        curve: Curves.easeOutBack,
-        reverseCurve: Curves.easeInCubic,
-      );
+    title: title,
+    width: 260,
+    builder: (context, maxHeight) {
       final menu = ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: maxHeight.clamp(120.0, 520.0)),
+        constraints: BoxConstraints(maxHeight: maxHeight),
         child: Material(
           color: c.card,
           shape: cardShape(context, radius: 20),
@@ -924,11 +895,57 @@ Future<T?> showOptionSheet<T>({
           ),
         ),
       );
+      return menu;
+    },
+  );
+}
+
+/// Shows [builder]'s content as a floating card that grows out of the
+/// control just tapped (scale and fade from its corner) over a lightly
+/// dimmed page. It hangs below the control, or above it near the bottom.
+Future<T?> _showPopover<T>({
+  required BuildContext context,
+  required String title,
+  required double width,
+  required Widget Function(BuildContext context, double maxHeight) builder,
+}) {
+  final overlay =
+      Navigator.of(context).overlay!.context.findRenderObject()! as RenderBox;
+  final size = overlay.size;
+  final w = width.clamp(0.0, size.width - 16);
+  final anchor = _lastTappedRect == null
+      ? Rect.fromLTWH(size.width / 2 - w / 2, size.height / 3, 0, 0)
+      : Rect.fromPoints(
+          overlay.globalToLocal(_lastTappedRect!.topLeft),
+          overlay.globalToLocal(_lastTappedRect!.bottomRight),
+        );
+  // Hangs from the control's left edge, kept on screen.
+  final left = anchor.left.clamp(8.0, size.width - w - 8);
+  final top = anchor.bottom + 2;
+  final room = size.height - top - 16;
+  // Opens upward instead when there's little room below.
+  final up = room < 260 && anchor.top > room;
+  final maxHeight = (up ? anchor.top - 2 - 16 : room).clamp(120.0, 560.0);
+  // The scale starts where the control was tapped.
+  final originX = ((anchor.left - left) / w).clamp(0.0, 1.0);
+  final origin = Alignment(originX * 2 - 1, up ? 1 : -1);
+  return showGeneralDialog<T>(
+    context: context,
+    barrierDismissible: true,
+    barrierLabel: title,
+    barrierColor: Colors.black.withValues(alpha: 0.22),
+    transitionDuration: const Duration(milliseconds: 280),
+    pageBuilder: (context, animation, _) {
+      final grow = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutBack,
+        reverseCurve: Curves.easeInCubic,
+      );
       return Stack(
         children: [
           Positioned(
             left: left,
-            width: width,
+            width: w,
             top: up ? null : top,
             bottom: up ? size.height - anchor.top + 2 : null,
             child: FadeTransition(
@@ -939,11 +956,454 @@ Future<T?> showOptionSheet<T>({
               child: ScaleTransition(
                 scale: Tween(begin: 0.4, end: 1.0).animate(grow),
                 alignment: origin,
-                child: menu,
+                child: builder(context, maxHeight),
               ),
             ),
           ),
         ],
+      );
+    },
+  );
+}
+
+/// Popover card body: rounded panel with a title row, content and a
+/// Cancel / OK footer, like the iOS calendar popover.
+class _PickerCard extends StatelessWidget {
+  const _PickerCard({
+    required this.header,
+    required this.body,
+    required this.onOk,
+  });
+
+  final Widget header;
+  final Widget body;
+  final VoidCallback? onOk;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    Widget button(String label, VoidCallback? onTap, {required bool primary}) =>
+        Expanded(
+          child: Material(
+            color: primary ? c.button : c.raised,
+            shape: const StadiumBorder(),
+            child: InkWell(
+              customBorder: const StadiumBorder(),
+              onTap: onTap,
+              child: SizedBox(
+                height: 46,
+                child: Center(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: primary
+                          ? (onTap == null
+                                ? c.onButton.withValues(alpha: 0.5)
+                                : c.onButton)
+                          : c.text,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+    return Material(
+      color: c.card,
+      shape: cardShape(context, radius: 26),
+      clipBehavior: Clip.antiAlias,
+      elevation: 16,
+      shadowColor: c.cardShadow,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            header,
+            const SizedBox(height: 8),
+            body,
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                button(
+                  'Cancel',
+                  () => Navigator.of(context).pop(),
+                  primary: false,
+                ),
+                const SizedBox(width: 14),
+                button('OK', onOk, primary: true),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// "October 2026  ‹ ›" header row of a picker card.
+class _PickerHeader extends StatelessWidget {
+  const _PickerHeader({
+    required this.title,
+    required this.onPrevious,
+    required this.onNext,
+  });
+
+  final String title;
+  final VoidCallback? onPrevious;
+  final VoidCallback? onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    Widget arrow(IconData icon, VoidCallback? onTap, String tip) => IconButton(
+      tooltip: tip,
+      onPressed: onTap,
+      icon: Icon(icon, size: 26),
+      color: c.text,
+      disabledColor: c.muted.withValues(alpha: 0.35),
+    );
+    return Row(
+      children: [
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            title,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          ),
+        ),
+        arrow(Icons.chevron_left_rounded, onPrevious, 'Previous'),
+        arrow(Icons.chevron_right_rounded, onNext, 'Next'),
+      ],
+    );
+  }
+}
+
+/// One round cell in a picker grid: filled when chosen, tinted when it is
+/// today / this month, faded when it can't be picked.
+class _PickerCell extends StatelessWidget {
+  const _PickerCell({
+    required this.label,
+    required this.onTap,
+    this.selected = false,
+    this.current = false,
+    this.inRange = false,
+    this.height = 44,
+  });
+
+  final String label;
+  final VoidCallback? onTap;
+  final bool selected;
+  final bool current;
+  final bool inRange;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final fill = selected
+        ? c.text
+        : (current || inRange ? c.raised : Colors.transparent);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: SizedBox(
+        height: height,
+        child: Center(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            constraints: BoxConstraints(
+              minWidth: height,
+              minHeight: height - 4,
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: ShapeDecoration(
+              color: fill,
+              shape: const StadiumBorder(),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                color: selected
+                    ? c.background
+                    : (onTap == null ? c.muted.withValues(alpha: 0.4) : c.text),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+const _monthShort = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+/// Month picker as a calendar-style popover: "‹ 2026 ›" header, a 4×3
+/// grid of months (only [options] can be picked), an "All of 2026" choice
+/// when [options] has that year's all-year entry, then Cancel / OK.
+/// [options] uses the app's month values (day 1, or day 2 for All Year).
+Future<DateTime?> showMonthGridPicker({
+  required BuildContext context,
+  required List<DateTime> options,
+  required DateTime selected,
+}) {
+  bool isAllYear(DateTime d) => d.month == 1 && d.day == 2;
+  final optionSet = options.toSet();
+  final years = {for (final o in options) o.year}.toList()..sort();
+  if (years.isEmpty) years.add(selected.year);
+  final now = DateTime.now();
+  return _showPopover<DateTime>(
+    context: context,
+    title: 'Month',
+    width: 360,
+    builder: (context, _) {
+      var year = selected.year;
+      DateTime picked = selected;
+      return StatefulBuilder(
+        builder: (context, setState) {
+          final yi = years.indexOf(year);
+          final allYear = DateTime(year, 1, 2);
+          return _PickerCard(
+            header: _PickerHeader(
+              title: '$year',
+              onPrevious: yi > 0
+                  ? () => setState(() => year = years[yi - 1])
+                  : null,
+              onNext: yi >= 0 && yi < years.length - 1
+                  ? () => setState(() => year = years[yi + 1])
+                  : null,
+            ),
+            body: Column(
+              children: [
+                if (optionSet.contains(allYear))
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: _PickerCell(
+                      label: 'All of $year',
+                      selected: picked == allYear,
+                      onTap: () => setState(() => picked = allYear),
+                    ),
+                  ),
+                for (var row = 0; row < 3; row++)
+                  Row(
+                    children: [
+                      for (var col = 0; col < 4; col++)
+                        Expanded(
+                          child: Builder(
+                            builder: (context) {
+                              final m = DateTime(year, row * 4 + col + 1, 1);
+                              return _PickerCell(
+                                label: _monthShort[m.month - 1],
+                                height: 52,
+                                selected: !isAllYear(picked) && picked == m,
+                                current:
+                                    m.year == now.year && m.month == now.month,
+                                onTap: optionSet.contains(m)
+                                    ? () => setState(() => picked = m)
+                                    : null,
+                              );
+                            },
+                          ),
+                        ),
+                    ],
+                  ),
+              ],
+            ),
+            onOk: () => Navigator.of(context).pop(picked),
+          );
+        },
+      );
+    },
+  );
+}
+
+/// Year picker as a calendar-style popover: a grid of [years], Cancel / OK.
+Future<int?> showYearGridPicker({
+  required BuildContext context,
+  required List<int> years,
+  required int selected,
+}) {
+  final sorted = [...years]..sort();
+  final now = DateTime.now().year;
+  return _showPopover<int>(
+    context: context,
+    title: 'Year',
+    width: 360,
+    builder: (context, _) {
+      var picked = selected;
+      return StatefulBuilder(
+        builder: (context, setState) => _PickerCard(
+          header: const _PickerHeader(
+            title: 'Year',
+            onPrevious: null,
+            onNext: null,
+          ),
+          body: Wrap(
+            alignment: WrapAlignment.center,
+            children: [
+              for (final y in sorted)
+                SizedBox(
+                  width: 96,
+                  child: _PickerCell(
+                    label: '$y',
+                    height: 52,
+                    selected: y == picked,
+                    current: y == now,
+                    onTap: () => setState(() => picked = y),
+                  ),
+                ),
+            ],
+          ),
+          onOk: () => Navigator.of(context).pop(picked),
+        ),
+      );
+    },
+  );
+}
+
+/// Date-range picker as a calendar popover: "October 2026 ‹ ›", weekday
+/// row, a day grid. The first tap picks the start, the second the end;
+/// days between are tinted. Cancel / OK.
+Future<DateTimeRange?> showRangeCalendar({
+  required BuildContext context,
+  DateTimeRange? initial,
+}) {
+  const monthNames = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+  final today = DateTime.now();
+  DateTime day(DateTime d) => DateTime(d.year, d.month, d.day);
+  return _showPopover<DateTimeRange>(
+    context: context,
+    title: 'Date range',
+    width: 360,
+    builder: (context, _) {
+      var month = DateTime(
+        (initial?.end ?? today).year,
+        (initial?.end ?? today).month,
+      );
+      DateTime? start = initial == null ? null : day(initial.start);
+      DateTime? end = initial == null ? null : day(initial.end);
+      return StatefulBuilder(
+        builder: (context, setState) {
+          final c = context.colors;
+          final first = DateTime(month.year, month.month, 1);
+          final lead = first.weekday % 7; // Sunday first
+          final days = DateTime(month.year, month.month + 1, 0).day;
+          void tap(DateTime d) => setState(() {
+            if (start == null || end != null) {
+              start = d;
+              end = null;
+            } else if (d.isBefore(start!)) {
+              end = start;
+              start = d;
+            } else {
+              end = d;
+            }
+          });
+          return _PickerCard(
+            header: _PickerHeader(
+              title: '${monthNames[month.month - 1]} ${month.year}',
+              onPrevious: () =>
+                  setState(() => month = DateTime(month.year, month.month - 1)),
+              onNext: () =>
+                  setState(() => month = DateTime(month.year, month.month + 1)),
+            ),
+            body: Column(
+              children: [
+                Row(
+                  children: [
+                    for (final w in const [
+                      'SUN',
+                      'MON',
+                      'TUE',
+                      'WED',
+                      'THU',
+                      'FRI',
+                      'SAT',
+                    ])
+                      Expanded(
+                        child: Center(
+                          child: Text(
+                            w,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: c.muted,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                for (var row = 0; row * 7 < lead + days; row++)
+                  Row(
+                    children: [
+                      for (var col = 0; col < 7; col++)
+                        Expanded(
+                          child: Builder(
+                            builder: (context) {
+                              final n = row * 7 + col - lead + 1;
+                              if (n < 1 || n > days) {
+                                return const SizedBox(height: 44);
+                              }
+                              final d = DateTime(month.year, month.month, n);
+                              final s = start, e = end;
+                              return _PickerCell(
+                                label: '$n',
+                                selected: d == s || d == e,
+                                inRange:
+                                    s != null &&
+                                    e != null &&
+                                    d.isAfter(s) &&
+                                    d.isBefore(e),
+                                current: d == day(today),
+                                onTap: () => tap(d),
+                              );
+                            },
+                          ),
+                        ),
+                    ],
+                  ),
+              ],
+            ),
+            onOk: start == null
+                ? null
+                : () => Navigator.of(
+                    context,
+                  ).pop(DateTimeRange(start: start!, end: end ?? start!)),
+          );
+        },
       );
     },
   );

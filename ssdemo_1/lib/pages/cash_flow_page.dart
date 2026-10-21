@@ -251,12 +251,9 @@ class _CashFlowPageState extends State<CashFlowPage> {
             onYearChanged: (year) =>
                 widget.onMonthChanged(DateTime(year, 1, 2)),
             onPickCustomRange: () async {
-              final now = DateTime.now();
-              final picked = await showDateRangePicker(
+              final picked = await showRangeCalendar(
                 context: context,
-                firstDate: DateTime(now.year - 10, 1, 1),
-                lastDate: DateTime(now.year + 1, 12, 31),
-                initialDateRange: customRange,
+                initial: customRange,
               );
               if (picked == null) return;
               setState(() => customRange = picked);

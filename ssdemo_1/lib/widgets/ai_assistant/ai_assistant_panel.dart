@@ -201,16 +201,26 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
     return history;
   }
 
-  void _scrollToBottom() {
+  /// Keeps the newest message in view. The list builds long answers lazily
+  /// and the sheet is still sliding open, so the end keeps moving for a few
+  /// frames: follow it until it settles, then check once more after the
+  /// sheet has opened.
+  void _scrollToBottom({int frames = 8, bool recheck = true}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-        );
+      if (!mounted || !_scrollController.hasClients) return;
+      final position = _scrollController.position;
+      if ((position.maxScrollExtent - position.pixels).abs() > 0.5) {
+        _scrollController.jumpTo(position.maxScrollExtent);
+      }
+      if (frames > 0) {
+        _scrollToBottom(frames: frames - 1, recheck: false);
       }
     });
+    if (recheck) {
+      Future<void>.delayed(const Duration(milliseconds: 450), () {
+        if (mounted) _scrollToBottom(frames: 4, recheck: false);
+      });
+    }
   }
 
   Future<void> _sendPrompt() async {

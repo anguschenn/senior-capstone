@@ -67,11 +67,9 @@ class CashFlowRangeSelector extends StatelessWidget {
         ),
         label: monthOptionLabel(monthSelectionValue),
         onTap: () async {
-          final picked = await showOptionSheet<DateTime>(
+          final picked = await showMonthGridPicker(
             context: context,
-            title: 'Month',
-            values: monthOptions.map(normalizedMonthOption).toList(),
-            labelOf: monthOptionLabel,
+            options: monthOptions.map(normalizedMonthOption).toList(),
             selected: monthSelectionValue,
           );
           if (picked != null) onMonthChanged(picked);
@@ -80,11 +78,9 @@ class CashFlowRangeSelector extends StatelessWidget {
       FlowViewMode.year => ScopeLine(
         label: '${focusMonth.year}',
         onTap: () async {
-          final picked = await showOptionSheet<int>(
+          final picked = await showYearGridPicker(
             context: context,
-            title: 'Year',
-            values: yearOptions,
-            labelOf: (y) => '$y',
+            years: yearOptions,
             selected: focusMonth.year,
           );
           if (picked != null) onYearChanged(picked);

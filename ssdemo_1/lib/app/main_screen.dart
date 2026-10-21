@@ -420,7 +420,10 @@ class _TabBar extends StatelessWidget {
                       children: [
                         AnimatedPositioned(
                           duration: const Duration(milliseconds: 360),
-                          curve: Curves.easeOutBack,
+                          // Springy between tabs, no overshoot at the ends.
+                          curve: index == 0 || index == _items.length - 1
+                              ? Curves.easeOutCubic
+                              : Curves.easeOutBack,
                           left: slot * _slotOf(index),
                           top: 0,
                           bottom: 0,
