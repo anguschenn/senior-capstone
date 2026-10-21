@@ -404,92 +404,99 @@ class SegmentedTabs<T> extends StatelessWidget {
         color: c.raised,
         shape: const StadiumBorder(),
       ),
-      child: LayoutBuilder(
-        builder: (context, box) {
-          final width = box.maxWidth / keys.length;
-          return Stack(
-            children: [
-              if (selected >= 0)
-                AnimatedPositioned(
-                  duration: const Duration(milliseconds: 320),
-                  curve: Curves.easeOutBack,
-                  left: width * selected,
-                  top: 0,
-                  bottom: 0,
-                  width: width,
-                  child: DecoratedBox(
-                    decoration: ShapeDecoration(
-                      color: dark ? c.line : c.card,
-                      shape: const StadiumBorder(),
-                      shadows: dark
-                          ? null
-                          : const [
-                              BoxShadow(
-                                color: Color(0x1F000000),
-                                blurRadius: 8,
-                                offset: Offset(0, 3),
-                              ),
-                            ],
+      // Clipped to the track, so the thumb's springy overshoot at either end
+      // stays inside the capsule.
+      child: ClipPath(
+        clipper: const ShapeBorderClipper(shape: StadiumBorder()),
+        child: LayoutBuilder(
+          builder: (context, box) {
+            final width = box.maxWidth / keys.length;
+            return Stack(
+              children: [
+                if (selected >= 0)
+                  AnimatedPositioned(
+                    duration: const Duration(milliseconds: 320),
+                    curve: Curves.easeOutBack,
+                    left: width * selected,
+                    top: 0,
+                    bottom: 0,
+                    width: width,
+                    child: DecoratedBox(
+                      decoration: ShapeDecoration(
+                        color: dark ? c.line : c.card,
+                        shape: const StadiumBorder(),
+                        shadows: dark
+                            ? null
+                            : const [
+                                BoxShadow(
+                                  color: Color(0x1F000000),
+                                  blurRadius: 8,
+                                  offset: Offset(0, 3),
+                                ),
+                              ],
+                      ),
                     ),
                   ),
-                ),
-              Row(
-                children: [
-                  for (final entry in segments.entries)
-                    Expanded(
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () => onChanged(entry.key),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: Row(
-                            children: [
-                              if (steps[entry.key] case final step?)
-                                _StepArrow(
-                                  key: ValueKey('step-previous-${entry.key}'),
-                                  icon: Icons.chevron_left_rounded,
-                                  tooltip: 'Previous',
-                                  onTap: entry.key == value
-                                      ? step.previous
-                                      : null,
-                                )
-                              else
-                                const SizedBox(width: 30),
-                              Expanded(
-                                child: AnimatedDefaultTextStyle(
-                                  duration: const Duration(milliseconds: 200),
-                                  style: DefaultTextStyle.of(context).style
-                                      .copyWith(
-                                        fontSize: 13,
-                                        fontWeight: entry.key == value
-                                            ? FontWeight.w600
-                                            : FontWeight.w500,
-                                      ),
-                                  child: Text(
-                                    entry.value,
-                                    textAlign: TextAlign.center,
+                Row(
+                  children: [
+                    for (final entry in segments.entries)
+                      Expanded(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => onChanged(entry.key),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Row(
+                              children: [
+                                if (steps[entry.key] case final step?)
+                                  _StepArrow(
+                                    key: ValueKey('step-previous-${entry.key}'),
+                                    icon: Icons.chevron_left_rounded,
+                                    tooltip: 'Previous',
+                                    onTap: entry.key == value
+                                        ? step.previous
+                                        : null,
+                                  )
+                                else
+                                  const SizedBox(width: 30),
+                                Expanded(
+                                  child: AnimatedDefaultTextStyle(
+                                    duration: const Duration(milliseconds: 200),
+                                    style: DefaultTextStyle.of(context).style
+                                        .copyWith(
+                                          fontSize: 13,
+                                          fontWeight: entry.key == value
+                                              ? FontWeight.w600
+                                              : FontWeight.w500,
+                                        ),
+                                    child: Text(
+                                      entry.value,
+                                      textAlign: TextAlign.center,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              if (steps[entry.key] case final step?)
-                                _StepArrow(
-                                  key: ValueKey('step-next-${entry.key}'),
-                                  icon: Icons.chevron_right_rounded,
-                                  tooltip: 'Next',
-                                  onTap: entry.key == value ? step.next : null,
-                                )
-                              else
-                                const SizedBox(width: 30),
-                            ],
+                                if (steps[entry.key] case final step?)
+                                  _StepArrow(
+                                    key: ValueKey('step-next-${entry.key}'),
+                                    icon: Icons.chevron_right_rounded,
+                                    tooltip: 'Next',
+                                    onTap: entry.key == value
+                                        ? step.next
+                                        : null,
+                                  )
+                                else
+                                  const SizedBox(width: 30),
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                ],
-              ),
-            ],
-          );
-        },
+                  ],
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
