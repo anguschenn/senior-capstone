@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_theme.dart';
 import '../../utils/app_helpers.dart';
+import '../common/ui.dart';
 
 class CashFlowTotalsCard extends StatelessWidget {
   const CashFlowTotalsCard({
@@ -47,10 +48,7 @@ class CashFlowTotalsCard extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        color: c.card,
-        borderRadius: BorderRadius.circular(14),
-      ),
+      decoration: cardDecoration(context),
       child: Column(
         children: [
           line('Income', formatMoney(income, signed: false)),

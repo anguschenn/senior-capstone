@@ -7,6 +7,7 @@ import '../../services/budget_alert_service.dart';
 import '../../services/budget_service.dart';
 import '../../utils/app_helpers.dart' show colorForDetailedCategory;
 import '../../utils/formatters.dart';
+import '../common/ui.dart';
 
 /// The last six finished months' budget overruns, newest first, so a pattern
 /// ("Food over in 4 of 6 months") is visible next to this month's budgets.
@@ -92,10 +93,7 @@ class _BudgetAlertHistoryCardState extends State<BudgetAlertHistoryCard> {
     return Container(
       margin: const EdgeInsets.only(top: 10),
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: c.card,
-        borderRadius: BorderRadius.circular(14),
-      ),
+      decoration: cardDecoration(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

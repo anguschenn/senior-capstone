@@ -282,10 +282,7 @@ class _CashFlowPageState extends State<CashFlowPage> {
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: c.card,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
+                    decoration: cardDecoration(context),
                     child: Text(
                       'Switch to month view to see budget pace',
                       style: TextStyle(color: c.muted),

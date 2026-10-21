@@ -53,10 +53,7 @@ class BudgetPaceChartCard extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-      decoration: BoxDecoration(
-        color: c.card,
-        borderRadius: BorderRadius.circular(14),
-      ),
+      decoration: cardDecoration(context),
       child: !snapshot.hasBudget
           ? Padding(
               padding: const EdgeInsets.symmetric(vertical: 20),

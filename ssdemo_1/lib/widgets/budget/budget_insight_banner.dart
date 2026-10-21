@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/app_theme.dart';
 import '../../models/app_models.dart';
 import 'budget_alert_toasts.dart';
+import '../common/ui.dart';
 
 /// Summary strip above the budget cards. Light red when any category is already
 /// over budget, orange when categories are only on pace to overspend. Category
@@ -55,10 +56,7 @@ class _BudgetInsightBannerState extends State<BudgetInsightBanner> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: c.card,
-        borderRadius: BorderRadius.circular(14),
-      ),
+      decoration: cardDecoration(context),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

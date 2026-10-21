@@ -130,6 +130,32 @@ class BackLink extends StatelessWidget {
   }
 }
 
+/// Card corner radius: large, on a continuous iOS-style curve.
+const double cardRadius = 22;
+
+/// Card outline: continuous corners plus a hairline edge that catches the
+/// light, so cards read as raised panels like iOS ones.
+ShapeBorder cardShape(BuildContext context, {double radius = cardRadius}) {
+  final dark = Theme.of(context).brightness == Brightness.dark;
+  return RoundedSuperellipseBorder(
+    borderRadius: BorderRadius.circular(radius),
+    side: BorderSide(
+      color: dark ? const Color(0x17FFFFFF) : const Color(0x12000000),
+      width: 0.8,
+    ),
+  );
+}
+
+/// [cardShape] filled with the card colour, for a Container.
+ShapeDecoration cardDecoration(
+  BuildContext context, {
+  Color? color,
+  double radius = cardRadius,
+}) => ShapeDecoration(
+  color: color ?? context.colors.card,
+  shape: cardShape(context, radius: radius),
+);
+
 /// Rounded card on the page background.
 class Section extends StatelessWidget {
   const Section({
@@ -154,7 +180,7 @@ class Section extends StatelessWidget {
       padding: margin,
       child: Material(
         color: color ?? c.card,
-        borderRadius: BorderRadius.circular(14),
+        shape: cardShape(context),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
@@ -306,77 +332,103 @@ class SegmentedTabs<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final dark = Theme.of(context).brightness == Brightness.dark;
+    final keys = segments.keys.toList();
+    final selected = keys.indexOf(value);
+    // A capsule track with one capsule thumb that slides to the chosen
+    // segment, like iOS segmented controls.
     return Container(
       margin: margin,
-      padding: const EdgeInsets.all(2),
-      decoration: BoxDecoration(
+      padding: const EdgeInsets.all(3),
+      decoration: ShapeDecoration(
         color: c.raised,
-        borderRadius: BorderRadius.circular(9),
+        shape: const StadiumBorder(),
       ),
-      child: Row(
-        children: [
-          for (final entry in segments.entries)
-            Expanded(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => onChanged(entry.key),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  decoration: BoxDecoration(
-                    color: entry.key == value
-                        ? (dark ? c.line : c.card)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(7),
-                    boxShadow: entry.key == value && !dark
-                        ? const [
-                            BoxShadow(
-                              color: Color(0x1F000000),
-                              blurRadius: 8,
-                              offset: Offset(0, 3),
-                            ),
-                          ]
-                        : null,
+      child: LayoutBuilder(
+        builder: (context, box) {
+          final width = box.maxWidth / keys.length;
+          return Stack(
+            children: [
+              if (selected >= 0)
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 320),
+                  curve: Curves.easeOutBack,
+                  left: width * selected,
+                  top: 0,
+                  bottom: 0,
+                  width: width,
+                  child: DecoratedBox(
+                    decoration: ShapeDecoration(
+                      color: dark ? c.line : c.card,
+                      shape: const StadiumBorder(),
+                      shadows: dark
+                          ? null
+                          : const [
+                              BoxShadow(
+                                color: Color(0x1F000000),
+                                blurRadius: 8,
+                                offset: Offset(0, 3),
+                              ),
+                            ],
+                    ),
                   ),
-                  alignment: Alignment.center,
-                  child: Row(
-                    children: [
-                      if (steps[entry.key] case final step?)
-                        _StepArrow(
-                          key: ValueKey('step-previous-${entry.key}'),
-                          icon: Icons.chevron_left_rounded,
-                          tooltip: 'Previous',
-                          onTap: entry.key == value ? step.previous : null,
-                        )
-                      else
-                        const SizedBox(width: 30),
-                      Expanded(
-                        child: Text(
-                          entry.value,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: entry.key == value
-                                ? FontWeight.w600
-                                : FontWeight.w500,
+                ),
+              Row(
+                children: [
+                  for (final entry in segments.entries)
+                    Expanded(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => onChanged(entry.key),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Row(
+                            children: [
+                              if (steps[entry.key] case final step?)
+                                _StepArrow(
+                                  key: ValueKey('step-previous-${entry.key}'),
+                                  icon: Icons.chevron_left_rounded,
+                                  tooltip: 'Previous',
+                                  onTap: entry.key == value
+                                      ? step.previous
+                                      : null,
+                                )
+                              else
+                                const SizedBox(width: 30),
+                              Expanded(
+                                child: AnimatedDefaultTextStyle(
+                                  duration: const Duration(milliseconds: 200),
+                                  style: DefaultTextStyle.of(context).style
+                                      .copyWith(
+                                        fontSize: 13,
+                                        fontWeight: entry.key == value
+                                            ? FontWeight.w600
+                                            : FontWeight.w500,
+                                      ),
+                                  child: Text(
+                                    entry.value,
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ),
+                              if (steps[entry.key] case final step?)
+                                _StepArrow(
+                                  key: ValueKey('step-next-${entry.key}'),
+                                  icon: Icons.chevron_right_rounded,
+                                  tooltip: 'Next',
+                                  onTap: entry.key == value ? step.next : null,
+                                )
+                              else
+                                const SizedBox(width: 30),
+                            ],
                           ),
                         ),
                       ),
-                      if (steps[entry.key] case final step?)
-                        _StepArrow(
-                          key: ValueKey('step-next-${entry.key}'),
-                          icon: Icons.chevron_right_rounded,
-                          tooltip: 'Next',
-                          onTap: entry.key == value ? step.next : null,
-                        )
-                      else
-                        const SizedBox(width: 30),
-                    ],
-                  ),
-                ),
+                    ),
+                ],
               ),
-            ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }
@@ -731,56 +783,89 @@ Future<T?> showOptionSheet<T>({
   final left = anchor.left.clamp(8.0, size.width - width - 8);
   // Directly under the control, so it reads as the box opening downward.
   final top = anchor.bottom + 2;
-  return showMenu<T>(
+  final room = size.height - top - 16;
+  // Opens upward instead when there's little room below.
+  final up = room < 220;
+  final maxHeight = up ? anchor.top - 2 - 16 : room;
+  // Grows out of the tapped control: the scale starts where it was tapped.
+  final originX = ((anchor.left - left) / width).clamp(0.0, 1.0);
+  final origin = Alignment(originX * 2 - 1, up ? 1 : -1);
+  return showGeneralDialog<T>(
     context: context,
-    position: RelativeRect.fromLTRB(
-      left,
-      top,
-      size.width - left - width,
-      size.height - top,
-    ),
-    color: c.card,
-    surfaceTintColor: Colors.transparent,
-    elevation: 10,
-    shadowColor: c.cardShadow,
-    constraints: BoxConstraints(
-      // One width for every menu so they all look alike.
-      minWidth: width,
-      maxWidth: width,
-      maxHeight: size.height * 0.6,
-    ),
-    // A hairline edge keeps the menu visible over the dark page.
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(menuRadius),
-      side: BorderSide(color: c.line, width: 0.8),
-    ),
-    menuPadding: const EdgeInsets.symmetric(vertical: 4),
-    semanticLabel: title,
-    items: [
-      for (final v in values)
-        PopupMenuItem<T>(
-          value: v,
-          height: 44,
-          padding: const EdgeInsets.symmetric(horizontal: itemInset),
-          child: Row(
+    barrierDismissible: true,
+    barrierLabel: title,
+    barrierColor: Colors.black.withValues(alpha: 0.16),
+    transitionDuration: const Duration(milliseconds: 280),
+    pageBuilder: (context, animation, _) {
+      final grow = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutBack,
+        reverseCurve: Curves.easeInCubic,
+      );
+      final menu = ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxHeight.clamp(120.0, 520.0)),
+        child: Material(
+          color: c.card,
+          shape: cardShape(context, radius: 20),
+          clipBehavior: Clip.antiAlias,
+          elevation: 12,
+          shadowColor: c.cardShadow,
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.symmetric(vertical: 6),
             children: [
-              Expanded(
-                child: Text(
-                  labelOf(v),
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: c.text,
-                    fontWeight: v == selected
-                        ? FontWeight.w600
-                        : FontWeight.w400,
+              for (final v in values)
+                InkWell(
+                  onTap: () => Navigator.of(context).pop(v),
+                  child: Container(
+                    height: 44,
+                    padding: const EdgeInsets.symmetric(horizontal: itemInset),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            labelOf(v),
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: c.text,
+                              fontWeight: v == selected
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
+                            ),
+                          ),
+                        ),
+                        if (v == selected)
+                          Icon(Icons.check_rounded, size: 18, color: c.text),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              if (v == selected)
-                Icon(Icons.check_rounded, size: 18, color: c.text),
             ],
           ),
         ),
-    ],
+      );
+      return Stack(
+        children: [
+          Positioned(
+            left: left,
+            width: width,
+            top: up ? null : top,
+            bottom: up ? size.height - anchor.top + 2 : null,
+            child: FadeTransition(
+              opacity: CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOut,
+              ),
+              child: ScaleTransition(
+                scale: Tween(begin: 0.4, end: 1.0).animate(grow),
+                alignment: origin,
+                child: menu,
+              ),
+            ),
+          ),
+        ],
+      );
+    },
   );
 }

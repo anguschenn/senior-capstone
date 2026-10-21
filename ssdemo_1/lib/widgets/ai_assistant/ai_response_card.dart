@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../app/app_theme.dart';
 import '../../models/ai/ai_models.dart';
+import '../common/ui.dart';
 
 class AiResponseCard extends StatelessWidget {
   const AiResponseCard({super.key, required this.response});
@@ -18,10 +19,7 @@ class AiResponseCard extends StatelessWidget {
     final c = context.colors;
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: c.card,
-        borderRadius: BorderRadius.circular(14),
-      ),
+      decoration: cardDecoration(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

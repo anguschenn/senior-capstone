@@ -219,10 +219,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
       rows.add(
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(
-            color: c.card,
-            borderRadius: BorderRadius.circular(14),
-          ),
+          decoration: cardDecoration(context),
           child: Column(
             children: [
               for (final (i, tx) in txs.indexed) ...[

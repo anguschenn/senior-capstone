@@ -1046,10 +1046,7 @@ class _ReviewTransactionsSheetState extends State<ReviewTransactionsSheet> {
             Container(
               margin: const EdgeInsets.only(bottom: 10),
               padding: const EdgeInsets.fromLTRB(14, 4, 10, 8),
-              decoration: BoxDecoration(
-                color: c.card,
-                borderRadius: BorderRadius.circular(14),
-              ),
+              decoration: cardDecoration(context),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [

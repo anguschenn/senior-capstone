@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/app_theme.dart';
 import '../../models/ai/ai_models.dart';
 import '../../utils/app_helpers.dart';
+import '../common/ui.dart';
 
 class BudgetAiAnalysisCard extends StatelessWidget {
   const BudgetAiAnalysisCard({
@@ -68,10 +69,7 @@ class BudgetAiAnalysisCard extends StatelessWidget {
     }
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: c.card,
-        borderRadius: BorderRadius.circular(14),
-      ),
+      decoration: cardDecoration(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
