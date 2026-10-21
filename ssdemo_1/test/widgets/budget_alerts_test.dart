@@ -25,45 +25,46 @@ void main() {
     expect(_budget('Health', 6.63, 30).isOverBudget, isFalse);
   });
 
-  testWidgets('one alert per category, with used %, amounts and pace', (
+  testWidgets('pill counts the alerts and lists them when tapped', (
     tester,
   ) async {
     final tapped = <String>[];
-    final dismissed = <String>[];
     await tester.pumpWidget(
       _host(
-        BudgetAlertToasts(
+        BudgetAlertPill(
           items: [
             _budget('Food', 1113.69, 810),
             _budget('Transport', 147.5, 275),
           ],
           onTap: (c) => tapped.add(c.title),
-          onDismiss: (c) => dismissed.add(c.title),
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    expect(find.text('2 budget alerts'), findsOneWidget);
 
-    // One banner at a time; the others wait behind it.
+    await tester.tap(find.byKey(const ValueKey('budget-alert-pill')));
+    await tester.pumpAndSettle();
     expect(find.text('Food is over budget'), findsOneWidget);
     expect(find.text('137% used · \$1,113.69 of \$810.00'), findsOneWidget);
-    expect(find.textContaining('Pace: ~\$'), findsOneWidget);
-    expect(find.text('+1 more'), findsOneWidget);
-    expect(find.text('Transport on track to overspend'), findsNothing);
+    expect(find.text('Transport is over budget'), findsNothing);
 
     await tester.tap(find.text('Food is over budget'));
-    await tester.tap(find.byTooltip('Dismiss'));
+    await tester.pumpAndSettle();
     expect(tapped, ['Food']);
-    expect(dismissed, ['Food']);
   });
 
-  testWidgets('no alerts renders nothing', (tester) async {
+  testWidgets('pill wording follows over versus heading over', (tester) async {
     await tester.pumpWidget(
-      _host(
-        BudgetAlertToasts(items: const [], onTap: (_) {}, onDismiss: (_) {}),
-      ),
+      _host(BudgetAlertPill(items: [_budget('Food', 900, 810)], onTap: (_) {})),
     );
-    expect(find.byType(InkWell), findsNothing);
+    expect(find.text('1 over budget'), findsOneWidget);
+  });
+
+  testWidgets('no alerts renders no pill', (tester) async {
+    await tester.pumpWidget(
+      _host(BudgetAlertPill(items: const [], onTap: (_) {})),
+    );
+    expect(find.byKey(const ValueKey('budget-alert-pill')), findsNothing);
   });
 
   testWidgets('banner separates over-budget from on-track categories', (
@@ -125,13 +126,13 @@ void main() {
   ) async {
     await tester.pumpWidget(
       _host(
-        BudgetAlertToasts(
+        BudgetAlertPill(
           items: [_budget('Food', 1349.02, 100).withoutPace()],
           onTap: (_) {},
-          onDismiss: (_) {},
         ),
       ),
     );
+    await tester.tap(find.byKey(const ValueKey('budget-alert-pill')));
     await tester.pumpAndSettle();
     expect(find.text('Food is over budget'), findsOneWidget);
     expect(find.textContaining('Pace:'), findsNothing);

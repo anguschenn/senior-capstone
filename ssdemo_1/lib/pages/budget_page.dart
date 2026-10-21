@@ -79,36 +79,6 @@ class _BudgetPageState extends State<BudgetPage> {
 
   /// Edit mode: cards in a flat list with drag handles to reorder.
   bool _editing = false;
-  // Alert popups the user closed, keyed by month + budget so a new month
-  // shows them again.
-  final Set<String> _dismissedAlertKeys = <String>{};
-
-  /// Hides the popups a few seconds after they first show on screen, so they
-  /// don't sit over the category amounts. The insight box keeps the details.
-  Timer? _toastTimer;
-  static const _toastLifetime = Duration(seconds: 12);
-
-  /// The popups showed once and folded away; switching months doesn't bring
-  /// them back until the app is opened again.
-  bool _toastsDone = false;
-
-  @override
-  void dispose() {
-    _toastTimer?.cancel();
-    super.dispose();
-  }
-
-  void _startToastTimer(List<BudgetCategoryProgress> shown) {
-    _toastTimer = Timer(_toastLifetime, () {
-      if (!mounted) return;
-      setState(() {
-        _dismissedAlertKeys.addAll(shown.map(_alertKey));
-        _toastsDone = true;
-      });
-      _toastTimer = null;
-    });
-  }
-
   bool _loadingAi = false;
   String _aiError = '';
   AiBudgetSuggestionResponse? _aiSuggestion;
@@ -320,42 +290,8 @@ class _BudgetPageState extends State<BudgetPage> {
   @override
   Widget build(BuildContext context) {
     // Budget page combines editable category limits with lightweight insight text.
-    final alerts = _toastsDone
-        ? const <BudgetCategoryProgress>[]
-        : _overspendCategories()
-              .where((c) => !_dismissedAlertKeys.contains(_alertKey(c)))
-              .take(4)
-              .toList();
-    // Tabs stay alive in the background: only count time while visible.
-    if (alerts.isNotEmpty && _toastTimer == null && widget.isVisible) {
-      _startToastTimer(alerts);
-    }
-    return SafeArea(
-      bottom: false,
-      child: Stack(
-        children: [
-          _budgetListView(context),
-          // One floating alert per category on pace to overspend. Like an
-          // iPhone notification they drop in at the top, over the title, and
-          // fold away after a few seconds.
-          Positioned(
-            top: 8,
-            left: 16,
-            right: 16,
-            child: BudgetAlertToasts(
-              items: alerts,
-              onTap: (c) => _scrollToBudgetCategory(c.budgetId),
-              onDismiss: (c) =>
-                  setState(() => _dismissedAlertKeys.add(_alertKey(c))),
-            ),
-          ),
-        ],
-      ),
-    );
+    return SafeArea(bottom: false, child: _budgetListView(context));
   }
-
-  String _alertKey(BudgetCategoryProgress item) =>
-      '${widget.selectedMonth.year}-${widget.selectedMonth.month}|${item.budgetId}';
 
   String get _insightPeriod => switch (viewMode) {
     BudgetViewMode.month => periodLabelForSelection(widget.selectedMonth),
@@ -415,6 +351,12 @@ class _BudgetPageState extends State<BudgetPage> {
           monthOptions: _monthOnlyOptions,
           yearOptions: _yearOptions,
           onMonthChanged: widget.onMonthChanged,
+          // Overspend alerts sit in a pill beside the month instead of
+          // popping up over the page.
+          alert: BudgetAlertPill(
+            items: _overspendCategories(),
+            onTap: (c) => _scrollToBudgetCategory(c.budgetId),
+          ),
         ),
         _budgetHeader(context),
         // Lists overspending categories; tap a name to jump to its card.

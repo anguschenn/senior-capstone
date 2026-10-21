@@ -13,6 +13,7 @@ class BudgetScopeSelector extends StatelessWidget {
     required this.monthOptions,
     required this.yearOptions,
     required this.onMonthChanged,
+    this.alert,
   });
 
   final BudgetViewMode viewMode;
@@ -21,6 +22,9 @@ class BudgetScopeSelector extends StatelessWidget {
   final List<DateTime> monthOptions;
   final List<int> yearOptions;
   final ValueChanged<DateTime> onMonthChanged;
+
+  /// Shown at the right of the month line, e.g. the overspend alert pill.
+  final Widget? alert;
 
   @override
   Widget build(BuildContext context) {
@@ -59,6 +63,7 @@ class BudgetScopeSelector extends StatelessWidget {
           'budget-month-${selectedMonth.year}-${selectedMonth.month}-${selectedMonth.day}',
         ),
         label: monthOptionLabel(monthSelectionValue),
+        actions: [?alert],
         onTap: () async {
           final picked = await showOptionSheet<DateTime>(
             context: context,
