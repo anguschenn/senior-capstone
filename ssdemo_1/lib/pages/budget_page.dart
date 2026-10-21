@@ -698,14 +698,16 @@ class _BudgetPageState extends State<BudgetPage> {
   /// What the dots on the category cards mean.
   Widget _statusLegend(BuildContext context) {
     final c = context.colors;
-    Widget entry(Color color, String label) => Row(
+    final style = TextStyle(fontSize: 13, color: c.muted);
+    Widget entry(Widget swatch, String label) => Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        BudgetStatusDot(color: color, size: 10),
+        swatch,
         const SizedBox(width: 6),
-        Text(label, style: TextStyle(fontSize: 12.5, color: c.muted)),
+        Text(label, style: style),
       ],
     );
+    const dot = 10.0;
     return Padding(
       key: const ValueKey('budget-legend'),
       padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
@@ -713,12 +715,36 @@ class _BudgetPageState extends State<BudgetPage> {
         spacing: 16,
         runSpacing: 6,
         children: [
-          entry(BudgetStatusDot.over, 'Over budget or pace'),
-          entry(BudgetStatusDot.high, 'High usage'),
-          // Healthy cards carry no dot, so problems stand out.
-          Text(
-            'No dot: on track',
-            style: TextStyle(fontSize: 12.5, color: c.muted),
+          // Red: spent more than the limit, or (this month only) the pace
+          // ends over it.
+          entry(
+            const BudgetStatusDot(
+              color: BudgetStatusDot.over,
+              size: dot,
+              ring: false,
+            ),
+            _showsCurrentMonth ? 'Over or will go over' : 'Over budget',
+          ),
+          // Amber: 80% used, or this month's pace ends at 90% or more.
+          entry(
+            const BudgetStatusDot(
+              color: BudgetStatusDot.high,
+              size: dot,
+              ring: false,
+            ),
+            'Near limit (80%+)',
+          ),
+          // Healthy cards carry no dot: an empty ring stands for that.
+          entry(
+            Container(
+              width: dot,
+              height: dot,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: c.muted, width: 1.5),
+              ),
+            ),
+            'On track',
           ),
         ],
       ),

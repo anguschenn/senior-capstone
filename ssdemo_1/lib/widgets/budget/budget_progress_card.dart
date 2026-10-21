@@ -240,8 +240,8 @@ class BudgetProgressCard extends StatelessWidget {
   /// Fits beside the title on a closed card.
   String _shortStatus(BudgetCategoryProgress item) {
     if (item.isOverBudget) return 'Over';
-    if (item.isBurnRateHigh) return 'Over pace';
-    return 'High usage';
+    if (item.isBurnRateHigh) return 'Will go over';
+    return 'Near limit';
   }
 
   String _statusLabel(BudgetCategoryProgress item) {
@@ -249,8 +249,8 @@ class BudgetProgressCard extends StatelessWidget {
     if (!item.hasLimit) return 'No budget set';
     if (!item.paceApplies && item.isOverBudget) return 'Over budget';
     if (item.isBurnRateHigh) return 'On track to overspend';
-    if (item.isBurnRateApproaching) return 'Burn rate high';
-    if (item.isWarning) return 'High usage';
+    if (item.isBurnRateApproaching) return 'Near limit by month end';
+    if (item.isWarning) return 'Near limit';
     return 'Healthy';
   }
 
@@ -386,13 +386,22 @@ class _Badge extends StatelessWidget {
 /// Small status dot on a budget card: red = over budget or on pace to go
 /// over, amber = high usage. The legend above the cards explains them.
 class BudgetStatusDot extends StatelessWidget {
-  const BudgetStatusDot({super.key, required this.color, this.size = 12});
+  const BudgetStatusDot({
+    super.key,
+    required this.color,
+    this.size = 12,
+    this.ring = true,
+  });
 
   static const over = Color(0xFFB4382A);
   static const high = Color(0xFFE2B04E);
 
   final Color color;
   final double size;
+
+  /// A light ring keeps the dot visible on every category colour; on the
+  /// plain page (the legend) it only muddies the colour.
+  final bool ring;
 
   @override
   Widget build(BuildContext context) {
@@ -402,11 +411,9 @@ class BudgetStatusDot extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         shape: BoxShape.circle,
-        // A light ring keeps the dot visible on every category colour.
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.85),
-          width: 2,
-        ),
+        border: ring
+            ? Border.all(color: Colors.white.withValues(alpha: 0.85), width: 2)
+            : null,
       ),
     );
   }
