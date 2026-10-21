@@ -37,6 +37,7 @@ class BudgetPage extends StatefulWidget {
     this.transactions = const [],
     this.reviewedCategoryByTxId = const {},
     this.onAsk,
+    this.isVisible = true,
   });
 
   final DashboardStats stats;
@@ -58,6 +59,9 @@ class BudgetPage extends StatefulWidget {
 
   /// Opens the AI with a question filled in (the ✦ chips).
   final void Function({String? prompt, String? contextLabel})? onAsk;
+
+  /// Whether the Budget tab is on screen; the popups' timer only runs then.
+  final bool isVisible;
 
   @override
   State<BudgetPage> createState() => _BudgetPageState();
@@ -280,7 +284,7 @@ class _BudgetPageState extends State<BudgetPage> {
         .take(4)
         .toList();
     // Tabs stay alive in the background: only count time while visible.
-    if (alerts.isNotEmpty && _toastTimer == null && TickerMode.of(context)) {
+    if (alerts.isNotEmpty && _toastTimer == null && widget.isVisible) {
       _startToastTimer(alerts);
     }
     return SafeArea(

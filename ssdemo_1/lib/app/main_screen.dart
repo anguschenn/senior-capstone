@@ -239,6 +239,7 @@ class _MainScreenState extends State<MainScreen> {
         accessToken: AuthService.instance.currentAccessToken,
       ),
       BudgetPage(
+        isVisible: c.tabIndex == 2,
         stats: snapshot.stats,
         budgetProgress: snapshot.budgetProgress,
         budgetProgressYear: snapshot.budgetProgressYear,
