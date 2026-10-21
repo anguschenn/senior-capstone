@@ -19,7 +19,35 @@ class SmartSpendApp extends StatelessWidget {
         theme: AppTheme.light(),
         darkTheme: AppTheme.dark(),
         themeMode: mode,
+        builder: (context, child) => _PhoneWidth(child: child!),
         home: const _AuthGate(),
+      ),
+    );
+  }
+}
+
+/// The app is laid out for a phone. In a wide window (Chrome on a laptop)
+/// keep it phone-width and centred instead of stretching every card.
+class _PhoneWidth extends StatelessWidget {
+  const _PhoneWidth({required this.child});
+
+  final Widget child;
+  static const double _maxWidth = 500;
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    if (media.size.width <= _maxWidth) return child;
+    return ColoredBox(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: Center(
+        child: SizedBox(
+          width: _maxWidth,
+          child: MediaQuery(
+            data: media.copyWith(size: Size(_maxWidth, media.size.height)),
+            child: child,
+          ),
+        ),
       ),
     );
   }

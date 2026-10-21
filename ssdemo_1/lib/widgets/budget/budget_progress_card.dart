@@ -113,7 +113,11 @@ class BudgetProgressCard extends StatelessWidget {
                         ),
                       ),
                       if (!expanded && isWarning) ...[
-                        _Badge(label: _shortStatus(item), alarming: alarming),
+                        _Badge(
+                          label: _shortStatus(item),
+                          alarming: alarming,
+                          calm: !isWarning,
+                        ),
                         const SizedBox(width: 8),
                       ],
                       Text(
@@ -349,14 +353,19 @@ class _Badge extends StatelessWidget {
   final bool alarming;
   final bool calm;
 
+  static const _highUsage = Color(0xFFE2B04E);
+
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
+        // Red for over budget / over pace, ochre for high usage.
         color: alarming
             ? BudgetProgressCard._overInk
-            : Colors.white.withValues(alpha: calm ? 0.35 : 0.6),
+            : calm
+            ? Colors.white.withValues(alpha: 0.35)
+            : _highUsage,
         borderRadius: BorderRadius.circular(99),
       ),
       child: Text(
