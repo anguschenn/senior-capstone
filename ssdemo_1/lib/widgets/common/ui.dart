@@ -194,6 +194,11 @@ class _AskMarkPainter extends CustomPainter {
   bool shouldRepaint(_AskMarkPainter old) => old.color != color;
 }
 
+/// Space a tab page leaves at its scroll end so the last item clears the
+/// floating tab bar (62 tall, 8 above the bottom edge, plus a gap).
+double tabBarClearance(BuildContext context) =>
+    MediaQuery.paddingOf(context).bottom.clamp(86.0, double.infinity);
+
 /// Card corner radius: large, on a continuous iOS-style curve.
 const double cardRadius = 22;
 

@@ -29,9 +29,7 @@ class SubscriptionsPage extends StatelessWidget {
       bottom: false,
       child: ListView(
         // Clears the floating tab bar.
-        padding: EdgeInsets.only(
-          bottom: 24 + MediaQuery.paddingOf(context).bottom,
-        ),
+        padding: EdgeInsets.only(bottom: 24 + tabBarClearance(context)),
         children: [
           const LargeTitle('Subscriptions'),
           Container(

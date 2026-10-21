@@ -539,7 +539,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
                       16,
                       0,
                       16,
-                      24 + MediaQuery.paddingOf(context).bottom,
+                      24 + tabBarClearance(context),
                     ),
                     sliver: SliverList.list(children: rows),
                   ),
