@@ -556,6 +556,29 @@ def _months_before(month: str, count: int) -> str:
     return f"{index // 12}-{index % 12 + 1:02d}"
 
 
+def fetch_hidden_account_ids(user_id: str, db=None) -> set[str]:
+    """Accounts the user hid in the app (accounts.hidden): treated as never linked. Empty
+    when the column isn't there yet (db/migrations/016_accounts_hidden.sql not applied)."""
+    try:
+        rows = (
+            (db or supabase)
+            .table("accounts")
+            .select("plaid_account_id")
+            .eq("user_id", user_id)
+            .eq("hidden", True)
+            .execute()
+        ).data or []
+    except Exception:
+        return set()
+    return {str(r.get("plaid_account_id") or "").strip() for r in rows} - {""}
+
+
+def without_hidden_accounts(rows: list[dict], hidden: set[str]) -> list[dict]:
+    if not hidden:
+        return rows
+    return [r for r in rows if str(r.get("plaid_account_id") or "").strip() not in hidden]
+
+
 def _fetch_month_transactions(user_id: str, month: str) -> list[dict]:
     """The month's transactions plus the few months before, for refund matching, and the
     first days after, so a move between own accounts at month end still pairs."""
@@ -578,7 +601,7 @@ def _fetch_month_transactions(user_id: str, month: str) -> list[dict]:
         ).data or []
         rows.extend(page)
         if len(page) < _PAGE_SIZE:
-            return rows
+            return without_hidden_accounts(rows, fetch_hidden_account_ids(user_id))
         start += _PAGE_SIZE
 
 

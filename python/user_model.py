@@ -21,9 +21,11 @@ import math
 from budget_progress import (
     build_budget_progress,
     classify_rows,
+    fetch_hidden_account_ids,
     normalize_category_key,
     row_id,
     signed_spend,
+    without_hidden_accounts,
 )
 from supabase_repo import supabase
 
@@ -292,7 +294,8 @@ def fetch_all_transactions(user_id: str) -> list[dict]:
         ).data or []
         rows.extend(page)
         if len(page) < _PAGE_SIZE:
-            return rows
+            # A hidden account counts as never linked, everywhere the backend looks.
+            return without_hidden_accounts(rows, fetch_hidden_account_ids(user_id, supabase))
         start += _PAGE_SIZE
 
 

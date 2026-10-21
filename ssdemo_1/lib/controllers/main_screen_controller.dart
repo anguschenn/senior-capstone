@@ -529,9 +529,13 @@ class MainScreenController extends ChangeNotifier {
 
   // --- Hidden accounts ---
 
-  /// Accounts hidden in Settings: left out of every page and total until
-  /// shown again. Nothing is deleted.
+  /// Accounts hidden in Settings, by Plaid account id: left out of every
+  /// page and total until shown again. Nothing is deleted.
   Set<String> hiddenAccountIds = const {};
+
+  bool isAccountHidden(AccountOption a) =>
+      hiddenAccountIds.contains(a.accountId) ||
+      a.linkedAccountIds.any(hiddenAccountIds.contains);
 
   List<AppTransaction> _allTransactions = const [];
   List<AccountOption> _allAccountOptions = const [];
@@ -550,9 +554,12 @@ class MainScreenController extends ChangeNotifier {
   Future<void> _loadHiddenAccounts() async {
     final Set<String> ids;
     try {
-      ids = await HiddenAccountsStore.instance.load(
-        AuthService.instance.currentUserId,
-      );
+      final userId = AuthService.instance.currentUserId;
+      // The database is the record (the backend reads it too); this device's
+      // copy covers a failed read.
+      ids =
+          await HiddenAccountsStore.instance.loadFromServer(userId) ??
+          await HiddenAccountsStore.instance.load(userId);
     } catch (_) {
       return; // signed out or no session yet: nothing hidden
     }
@@ -565,31 +572,33 @@ class MainScreenController extends ChangeNotifier {
   }
 
   Future<void> setAccountHidden(String accountId, bool hidden) async {
+    final ids = {
+      accountId,
+      for (final a in _allAccountOptions)
+        if (a.accountId == accountId) ...a.linkedAccountIds,
+    };
     final next = Set<String>.from(hiddenAccountIds);
-    hidden ? next.add(accountId) : next.remove(accountId);
+    hidden ? next.addAll(ids) : next.removeAll(ids);
     hiddenAccountIds = next;
     _applyHiddenAccounts();
     _reclassify();
     _rebuildBudgetProgress();
     _notifyListenersSafe();
-    await HiddenAccountsStore.instance.save(
-      AuthService.instance.currentUserId,
-      next,
-    );
+    final userId = AuthService.instance.currentUserId;
+    await HiddenAccountsStore.instance.save(userId, next);
+    await HiddenAccountsStore.instance.saveToServer(userId, ids, hidden);
   }
 
   /// Every Plaid account id behind the hidden accounts.
   Set<String> get hiddenTransactionAccountIds => {
+    ...hiddenAccountIds,
     for (final a in _allAccountOptions)
-      if (hiddenAccountIds.contains(a.accountId)) ...{
-        a.accountId,
-        ...a.linkedAccountIds,
-      },
+      if (isAccountHidden(a)) ...{a.accountId, ...a.linkedAccountIds},
   };
 
   void _applyHiddenAccounts() {
     final hiddenIds = hiddenTransactionAccountIds;
-    if (hiddenIds.isEmpty) {
+    if (!_allAccountOptions.any(isAccountHidden)) {
       liveTransactions = _allTransactions;
       liveAccountOptions = _allAccountOptions;
       liveStats = _allStats;
@@ -599,7 +608,7 @@ class MainScreenController extends ChangeNotifier {
         .where((tx) => !hiddenIds.contains(tx.accountId))
         .toList();
     liveAccountOptions = _allAccountOptions
-        .where((a) => !hiddenAccountIds.contains(a.accountId))
+        .where((a) => !isAccountHidden(a))
         .toList();
     liveStats = DashboardStats(
       totalBalance: liveAccountOptions.fold(0.0, (sum, a) => sum + a.balance),
@@ -607,7 +616,7 @@ class MainScreenController extends ChangeNotifier {
       monthlyExpenses: _allStats.monthlyExpenses,
       netThisMonth: _allStats.netThisMonth,
     );
-    if (hiddenAccountIds.contains(selectedAccountId)) {
+    if (hiddenIds.contains(selectedAccountId)) {
       selectedAccountId = kAllAccountsId;
     }
   }

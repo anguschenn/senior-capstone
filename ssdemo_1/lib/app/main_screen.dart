@@ -155,7 +155,7 @@ class _MainScreenState extends State<MainScreen> {
         accountOptions: c.liveAccountOptions,
         hiddenAccounts: [
           for (final a in c.allAccountOptions)
-            if (c.hiddenAccountIds.contains(a.accountId)) a,
+            if (c.isAccountHidden(a)) a,
         ],
         onHideAccount: (a) => c.setAccountHidden(a.accountId, true),
         onShowAccount: (a) => c.setAccountHidden(a.accountId, false),

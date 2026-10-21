@@ -385,3 +385,25 @@ class WriteTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HiddenAccountTests(unittest.TestCase):
+    def test_transactions_of_a_hidden_account_are_left_out(self):
+        rows = [
+            {**food("2026-10-02", 10), "user_id": USER},
+            {**shop("2026-10-03", 20), "user_id": USER, "plaid_account_id": "acc-hidden"},
+        ]
+        accounts = [
+            {"user_id": USER, "plaid_account_id": "acc-1", "hidden": False},
+            {"user_id": USER, "plaid_account_id": "acc-hidden", "hidden": True},
+            {"user_id": "someone-else", "plaid_account_id": "acc-1", "hidden": True},
+        ]
+        db = FakeSupabase({"transactions": rows, "accounts": accounts})
+        with mock.patch.object(user_model, "supabase", db):
+            fetched = user_model.fetch_all_transactions(USER)
+        self.assertEqual([r["plaid_account_id"] for r in fetched], ["acc-1"])
+
+    def test_no_hidden_column_yet_keeps_everything(self):
+        db = FakeSupabase({"transactions": [{**food("2026-10-02", 10), "user_id": USER}]})
+        with mock.patch.object(user_model, "supabase", db):
+            self.assertEqual(len(user_model.fetch_all_transactions(USER)), 1)
