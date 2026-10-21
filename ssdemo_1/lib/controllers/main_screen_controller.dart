@@ -555,11 +555,16 @@ class MainScreenController extends ChangeNotifier {
     final Set<String> ids;
     try {
       final userId = AuthService.instance.currentUserId;
-      // The database is the record (the backend reads it too); this device's
-      // copy covers a failed read.
-      ids =
-          await HiddenAccountsStore.instance.loadFromServer(userId) ??
-          await HiddenAccountsStore.instance.load(userId);
+      // The database is what the backend reads. This device's copy covers a
+      // failed read, and anything hidden here before the column existed is
+      // written back so the backend skips it too.
+      final store = HiddenAccountsStore.instance;
+      final local = await store.load(userId);
+      final remote = await store.loadFromServer(userId);
+      if (remote != null && !remote.containsAll(local)) {
+        await store.saveToServer(userId, local.difference(remote), true);
+      }
+      ids = {...local, ...?remote};
     } catch (_) {
       return; // signed out or no session yet: nothing hidden
     }
