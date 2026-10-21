@@ -36,6 +36,14 @@ IconData iconForTransaction(String category, String merchant) {
   return Icons.shopping_cart;
 }
 
+/// Icon for a row whose category label is shown next to it: the category's
+/// own icon when it has one, so every row in a category looks the same.
+IconData iconForCategoryLabel(String category, String merchant) {
+  final icon = iconForBudgetCategory(category);
+  if (icon != Icons.category_outlined) return icon;
+  return iconForTransaction(category, merchant);
+}
+
 Color colorForDetailedCategory(String detailedCategory) {
   final key = detailedCategory.toLowerCase().trim();
   bool has(List<String> words) => words.any(key.contains);

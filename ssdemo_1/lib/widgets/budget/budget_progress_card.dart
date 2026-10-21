@@ -55,7 +55,9 @@ class BudgetProgressCard extends StatelessWidget {
     final spent = item.spent;
     final remaining = (limit - spent).clamp(-999999, 999999);
     final alarming = item.isBurnRateHigh || item.isOverBudget;
-    final muted = _ink.withValues(alpha: 0.62);
+    // Text on the coloured card stays dark ink (red-on-orange was hard to
+    // read); the red "Over" badge and bar carry the warning.
+    final muted = _ink.withValues(alpha: 0.75);
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
@@ -166,7 +168,7 @@ class BudgetProgressCard extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 12.5,
                               fontWeight: FontWeight.w600,
-                              color: item.isOverBudget ? _overInk : _ink,
+                              color: _ink,
                             ),
                           ),
                           const SizedBox(width: 10),
@@ -178,8 +180,10 @@ class BudgetProgressCard extends StatelessWidget {
                                 : '${dollars(remaining.toDouble())} over',
                             style: TextStyle(
                               fontSize: 12.5,
-                              color: remaining >= 0 ? muted : _overInk,
-                              fontWeight: FontWeight.w600,
+                              color: _ink,
+                              fontWeight: remaining >= 0
+                                  ? FontWeight.w500
+                                  : FontWeight.w700,
                             ),
                           ),
                         const SizedBox(width: 4),
@@ -193,7 +197,10 @@ class BudgetProgressCard extends StatelessWidget {
                         _burnRateLine(item),
                         style: TextStyle(
                           fontSize: 12,
-                          color: item.isBurnRateHigh ? _overInk : muted,
+                          color: _ink,
+                          fontWeight: item.isBurnRateHigh
+                              ? FontWeight.w600
+                              : FontWeight.w400,
                         ),
                       ),
                     ],

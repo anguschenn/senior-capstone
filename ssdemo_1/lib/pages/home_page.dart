@@ -753,7 +753,7 @@ class TransactionRow extends StatelessWidget {
         children: [
           CategoryDot(
             color: tone,
-            icon: iconForTransaction(tx.category, tx.name),
+            icon: iconForCategoryLabel(category, tx.name),
             size: 34,
           ),
           const SizedBox(width: 12),

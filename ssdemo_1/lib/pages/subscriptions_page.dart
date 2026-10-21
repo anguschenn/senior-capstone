@@ -106,7 +106,7 @@ class SubscriptionsPage extends StatelessWidget {
                       child: InfoRow(
                         leading: CategoryDot(
                           color: AppPalette.subscriptions,
-                          icon: iconForTransaction('', sub.merchant),
+                          icon: iconForBudgetCategory('Subscriptions'),
                         ),
                         title: sub.merchant,
                         subtitle:

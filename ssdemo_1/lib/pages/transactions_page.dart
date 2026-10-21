@@ -164,16 +164,29 @@ class _TransactionsPageState extends State<TransactionsPage> {
         '${filtered.length} transaction${filtered.length == 1 ? '' : 's'}';
 
     // Newest/oldest first with a header per day; by amount it's one list.
-    final rows = <Widget>[];
+    // Each group is one rounded card with dividers, like Wallet's list.
+    final groups = <(String?, List<AppTransaction>)>[];
     DateTime? lastDay;
     for (final tx in filtered) {
       final day = DateTime(tx.date.year, tx.date.month, tx.date.day);
-      if (sortKey == ActivitySortKey.date && day != lastDay) {
+      if (groups.isEmpty ||
+          (sortKey == ActivitySortKey.date && day != lastDay)) {
+        groups.add((
+          sortKey == ActivitySortKey.date ? _dayLabel(day) : null,
+          <AppTransaction>[],
+        ));
+        lastDay = day;
+      }
+      groups.last.$2.add(tx);
+    }
+    final rows = <Widget>[];
+    for (final (label, txs) in groups) {
+      if (label != null) {
         rows.add(
           Padding(
             padding: const EdgeInsets.fromLTRB(4, 14, 4, 4),
             child: Text(
-              _dayLabel(day),
+              label,
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
@@ -182,25 +195,33 @@ class _TransactionsPageState extends State<TransactionsPage> {
             ),
           ),
         );
-        lastDay = day;
+      } else {
+        rows.add(const SizedBox(height: 8));
       }
       rows.add(
         Container(
-          margin: const EdgeInsets.only(bottom: 1),
           padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
             color: c.card,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(14),
           ),
-          child: TransactionRow(
-            tx: tx,
-            accountOptions: widget.accountOptions,
-            reviewedCategoryByTxId: widget.reviewedCategoryByTxId,
-            onTransactionCategorySelected: widget.onTransactionCategorySelected,
-            aiCategorySuggestUri: widget.aiCategorySuggestUri,
-            apiKey: widget.apiKey,
-            accessToken: widget.accessToken,
-            showDate: sortKey != ActivitySortKey.date,
+          child: Column(
+            children: [
+              for (final (i, tx) in txs.indexed) ...[
+                if (i > 0) Divider(height: 0.5, thickness: 0.5, color: c.line),
+                TransactionRow(
+                  tx: tx,
+                  accountOptions: widget.accountOptions,
+                  reviewedCategoryByTxId: widget.reviewedCategoryByTxId,
+                  onTransactionCategorySelected:
+                      widget.onTransactionCategorySelected,
+                  aiCategorySuggestUri: widget.aiCategorySuggestUri,
+                  apiKey: widget.apiKey,
+                  accessToken: widget.accessToken,
+                  showDate: sortKey != ActivitySortKey.date,
+                ),
+              ],
+            ],
           ),
         ),
       );

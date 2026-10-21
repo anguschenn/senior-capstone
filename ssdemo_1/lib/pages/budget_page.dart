@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app/app_theme.dart';
 import '../models/ai/ai_models.dart';
 import '../models/app_models.dart';
+import '../models/budget_pace.dart';
 import '../models/budget/budget_view_mode.dart';
 import '../services/ai_api_client.dart';
 import '../services/budget_service.dart';
@@ -437,10 +438,22 @@ class _BudgetPageState extends State<BudgetPage> {
     final budgeted = activeBudgetProgress
         .where((b) => b.hasLimit)
         .fold<double>(0, (sum, b) => sum + b.limit);
-    final spent = activeBudgetProgress
-        .where((b) => b.hasLimit)
-        .fold<double>(0, (sum, b) => sum + b.spent);
-    final left = budgeted - spent;
+    final double left;
+    if (viewMode == BudgetViewMode.month &&
+        !isAllYearOption(widget.selectedMonth)) {
+      // Same number as "Budget left" on Wallet and Cash Flow: the month's
+      // budgets minus all of its spending, budgeted category or not.
+      left = BudgetPaceSnapshot.build(
+        focusMonth: normalizedMonthOption(widget.selectedMonth),
+        budgets: activeBudgetProgress,
+        transactions: widget.transactions,
+      ).remaining;
+    } else {
+      final spent = activeBudgetProgress
+          .where((b) => b.hasLimit)
+          .fold<double>(0, (sum, b) => sum + b.spent);
+      left = budgeted - spent;
+    }
 
     return Section(
       margin: const EdgeInsets.fromLTRB(16, 4, 16, 10),
@@ -501,7 +514,16 @@ class _BudgetPageState extends State<BudgetPage> {
 
   /// Wallet-style stack of category cards; tap one to open it up.
   Widget _budgetStack(BuildContext context) {
-    final items = orderedBudgetProgress;
+    // Categories with no budget and no spending fold into one row at the end
+    // so they don't take a full card each.
+    final items = [
+      for (final b in orderedBudgetProgress)
+        if (b.hasLimit || b.spent > 0) b,
+    ];
+    final unset = [
+      for (final b in orderedBudgetProgress)
+        if (!b.hasLimit && b.spent <= 0) b,
+    ];
     final txByCategory = _transactionsByCategory();
     return Column(
       children: [
@@ -553,7 +575,52 @@ class _BudgetPageState extends State<BudgetPage> {
               );
             },
           ),
+        if (unset.isNotEmpty) _unsetBudgetsRow(context, unset),
       ],
+    );
+  }
+
+  /// "No budget set: Bills, Housing… · Set ›" — tap to pick one and set it.
+  Widget _unsetBudgetsRow(
+    BuildContext context,
+    List<BudgetCategoryProgress> unset,
+  ) {
+    final c = context.colors;
+    return Section(
+      key: const ValueKey('budget-unset'),
+      margin: const EdgeInsets.only(top: 10),
+      onTap: () async {
+        final picked = await showOptionSheet<BudgetCategoryProgress>(
+          context: context,
+          title: 'Set a budget',
+          values: unset,
+          labelOf: (b) => b.title,
+          selected: null,
+        );
+        if (picked != null && context.mounted) {
+          _showEditBudgetDialog(context, picked);
+        }
+      },
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'No budget set: ${unset.map((b) => b.title).join(', ')}',
+              style: TextStyle(fontSize: 13.5, color: c.muted),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'Set',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: c.text,
+            ),
+          ),
+          Icon(Icons.chevron_right_rounded, size: 20, color: c.muted),
+        ],
+      ),
     );
   }
 
