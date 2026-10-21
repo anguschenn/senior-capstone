@@ -86,7 +86,7 @@ class _BudgetPageState extends State<BudgetPage> {
   /// Hides the popups a few seconds after they first show on screen, so they
   /// don't sit over the category amounts. The insight box keeps the details.
   Timer? _toastTimer;
-  static const _toastLifetime = Duration(seconds: 6);
+  static const _toastLifetime = Duration(seconds: 12);
 
   @override
   void dispose() {
