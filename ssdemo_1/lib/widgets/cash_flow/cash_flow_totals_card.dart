@@ -58,7 +58,7 @@ class CashFlowTotalsCard extends StatelessWidget {
           Divider(height: 10, thickness: 0.5, color: c.line),
           line(
             'Net',
-            '${net >= 0 ? '+' : '-'} \$${net.abs().toStringAsFixed(2)}',
+            dollars(net, sign: true),
             color: net >= 0 ? c.good : c.bad,
             bold: true,
           ),

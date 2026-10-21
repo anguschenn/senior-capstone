@@ -262,9 +262,11 @@ class _BudgetPageState extends State<BudgetPage> {
       child: Stack(
         children: [
           _budgetListView(context),
-          // One floating alert per category on pace to overspend.
+          // One floating alert per category on pace to overspend. They sit at
+          // the bottom, above the tab bar, so the title, the Month/Year
+          // controls and the "Left to spend" total stay readable.
           Positioned(
-            top: 12,
+            bottom: 12,
             right: 12,
             child: BudgetAlertToasts(
               items: alerts,
@@ -456,7 +458,7 @@ class _BudgetPageState extends State<BudgetPage> {
             textBaseline: TextBaseline.alphabetic,
             children: [
               Text(
-                '\$${left.abs().toStringAsFixed(0)}',
+                dollars(left, decimals: 0),
                 style: TextStyle(
                   fontSize: 34,
                   fontWeight: FontWeight.w700,
@@ -466,7 +468,7 @@ class _BudgetPageState extends State<BudgetPage> {
               ),
               const SizedBox(width: 6),
               Text(
-                'of \$${budgeted.toStringAsFixed(0)} budgeted',
+                'of ${dollars(budgeted, decimals: 0)} budgeted',
                 style: TextStyle(fontSize: 14, color: c.muted),
               ),
             ],
@@ -483,7 +485,7 @@ class _BudgetPageState extends State<BudgetPage> {
                 ),
               ),
               Text(
-                '${positive ? '+' : '-'}\$${net.abs().toStringAsFixed(2)}',
+                dollars(net, sign: true),
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
@@ -702,23 +704,23 @@ class _BudgetPageState extends State<BudgetPage> {
     if (viewMode == BudgetViewMode.month) {
       if (lead.isBurnRateHigh) {
         return 'Burn rate alert: ${lead.title} projects '
-            '\$${lead.projectedMonthEnd.toStringAsFixed(0)} by month end '
-            '(\$${lead.projectedOverrun.toStringAsFixed(0)} over budget).';
+            '${dollars(lead.projectedMonthEnd, decimals: 0)} by month end '
+            '(${dollars(lead.projectedOverrun, decimals: 0)} over budget).';
       }
       if (lead.isBurnRateApproaching) {
         return 'Burn rate alert: ${lead.title} is on pace for '
-            '\$${lead.projectedMonthEnd.toStringAsFixed(0)} by month end (near limit).';
+            '${dollars(lead.projectedMonthEnd, decimals: 0)} by month end (near limit).';
       }
       // Prefer the worst burn-rate category even if ratio leader looks fine.
       final burnLead = _topBurnRateCategory();
       if (burnLead != null && burnLead.isBurnRateHigh) {
         return 'Burn rate alert: ${burnLead.title} projects '
-            '\$${burnLead.projectedMonthEnd.toStringAsFixed(0)} by month end '
-            '(\$${burnLead.projectedOverrun.toStringAsFixed(0)} over budget).';
+            '${dollars(burnLead.projectedMonthEnd, decimals: 0)} by month end '
+            '(${dollars(burnLead.projectedOverrun, decimals: 0)} over budget).';
       }
       if (burnLead != null && burnLead.isBurnRateApproaching) {
         return 'Burn rate alert: ${burnLead.title} is on pace for '
-            '\$${burnLead.projectedMonthEnd.toStringAsFixed(0)} by month end (near limit).';
+            '${dollars(burnLead.projectedMonthEnd, decimals: 0)} by month end (near limit).';
       }
     }
 

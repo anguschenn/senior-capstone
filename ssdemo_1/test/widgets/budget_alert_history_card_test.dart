@@ -38,7 +38,7 @@ void main() {
     expect(find.text('Alert history'), findsOneWidget);
     expect(find.text('Sep 2026'), findsOneWidget);
     expect(
-      find.text('Food: \$1349.02 of \$810.00 (over by \$539.02)'),
+      find.text('Food: \$1,349.02 of \$810.00 (over by \$539.02)'),
       findsOneWidget,
     );
     expect(find.text('Aug 2026'), findsOneWidget);

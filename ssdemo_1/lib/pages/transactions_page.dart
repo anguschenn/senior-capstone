@@ -73,18 +73,6 @@ class _TransactionsPageState extends State<TransactionsPage> {
     return sorted;
   }
 
-  String get _rangeLabel {
-    final selectedMonth = normalizedMonthOption(widget.selectedMonth);
-    if (viewMode == ActivityViewMode.month) {
-      return monthOptionLabel(selectedMonth);
-    }
-    if (viewMode == ActivityViewMode.year) return '${selectedMonth.year}';
-    if (customRange != null) {
-      return '${shortDate(customRange!.start, alwaysShowYear: true)} - ${shortDate(customRange!.end, alwaysShowYear: true)}';
-    }
-    return 'all time';
-  }
-
   List<DateTime> get _monthOnlyOptions {
     final seen = <String>{};
     final out = <DateTime>[];
@@ -172,6 +160,8 @@ class _TransactionsPageState extends State<TransactionsPage> {
     );
 
     final c = context.colors;
+    final countLabel =
+        '${filtered.length} transaction${filtered.length == 1 ? '' : 's'}';
 
     // Newest/oldest first with a header per day; by amount it's one list.
     final rows = <Widget>[];
@@ -316,170 +306,201 @@ class _TransactionsPageState extends State<TransactionsPage> {
               ),
             ],
           ),
-          // Header filters let the user narrow the full activity list without re-querying.
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
-            child: TextField(
-              onChanged: (value) => setState(() => query = value),
-              decoration: InputDecoration(
-                hintText: 'Search',
-                prefixIcon: Icon(Icons.search_rounded, color: c.muted),
-                contentPadding: const EdgeInsets.symmetric(vertical: 9),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-          ),
-          SegmentedTabs<ActivityViewMode>(
-            margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-            value: viewMode,
-            segments: const {
-              ActivityViewMode.month: 'Month',
-              ActivityViewMode.year: 'Year',
-              ActivityViewMode.all: 'All Time',
-            },
-            onChanged: (value) => setState(() => viewMode = value),
-          ),
-          switch (viewMode) {
-            ActivityViewMode.month => ScopeLine(
-              key: ValueKey(
-                'tx-month-${selectedMonth.year}-${selectedMonth.month}-${selectedMonth.day}',
-              ),
-              label: monthOptionLabel(monthSelectionValue),
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
-              onTap: () async {
-                final picked = await showOptionSheet<DateTime>(
-                  context: context,
-                  title: 'Month',
-                  values: _monthOnlyOptions,
-                  labelOf: monthOptionLabel,
-                  selected: monthSelectionValue,
-                );
-                if (picked != null) widget.onMonthChanged(picked);
-              },
-            ),
-            ActivityViewMode.year => ScopeLine(
-              label: '${selectedMonth.year}',
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
-              onTap: () async {
-                final picked = await showOptionSheet<int>(
-                  context: context,
-                  title: 'Year',
-                  values: _yearOptions,
-                  labelOf: (y) => '$y',
-                  selected: selectedMonth.year,
-                );
-                if (picked != null) {
-                  widget.onMonthChanged(DateTime(picked, 1, 2));
-                }
-              },
-            ),
-            ActivityViewMode.all => Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 8, 0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: InkWell(
-                      onTap: () async {
-                        final now = DateTime.now();
-                        final picked = await showDateRangePicker(
-                          context: context,
-                          firstDate: DateTime(now.year - 10, 1, 1),
-                          lastDate: DateTime(now.year + 1, 12, 31),
-                          initialDateRange: customRange,
-                        );
-                        if (picked == null) return;
-                        setState(() => customRange = picked);
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Text(
-                          customRange == null
-                              ? 'All time · pick a date range'
-                              : '${shortDate(customRange!.start, alwaysShowYear: true)} - ${shortDate(customRange!.end, alwaysShowYear: true)}',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: c.muted,
+          Expanded(
+            // Filters scroll away with the list so more rows fit on screen.
+            child: CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Column(
+                    children: [
+                      // Header filters let the user narrow the full activity list without re-querying.
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+                        child: TextField(
+                          onChanged: (value) => setState(() => query = value),
+                          decoration: InputDecoration(
+                            hintText: 'Search',
+                            prefixIcon: Icon(
+                              Icons.search_rounded,
+                              color: c.muted,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 9,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide.none,
+                            ),
                           ),
                         ),
                       ),
-                    ),
+                      SegmentedTabs<ActivityViewMode>(
+                        margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                        value: viewMode,
+                        segments: const {
+                          ActivityViewMode.month: 'Month',
+                          ActivityViewMode.year: 'Year',
+                          ActivityViewMode.all: 'All Time',
+                        },
+                        onChanged: (value) => setState(() => viewMode = value),
+                      ),
+                      switch (viewMode) {
+                        ActivityViewMode.month => ScopeLine(
+                          key: ValueKey(
+                            'tx-month-${selectedMonth.year}-${selectedMonth.month}-${selectedMonth.day}',
+                          ),
+                          label: monthOptionLabel(monthSelectionValue),
+                          trailing: countLabel,
+                          padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+                          onTap: () async {
+                            final picked = await showOptionSheet<DateTime>(
+                              context: context,
+                              title: 'Month',
+                              values: _monthOnlyOptions,
+                              labelOf: monthOptionLabel,
+                              selected: monthSelectionValue,
+                            );
+                            if (picked != null) widget.onMonthChanged(picked);
+                          },
+                        ),
+                        ActivityViewMode.year => ScopeLine(
+                          label: '${selectedMonth.year}',
+                          trailing: countLabel,
+                          padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+                          onTap: () async {
+                            final picked = await showOptionSheet<int>(
+                              context: context,
+                              title: 'Year',
+                              values: _yearOptions,
+                              labelOf: (y) => '$y',
+                              selected: selectedMonth.year,
+                            );
+                            if (picked != null) {
+                              widget.onMonthChanged(DateTime(picked, 1, 2));
+                            }
+                          },
+                        ),
+                        ActivityViewMode.all => Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 4, 8, 0),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: InkWell(
+                                  onTap: () async {
+                                    final now = DateTime.now();
+                                    final picked = await showDateRangePicker(
+                                      context: context,
+                                      firstDate: DateTime(now.year - 10, 1, 1),
+                                      lastDate: DateTime(now.year + 1, 12, 31),
+                                      initialDateRange: customRange,
+                                    );
+                                    if (picked == null) return;
+                                    setState(() => customRange = picked);
+                                  },
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 8,
+                                    ),
+                                    child: Text(
+                                      customRange == null
+                                          ? 'All time · pick a date range'
+                                          : '${shortDate(customRange!.start, alwaysShowYear: true)} - ${shortDate(customRange!.end, alwaysShowYear: true)}',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                        color: c.muted,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              if (customRange != null)
+                                IconButton(
+                                  tooltip: 'Clear custom range',
+                                  onPressed: () =>
+                                      setState(() => customRange = null),
+                                  icon: Icon(
+                                    Icons.close_rounded,
+                                    size: 18,
+                                    color: c.muted,
+                                  ),
+                                ),
+                              Padding(
+                                padding: const EdgeInsets.only(right: 12),
+                                child: Text(
+                                  countLabel,
+                                  style: TextStyle(
+                                    color: c.muted,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      },
+                      SizedBox(
+                        height: 40,
+                        child: ListView(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.fromLTRB(16, 4, 8, 2),
+                          children: [
+                            chip(
+                              key: const ValueKey('tx-category-filter'),
+                              label: categoryFilter.isEmpty
+                                  ? 'All categories (${periodTransactions.length})'
+                                  : 'All categories',
+                              selected: categoryFilter.isEmpty,
+                              onTap: () async {
+                                final picked = await showOptionSheet<String>(
+                                  context: context,
+                                  title: 'Category',
+                                  values: ['', ...categoryNames],
+                                  labelOf: (name) => name.isEmpty
+                                      ? 'All categories (${periodTransactions.length})'
+                                      : '$name (${categoryCounts[name]})',
+                                  selected: categoryFilter,
+                                );
+                                if (picked != null) {
+                                  setState(() => categoryFilter = picked);
+                                }
+                              },
+                            ),
+                            for (final name in categoryNames)
+                              chip(
+                                label: name,
+                                dot: colorForDetailedCategory(name),
+                                selected: categoryFilter == name,
+                                onTap: () => setState(
+                                  () => categoryFilter = categoryFilter == name
+                                      ? ''
+                                      : name,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  if (customRange != null)
-                    IconButton(
-                      tooltip: 'Clear custom range',
-                      onPressed: () => setState(() => customRange = null),
-                      icon: Icon(Icons.close_rounded, size: 18, color: c.muted),
-                    ),
-                ],
-              ),
-            ),
-          },
-          SizedBox(
-            height: 40,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.fromLTRB(16, 4, 8, 2),
-              children: [
-                chip(
-                  key: const ValueKey('tx-category-filter'),
-                  label: categoryFilter.isEmpty
-                      ? 'All categories (${periodTransactions.length})'
-                      : 'All categories',
-                  selected: categoryFilter.isEmpty,
-                  onTap: () async {
-                    final picked = await showOptionSheet<String>(
-                      context: context,
-                      title: 'Category',
-                      values: ['', ...categoryNames],
-                      labelOf: (name) => name.isEmpty
-                          ? 'All categories (${periodTransactions.length})'
-                          : '$name (${categoryCounts[name]})',
-                      selected: categoryFilter,
-                    );
-                    if (picked != null) {
-                      setState(() => categoryFilter = picked);
-                    }
-                  },
                 ),
-                for (final name in categoryNames)
-                  chip(
-                    label: name,
-                    dot: colorForDetailedCategory(name),
-                    selected: categoryFilter == name,
-                    onTap: () => setState(
-                      () => categoryFilter = categoryFilter == name ? '' : name,
+                if (filtered.isEmpty)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(
+                      child: Text(
+                        'No transactions found',
+                        style: TextStyle(color: c.muted),
+                      ),
                     ),
+                  )
+                else
+                  // Main activity list with inline re-categorization for spending rows.
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                    sliver: SliverList.list(children: rows),
                   ),
               ],
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 6, 20, 0),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                '${filtered.length} transactions ($_rangeLabel)',
-                style: TextStyle(color: c.muted, fontSize: 13),
-              ),
-            ),
-          ),
-          Expanded(
-            // Main activity list with inline re-categorization for spending rows.
-            child: filtered.isEmpty
-                ? Center(
-                    child: Text(
-                      'No transactions found',
-                      style: TextStyle(color: c.muted),
-                    ),
-                  )
-                : ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                    children: rows,
-                  ),
           ),
         ],
       ),

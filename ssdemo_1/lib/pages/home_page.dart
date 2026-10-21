@@ -448,7 +448,9 @@ class WalletCardStack extends StatelessWidget {
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    '${selectedBalance < 0 ? '- ' : ''}\$${_withCommas(selectedBalance.abs())}',
+                    selectedBalance < 0
+                        ? dollars(selectedBalance, sign: true)
+                        : dollars(selectedBalance),
                     style: const TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.w700,
@@ -481,82 +483,103 @@ class WalletCardStack extends StatelessWidget {
       );
     }
 
+    // Page dots under the stack: one per account, the selected one long, so
+    // it's clear the front card can be swiped.
+    final dots = ids.length < 2
+        ? null
+        : Padding(
+            key: const ValueKey('wallet-dots'),
+            padding: const EdgeInsets.only(top: 10),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                for (final id in ids)
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                    width: id == selected ? 16 : 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: id == selected
+                          ? c.text
+                          : c.muted.withValues(alpha: 0.45),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+              ],
+            ),
+          );
+
     return AnimatedSize(
       duration: const Duration(milliseconds: 200),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-        child: SizedBox(
-          height: strips * _peek + _cardHeight,
-          child: Stack(
-            children: [
-              for (final (i, id) in behind.indexed)
-                card(id, front: false, top: i * _peek),
-              if (overflow)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  top: behind.length * _peek,
-                  child: GestureDetector(
-                    key: const ValueKey('wallet-more-accounts'),
-                    behavior: HitTestBehavior.opaque,
-                    onTap: !enabled
-                        ? null
-                        : () async {
-                            final picked = await showOptionSheet<String>(
-                              context: context,
-                              title: 'Accounts',
-                              values: ids,
-                              labelOf: (id) => id == kAllAccountsId
-                                  ? 'All Accounts'
-                                  : (optionFor(id)?.label ?? id),
-                              selected: selected,
-                            );
-                            if (picked != null) onAccountChanged(picked);
-                          },
-                    child: Container(
-                      height: _cardHeight,
-                      padding: const EdgeInsets.fromLTRB(18, 13, 18, 16),
-                      alignment: Alignment.topLeft,
-                      decoration: BoxDecoration(
-                        color: c.raised,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: c.cardShadow,
-                            blurRadius: 16,
-                            offset: const Offset(0, -6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              height: strips * _peek + _cardHeight,
+              child: Stack(
+                children: [
+                  for (final (i, id) in behind.indexed)
+                    card(id, front: false, top: i * _peek),
+                  if (overflow)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      top: behind.length * _peek,
+                      child: GestureDetector(
+                        key: const ValueKey('wallet-more-accounts'),
+                        behavior: HitTestBehavior.opaque,
+                        onTap: !enabled
+                            ? null
+                            : () async {
+                                final picked = await showOptionSheet<String>(
+                                  context: context,
+                                  title: 'Accounts',
+                                  values: ids,
+                                  labelOf: (id) => id == kAllAccountsId
+                                      ? 'All Accounts'
+                                      : (optionFor(id)?.label ?? id),
+                                  selected: selected,
+                                );
+                                if (picked != null) onAccountChanged(picked);
+                              },
+                        child: Container(
+                          height: _cardHeight,
+                          padding: const EdgeInsets.fromLTRB(18, 13, 18, 16),
+                          alignment: Alignment.topLeft,
+                          decoration: BoxDecoration(
+                            color: c.raised,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: c.cardShadow,
+                                blurRadius: 16,
+                                offset: const Offset(0, -6),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                      child: Text(
-                        'More accounts (${others.length - behind.length})',
-                        style: const TextStyle(
-                          fontSize: 15.5,
-                          fontWeight: FontWeight.w700,
+                          child: Text(
+                            'More accounts (${others.length - behind.length})',
+                            style: const TextStyle(
+                              fontSize: 15.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ),
-              card(selected, front: true, top: strips * _peek),
-            ],
-          ),
+                  card(selected, front: true, top: strips * _peek),
+                ],
+              ),
+            ),
+            ?dots,
+          ],
         ),
       ),
     );
   }
-}
-
-String _withCommas(double value) {
-  final fixed = value.toStringAsFixed(2);
-  final parts = fixed.split('.');
-  final digits = parts[0];
-  final out = StringBuffer();
-  for (var i = 0; i < digits.length; i++) {
-    if (i > 0 && (digits.length - i) % 3 == 0) out.write(',');
-    out.write(digits[i]);
-  }
-  return '$out.${parts[1]}';
 }
 
 /// "Cash Flow · October ›" card: budget left, pace, and a mini pace chart.
@@ -643,7 +666,7 @@ class _FlowThumbnail extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '\$${snapshot.remaining.abs().round()}',
+                        dollars(snapshot.remaining, decimals: 0),
                         style: TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.w700,
@@ -658,8 +681,8 @@ class _FlowThumbnail extends StatelessWidget {
                       const SizedBox(height: 8),
                       StatusPill(
                         label: snapshot.isUnderPace
-                            ? '\$${snapshot.paceDelta.abs().round()} under pace'
-                            : '\$${snapshot.paceDelta.abs().round()} over pace',
+                            ? '${dollars(snapshot.paceDelta, decimals: 0)} under pace'
+                            : '${dollars(snapshot.paceDelta, decimals: 0)} over pace',
                         background: snapshot.isUnderPace
                             ? c.goodTint
                             : c.bad.withValues(alpha: 0.16),
@@ -679,7 +702,7 @@ class _FlowThumbnail extends StatelessWidget {
               stat('Expenses', formatMoney(expenses, signed: false)),
               stat(
                 'Cash flow',
-                '${net >= 0 ? '+' : '-'}\$${net.abs().toStringAsFixed(2)}',
+                dollars(net, sign: true),
                 color: net >= 0 ? c.good : c.bad,
               ),
             ],

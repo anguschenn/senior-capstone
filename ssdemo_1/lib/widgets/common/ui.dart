@@ -27,8 +27,37 @@ class LargeTitle extends StatelessWidget {
               ),
             ),
           ),
-          for (final w in trailing) ...[const SizedBox(width: 10), w],
+          for (final w in trailing) ...[const SizedBox(width: 2), w],
         ],
+      ),
+    );
+  }
+}
+
+/// Gives a small control a 44×44 touch area (Apple's minimum) without
+/// changing how it looks: taps just outside the control still reach it.
+class TapTarget extends StatelessWidget {
+  const TapTarget({
+    super.key,
+    required this.child,
+    required this.onTap,
+    this.minWidth = 44,
+    this.minHeight = 44,
+  });
+
+  final Widget child;
+  final VoidCallback? onTap;
+  final double minWidth;
+  final double minHeight;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minWidth: minWidth, minHeight: minHeight),
+        child: Center(widthFactor: 1, heightFactor: 1, child: child),
       ),
     );
   }
@@ -50,19 +79,22 @@ class CircleIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final button = Material(
-      color: c.raised,
-      shape: const CircleBorder(),
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: onPressed,
-        child: SizedBox(
-          width: 34,
-          height: 34,
-          child: Icon(
-            icon,
-            size: 19,
-            color: onPressed == null ? c.muted : c.text,
+    final button = TapTarget(
+      onTap: onPressed,
+      child: Material(
+        color: c.raised,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onPressed,
+          child: SizedBox(
+            width: 34,
+            height: 34,
+            child: Icon(
+              icon,
+              size: 19,
+              color: onPressed == null ? c.muted : c.text,
+            ),
           ),
         ),
       ),
@@ -280,7 +312,7 @@ class SegmentedTabs<T> extends StatelessWidget {
                 onTap: () => onChanged(entry.key),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
-                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
                   decoration: BoxDecoration(
                     color: entry.key == value
                         ? (dark ? c.line : c.card)
@@ -321,48 +353,55 @@ class ScopeLine extends StatelessWidget {
     super.key,
     required this.label,
     this.onTap,
-    this.padding = const EdgeInsets.fromLTRB(20, 4, 20, 10),
+    this.trailing,
+    this.padding = const EdgeInsets.fromLTRB(20, 0, 20, 2),
   });
 
   final String label;
   final VoidCallback? onTap;
+
+  /// Muted text on the right, e.g. "42 transactions".
+  final String? trailing;
   final EdgeInsetsGeometry padding;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    final style = TextStyle(
+      fontSize: 14,
+      fontWeight: FontWeight.w500,
+      color: c.muted,
+    );
+    final scope = InkWell(
+      borderRadius: BorderRadius.circular(6),
+      onTap: onTap,
+      child: ConstrainedBox(
+        // Tall enough to tap easily; the text itself stays small.
+        constraints: const BoxConstraints(minHeight: 40),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Text(label, overflow: TextOverflow.ellipsis, style: style),
+            ),
+            if (onTap != null) ...[
+              const SizedBox(width: 3),
+              Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: c.muted),
+            ],
+          ],
+        ),
+      ),
+    );
     return Padding(
       padding: padding,
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(6),
-          onTap: onTap,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Flexible(
-                child: Text(
-                  label,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: c.muted,
-                  ),
-                ),
-              ),
-              if (onTap != null) ...[
-                const SizedBox(width: 3),
-                Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  size: 18,
-                  color: c.muted,
-                ),
-              ],
-            ],
+      child: Row(
+        children: [
+          Expanded(
+            child: Align(alignment: Alignment.centerLeft, child: scope),
           ),
-        ),
+          if (trailing != null)
+            Text(trailing!, style: style.copyWith(fontSize: 13)),
+        ],
       ),
     );
   }
@@ -378,7 +417,7 @@ class AskChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return Material(
+    final chip = Material(
       color: c.raised,
       borderRadius: BorderRadius.circular(99),
       child: InkWell(
@@ -404,6 +443,7 @@ class AskChip extends StatelessWidget {
         ),
       ),
     );
+    return TapTarget(onTap: onTap, minWidth: 0, child: chip);
   }
 }
 

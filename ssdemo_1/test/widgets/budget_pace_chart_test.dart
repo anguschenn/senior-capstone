@@ -14,12 +14,12 @@ void main() {
 
   test('line colour: green well under, yellow/orange near, red over', () {
     Color c(double gap) => BudgetPaceChartCard.paceColor(gap);
-    expect(c(-0.30), const Color(0xFF2E7D32));
-    expect(c(-0.10), const Color(0xFF2E7D32));
-    expect(c(-0.04), const Color(0xFFF9A825));
-    expect(c(0.00), const Color(0xFFEF6C00));
-    expect(c(0.08), const Color(0xFFE53935));
-    expect(c(0.50), const Color(0xFFE53935));
+    expect(c(-0.30), const Color(0xFF6E9A5E));
+    expect(c(-0.10), const Color(0xFF6E9A5E));
+    expect(c(-0.04), const Color(0xFFCFA24A));
+    expect(c(0.00), const Color(0xFFC77A44));
+    expect(c(0.08), const Color(0xFFB4523C));
+    expect(c(0.50), const Color(0xFFB4523C));
     // Between stops it blends: less green (redder) the further past the line.
     expect(c(0.04).g, lessThan(c(0.0).g));
     expect(c(0.04).g, greaterThan(c(0.08).g));

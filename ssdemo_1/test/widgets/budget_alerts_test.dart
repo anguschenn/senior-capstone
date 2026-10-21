@@ -45,7 +45,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Food is over budget'), findsOneWidget);
-    expect(find.text('137% used · \$1113.69 of \$810.00'), findsOneWidget);
+    expect(find.text('137% used · \$1,113.69 of \$810.00'), findsOneWidget);
     expect(find.text('Transport on track to overspend'), findsOneWidget);
     expect(find.textContaining('Pace: ~\$'), findsNWidgets(2));
 
@@ -101,9 +101,9 @@ void main() {
     expect(find.textContaining('79% used'), findsNothing);
     await tester.tap(find.text('Show details'));
     await tester.pumpAndSettle();
-    expect(find.text('79% used · \$789.33 of \$1000.00'), findsOneWidget);
+    expect(find.text('79% used · \$789.33 of \$1,000.00'), findsOneWidget);
     expect(find.text(budgetAlertPaceText(food)!), findsOneWidget);
-    await tester.tap(find.text('79% used · \$789.33 of \$1000.00'));
+    await tester.tap(find.text('79% used · \$789.33 of \$1,000.00'));
     expect(tapped, ['Food']);
   });
 

@@ -16,14 +16,15 @@ class BudgetPaceChartCard extends StatelessWidget {
   /// X-axis labels: day 1, every 5th day, and the month's last day. A 5-day
   /// mark within 2 days of the end is dropped so labels don't collide.
   /// Line colour for a point [gap] above (+) or below (-) the even-pace line,
-  /// as a share of the month's budget: green well under, yellow then orange as
-  /// it nears the line, red once it crosses and pulls away.
+  /// as a share of the month's budget, in earth tones: sage well under, ochre
+  /// then terracotta as it nears the line, brick red once it crosses and pulls
+  /// away.
   static Color paceColor(double gap) {
     const stops = <(double, Color)>[
-      (-0.10, Color(0xFF2E7D32)),
-      (-0.04, Color(0xFFF9A825)),
-      (0.00, Color(0xFFEF6C00)),
-      (0.08, Color(0xFFE53935)),
+      (-0.10, Color(0xFF6E9A5E)),
+      (-0.04, Color(0xFFCFA24A)),
+      (0.00, Color(0xFFC77A44)),
+      (0.08, Color(0xFFB4523C)),
     ];
     if (gap <= stops.first.$1) return stops.first.$2;
     for (var i = 1; i < stops.length; i++) {

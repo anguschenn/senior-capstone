@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/app_theme.dart';
 import '../../models/app_models.dart';
 import '../../utils/app_helpers.dart';
+import '../common/ui.dart';
 
 class BudgetProgressCard extends StatelessWidget {
   const BudgetProgressCard({
@@ -47,7 +48,7 @@ class BudgetProgressCard extends StatelessWidget {
     final tone = colorForDetailedCategory(item.title);
     final amount = expanded
         ? '${formatMoney(item.spent, signed: false)} / ${formatMoney(item.limit, signed: false)}'
-        : '\$${item.spent.round()} / \$${item.limit.round()}';
+        : '${dollars(item.spent, decimals: 0)} / ${dollars(item.limit, decimals: 0)}';
     final progress = item.ratio;
     final isWarning = item.isWarning;
     final limit = item.limit;
@@ -173,8 +174,8 @@ class BudgetProgressCard extends StatelessWidget {
                         if (item.hasLimit)
                           Text(
                             remaining >= 0
-                                ? '\$${remaining.toStringAsFixed(2)} left'
-                                : '\$${remaining.abs().toStringAsFixed(2)} over',
+                                ? '${dollars(remaining.toDouble())} left'
+                                : '${dollars(remaining.toDouble())} over',
                             style: TextStyle(
                               fontSize: 12.5,
                               color: remaining >= 0 ? muted : _overInk,
@@ -236,12 +237,12 @@ class BudgetProgressCard extends StatelessWidget {
   String _burnRateLine(BudgetCategoryProgress item) {
     final projected = item.projectedMonthEnd;
     if (item.isBurnRateHigh) {
-      return 'Burn rate: ~\$${item.burnRateDaily.toStringAsFixed(0)}/day → '
-          '~\$${projected.toStringAsFixed(0)} by month end '
-          '(+\$${item.projectedOverrun.toStringAsFixed(0)} over)';
+      return 'Burn rate: ~${dollars(item.burnRateDaily, decimals: 0)}/day → '
+          '~${dollars(projected, decimals: 0)} by month end '
+          '(+${dollars(item.projectedOverrun, decimals: 0)} over)';
     }
-    return 'Burn rate: ~\$${item.burnRateDaily.toStringAsFixed(0)}/day → '
-        '~\$${projected.toStringAsFixed(0)} projected month end';
+    return 'Burn rate: ~${dollars(item.burnRateDaily, decimals: 0)}/day → '
+        '~${dollars(projected, decimals: 0)} projected month end';
   }
 }
 
@@ -368,7 +369,7 @@ class _InkAskChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
+    final chip = Material(
       color: Colors.white.withValues(alpha: 0.45),
       borderRadius: BorderRadius.circular(99),
       child: InkWell(
@@ -394,5 +395,6 @@ class _InkAskChip extends StatelessWidget {
         ),
       ),
     );
+    return TapTarget(onTap: onTap, minWidth: 0, child: chip);
   }
 }

@@ -77,11 +77,11 @@ Future<void> _pick(
 void main() {
   testWidgets('filters the list to one category', (tester) async {
     await _pump(tester);
-    expect(find.text('4 transactions (Oct 2026)'), findsOneWidget);
+    expect(find.text('4 transactions'), findsOneWidget);
     expect(find.text('All categories (4)'), findsOneWidget);
 
     await _pick(tester, 'Food (2)');
-    expect(find.text('2 transactions (Oct 2026)'), findsOneWidget);
+    expect(find.text('2 transactions'), findsOneWidget);
     expect(find.text('Amazon'), findsNothing);
 
     await _pick(tester, 'Shopping (1)');
@@ -89,7 +89,7 @@ void main() {
     expect(find.text('Chipotle'), findsNothing);
 
     await _pick(tester, 'All categories (4)');
-    expect(find.text('4 transactions (Oct 2026)'), findsOneWidget);
+    expect(find.text('4 transactions'), findsOneWidget);
   });
 
   testWidgets('combines with search', (tester) async {
@@ -97,7 +97,7 @@ void main() {
     await _pick(tester, 'Food (2)');
     await tester.enterText(find.byType(TextField), 'pan');
     await tester.pumpAndSettle();
-    expect(find.text('1 transactions (Oct 2026)'), findsOneWidget);
+    expect(find.text('1 transaction'), findsOneWidget);
     expect(find.text('Panera'), findsOneWidget);
   });
 

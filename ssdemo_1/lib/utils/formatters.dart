@@ -1,15 +1,37 @@
+/// Minus sign used in front of amounts (U+2212, same width as "+").
+const String kMinus = '\u2212';
+
+/// "1,234.56" (or "1,235" with [decimals] 0). No sign, no "\$".
+String groupDigits(double value, {int decimals = 2}) {
+  final fixed = value.abs().toStringAsFixed(decimals);
+  final parts = fixed.split('.');
+  final digits = parts[0];
+  final out = StringBuffer();
+  for (var i = 0; i < digits.length; i++) {
+    if (i > 0 && (digits.length - i) % 3 == 0) out.write(',');
+    out.write(digits[i]);
+  }
+  return parts.length > 1 ? '$out.${parts[1]}' : out.toString();
+}
+
+/// "\$1,234.56"; with [sign], "+\$1,234.56" or "−\$1,234.56".
+String dollars(double value, {int decimals = 2, bool sign = false}) {
+  final body = '\$${groupDigits(value, decimals: decimals)}';
+  if (!sign) return body;
+  return '${value < 0 ? kMinus : '+'}$body';
+}
+
 String formatMoney(double amount, {bool signed = true}) {
-  final absAmount = amount.abs().toStringAsFixed(2);
-  if (!signed) return '\$$absAmount';
-  final isIncome = amount < 0;
-  return '${isIncome ? '+' : '-'} \$$absAmount';
+  if (!signed) return dollars(amount);
+  // Expenses are positive and income negative in this app's data.
+  return dollars(-amount, sign: true);
 }
 
 String formatTransactionMoney({
   required double amount,
   required bool isIncome,
 }) {
-  return '${isIncome ? '+' : '-'} \$${amount.abs().toStringAsFixed(2)}';
+  return dollars(isIncome ? amount.abs() : -amount.abs(), sign: true);
 }
 
 String shortDate(DateTime value, {bool alwaysShowYear = false}) {

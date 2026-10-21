@@ -379,30 +379,39 @@ class _TabBar extends StatelessWidget {
             children: [
               item(0),
               item(1),
+              // Raised Ask button with its own label, like the other tabs.
               Expanded(
-                child: Center(
-                  child: Tooltip(
-                    message: 'Ask',
-                    child: Material(
-                      color: c.button,
-                      shape: const CircleBorder(),
-                      elevation: 3,
-                      shadowColor: c.cardShadow,
-                      child: InkWell(
-                        key: const ValueKey('tab-ask'),
-                        customBorder: const CircleBorder(),
-                        onTap: onAsk,
+                child: InkWell(
+                  key: const ValueKey('tab-ask'),
+                  onTap: onAsk,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Material(
+                        color: c.button,
+                        shape: const CircleBorder(),
+                        elevation: 3,
+                        shadowColor: c.cardShadow,
                         child: SizedBox(
-                          width: 50,
-                          height: 50,
+                          width: 40,
+                          height: 40,
                           child: Icon(
                             Icons.auto_awesome,
                             color: c.onButton,
-                            size: 22,
+                            size: 19,
                           ),
                         ),
                       ),
-                    ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Ask',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
+                          color: c.text,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
