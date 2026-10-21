@@ -349,6 +349,101 @@
         "is_expense": true,
         "counts_as_spending": true
       }
+    },
+    {
+      "description": "transfer to own savings at another bank: not spending",
+      "row": {
+        "plaid_transaction_id": "tx-k1",
+        "date": "2026-10-14",
+        "name": "GOLDMAN SACHS BA TRANSFER 123",
+        "merchant_name": null,
+        "amount": 100,
+        "pfc_primary": "TRANSFER_OUT",
+        "pfc_detailed": "TRANSFER_OUT_ACCOUNT_TRANSFER"
+      },
+      "expected": {
+        "rule_key": "goldman sachs ba transfer 123|transfer out|transfer out account transfer",
+        "bucket": "Fees & Transfers",
+        "is_expense": true,
+        "counts_as_spending": false,
+        "kind": "internal"
+      }
+    },
+    {
+      "description": "zelle to a person still counts",
+      "row": {
+        "plaid_transaction_id": "tx-k2",
+        "date": "2026-10-14",
+        "name": "Zelle payment to Austin Chin",
+        "merchant_name": null,
+        "amount": 71,
+        "pfc_primary": "TRANSFER_OUT",
+        "pfc_detailed": "TRANSFER_OUT_ACCOUNT_TRANSFER"
+      },
+      "expected": {
+        "rule_key": "zelle payment to austin chin|transfer out|transfer out account transfer",
+        "bucket": "Fees & Transfers",
+        "is_expense": true,
+        "counts_as_spending": true,
+        "kind": "spend"
+      }
+    },
+    {
+      "description": "cash deposit is income (cash isn't tracked)",
+      "row": {
+        "plaid_transaction_id": "tx-k3",
+        "date": "2026-10-14",
+        "name": "ATM CASH DEPOSIT 10/12",
+        "merchant_name": null,
+        "amount": -3000,
+        "pfc_primary": "TRANSFER_IN",
+        "pfc_detailed": "TRANSFER_IN_DEPOSIT"
+      },
+      "expected": {
+        "rule_key": "atm cash deposit 10/12|transfer in|transfer in deposit",
+        "bucket": "Fees & Transfers",
+        "is_expense": false,
+        "counts_as_spending": false,
+        "kind": "income"
+      }
+    },
+    {
+      "description": "zelle from a friend is income by default",
+      "row": {
+        "plaid_transaction_id": "tx-k4",
+        "date": "2026-10-14",
+        "name": "Zelle payment from ALICE HU",
+        "merchant_name": null,
+        "amount": -67,
+        "pfc_primary": "TRANSFER_IN",
+        "pfc_detailed": "TRANSFER_IN_ACCOUNT_TRANSFER"
+      },
+      "expected": {
+        "rule_key": "zelle payment from alice hu|transfer in|transfer in account transfer",
+        "bucket": "Fees & Transfers",
+        "is_expense": false,
+        "counts_as_spending": false,
+        "kind": "income"
+      }
+    },
+    {
+      "description": "money back from a store is a refund",
+      "row": {
+        "plaid_transaction_id": "tx-k5",
+        "date": "2026-10-14",
+        "name": "Bose Corporation",
+        "merchant_name": null,
+        "amount": -107.79,
+        "pfc_primary": "GENERAL_MERCHANDISE",
+        "pfc_detailed": "GENERAL_MERCHANDISE_ELECTRONICS"
+      },
+      "expected": {
+        "rule_key": "bose corporation|general merchandise|general merchandise electronics",
+        "bucket": "Shopping",
+        "is_expense": false,
+        "counts_as_spending": false,
+        "kind": "refund"
+      }
     }
   ],
   "progress": {
@@ -602,7 +697,7 @@
       {
         "category_id": "cat-shop",
         "category": "Shopping",
-        "spent": 33.0,
+        "spent": 8.0,
         "limit": 0.0
       },
       {

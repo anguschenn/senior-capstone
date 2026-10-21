@@ -28,6 +28,7 @@ String effectiveCategoryFor(
   AppTransaction tx,
   Map<String, String> reviewedCategoryByTxId,
 ) {
+  if (tx.kind == TxKind.internal) return kInternalTransfer;
   if (tx.isIncome) return reviewedCategoryByTxId[tx.id] ?? tx.inflowLabel;
   return reviewedCategoryByTxId[tx.id] ??
       budgetCategoryFromPfc(
@@ -335,33 +336,20 @@ class _Shortcut extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final color = onPressed == null ? c.muted : c.text;
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onPressed,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+    // Quiet on purpose: the month and the cards are the point of the page.
+    return Semantics(
+      button: true,
+      label: label,
+      child: InkWell(
+        onTap: onPressed,
+        customBorder: const CircleBorder(),
         child: SizedBox(
-          width: 58,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: c.raised,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, size: 19, color: color),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                label,
-                maxLines: 1,
-                style: TextStyle(fontSize: 11, color: c.muted),
-              ),
-            ],
+          width: 32,
+          height: 32,
+          child: Icon(
+            icon,
+            size: 19,
+            color: c.muted.withValues(alpha: onPressed == null ? 0.4 : 0.85),
           ),
         ),
       ),
@@ -919,18 +907,16 @@ class TransactionRow extends StatelessWidget {
                       ),
                     InkWell(
                       borderRadius: BorderRadius.circular(999),
-                      onTap: tx.isIncome && !alwaysPickable
-                          ? null
-                          : () => showTransactionCategoryPicker(
-                              context: context,
-                              tx: tx,
-                              selectedCategory: category,
-                              onSelected: (picked) =>
-                                  onTransactionCategorySelected(tx, picked),
-                              aiBackendUri: aiCategorySuggestUri,
-                              apiKey: apiKey,
-                              accessToken: accessToken,
-                            ),
+                      onTap: () => showTransactionCategoryPicker(
+                        context: context,
+                        tx: tx,
+                        selectedCategory: category,
+                        onSelected: (picked) =>
+                            onTransactionCategorySelected(tx, picked),
+                        aiBackendUri: aiCategorySuggestUri,
+                        apiKey: apiKey,
+                        accessToken: accessToken,
+                      ),
                       child: TransactionCategoryTag(
                         label: category,
                         colorKey: category,
@@ -954,7 +940,9 @@ class TransactionRow extends StatelessWidget {
             style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w600,
-              color: tx.isIncome ? c.good : c.text,
+              color: tx.kind == TxKind.internal
+                  ? c.muted
+                  : (tx.isIncome ? c.good : c.text),
             ),
           ),
         ],

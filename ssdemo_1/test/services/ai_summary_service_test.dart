@@ -105,7 +105,7 @@ void main() {
       });
     });
 
-    test('credit card payments are not income, and their totals are kept', () {
+    test('card payments and refunds are not income; refunds lower spending', () {
       final now = DateTime.now();
       final cardPayment = _tx(
         id: 'p1',
@@ -135,8 +135,9 @@ void main() {
 
       expect(cardPayment.incomeAmount, 0);
       expect(cardPayment.cardPaymentAmount, 500);
-      expect(cardPayment.inflowLabel, 'Fees & Transfers');
-      expect(cardRefund.incomeAmount, 20);
+      expect(cardPayment.inflowLabel, kInternalTransfer);
+      expect(cardRefund.incomeAmount, 0);
+      expect(cardRefund.expenseAmount, -20);
       expect(paycheck.incomeAmount, 1000);
       expect(paycheck.inflowLabel, 'Income');
 
@@ -150,8 +151,8 @@ void main() {
       final key =
           '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}';
       final month = (result['month_index'] as Map)[key] as Map;
-      expect(month['income'], 1020);
-      expect(month['expenses'], 0);
+      expect(month['income'], 1000);
+      expect(month['expenses'], -20);
       expect(month['card_payments_in'], 500);
       expect(month['card_payments_out'], 500);
     });

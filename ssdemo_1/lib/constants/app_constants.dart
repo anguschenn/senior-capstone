@@ -1,4 +1,7 @@
 const String kAllAccountsId = '__all_accounts__';
+
+/// Money moving between the user's own accounts: listed, never counted.
+const String kInternalTransfer = 'Internal Transfer';
 const List<String> kReviewCategories = [
   'Income',
   'Food',
@@ -12,6 +15,7 @@ const List<String> kReviewCategories = [
   'Fees & Transfers',
   'Cash / ATM',
   'Other',
+  kInternalTransfer,
 ];
 
 const List<String> kPresetBudgetCategories = [

@@ -409,6 +409,7 @@ class MainScreenController extends ChangeNotifier {
     reviewedCategoryByTxId = reviewedNext;
     manualReviewedTxIds = manualNext;
     confirmedReviewTxIds = confirmedNext;
+    _reclassify();
     _rebuildBudgetProgress();
     _notifyListenersSafe();
   }
@@ -509,6 +510,19 @@ class MainScreenController extends ChangeNotifier {
 
   // --- Private helpers ---
 
+  Map<String, String> _ruleCategoryByTxId = const {};
+
+  /// Re-decides what counts as spending, income, a refund or a transfer
+  /// between own accounts, with the categories the user picked this session.
+  void _reclassify() {
+    AppTransaction.kindById = classifyTransactions(liveTransactions, {
+      ..._ruleCategoryByTxId,
+      for (final txId in manualReviewedTxIds)
+        if (reviewedCategoryByTxId[txId] != null)
+          txId: reviewedCategoryByTxId[txId]!,
+    }).kinds;
+  }
+
   void _applySyncResult(SyncResult result) {
     final txIdSet = result.transactions.map((e) => e.id).toSet();
     liveTransactions = result.transactions;
@@ -537,6 +551,8 @@ class MainScreenController extends ChangeNotifier {
     // Keeping previous low-confidence ids causes stale review items to linger
     // even after a remembered rule now classifies them confidently.
     lowConfidenceReviewTxIds = {...result.autoLowConfidenceReviewTxIds};
+    _ruleCategoryByTxId = result.ruleCategoryByTxId;
+    _reclassify();
     _applyManualLimitOverrides();
     if (selectedAccountId != kAllAccountsId &&
         !result.accountOptions.any((a) => a.accountId == selectedAccountId)) {

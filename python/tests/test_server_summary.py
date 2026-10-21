@@ -78,7 +78,9 @@ class SummaryContractTests(unittest.TestCase):
         # The checking-side card payment is not spending; the card side is not income.
         self.assertEqual(month["card_payments_out"], 500)
         self.assertEqual(month["card_payments_in"], 500)
-        self.assertEqual(month["income"], 2030)  # payroll + the Amazon refund
+        # Payroll only: the Amazon refund lowers Shopping instead of counting as income.
+        self.assertEqual(month["income"], 2000)
+        self.assertEqual(month["categories"]["Shopping"], 90.0)
         # The remembered rule moves Starbucks out of Food.
         self.assertIn("Entertainment", month["categories"])
         # The duplicated Plaid id is counted once.

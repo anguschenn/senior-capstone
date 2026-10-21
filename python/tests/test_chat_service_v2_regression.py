@@ -109,9 +109,9 @@ class TestChatServiceV2Regression(unittest.TestCase):
 
     def test_relative_month_income_net_and_typos_are_deterministic(self):
         cases = [
-            ("What was my income last month?", "total income", "$1998"),
+            ("What was my income last month?", "total income", "$1,998"),
             ("What's my net cash flow last month?", "net cash flow", "+$10"),
-            ("how much did i spnd last mnth", "total expenses", "$1988"),
+            ("how much did i spnd last mnth", "total expenses", "$1,988"),
         ]
         for prompt, label, amount in cases:
             with self.subTest(prompt=prompt):
@@ -136,7 +136,7 @@ class TestChatServiceV2Regression(unittest.TestCase):
                 self.assertEqual(response["answer_source"], "deterministic")
                 self.assertEqual(response["intent"], "compare_periods")
                 self.assertEqual(response.get("period_resolved"), "2026-05 vs 2026-04")
-                self.assertIn("You spent $1388 less in 2026-05 than in 2026-04", response["reply"])
+                self.assertIn("You spent $1,388 less in 2026-05 than in 2026-04", response["reply"])
 
     def test_category_spend_for_a_month_reads_month_categories(self):
         summary = self._summary()
@@ -197,7 +197,7 @@ class TestChatServiceV2Regression(unittest.TestCase):
         reply = response.get("reply", "")
         self.assertIn("income of $900, expenses of $600 and net cash flow of +$300", reply)
         self.assertIn("Food at about $250", reply)
-        self.assertIn("2026-04 expenses were $1988", reply)
+        self.assertIn("2026-04 expenses were $1,988", reply)
 
     def test_asks_outside_the_summary_say_where_to_look(self):
         cases = [
@@ -235,9 +235,9 @@ class TestChatServiceV2Regression(unittest.TestCase):
         summary = self._summary()
         summary["month_index"]["2026-04"]["categories"] = {"Food": 98.5}
         cases = [
-            ("wat was my incom lst month", "total income", "$1998"),
+            ("wat was my incom lst month", "total income", "$1,998"),
             ("hw much did i spedn on fod in aprl", "Food spending", "$98"),
-            ("how much ddi I spend in aprl", "total expenses", "$1988"),
+            ("how much ddi I spend in aprl", "total expenses", "$1,988"),
         ]
         for prompt, label, amount in cases:
             with self.subTest(prompt=prompt):
@@ -260,8 +260,8 @@ class TestChatServiceV2Regression(unittest.TestCase):
         }
         cases = [
             ("how much did I spend yesterday", f"On {yesterday}, total expenses", "$42.50"),
-            ("May I see my spending for April?", "For 2026-04, total expenses", "$1988"),
-            ("how much did I spend 2 months ago", "For 2026-03, total expenses", "$1750"),
+            ("May I see my spending for April?", "For 2026-04, total expenses", "$1,988"),
+            ("how much did I spend 2 months ago", "For 2026-03, total expenses", "$1,750"),
         ]
         for prompt, label, amount in cases:
             with self.subTest(prompt=prompt):
@@ -319,7 +319,7 @@ class TestChatServiceV2Regression(unittest.TestCase):
         summary["month_index"]["2026-04"]["categories"] = {"Food": 100.0, "Transport": 50.0}
         cases = [
             ("how much did I spend on food and transport last month", "together about $150"),
-            ("how much did I spend last month not counting food", "excluding Food is about $1888"),
+            ("how much did I spend last month not counting food", "excluding Food is about $1,888"),
             ("what was my income and spending last month", "net cash flow was +$10"),
         ]
         for prompt, expected in cases:
@@ -338,7 +338,7 @@ class TestChatServiceV2Regression(unittest.TestCase):
             ("How much money do I have?", "doesn't get your account balances"),
             ("Should I buy Tesla stock with my savings?", "can't give investment advice"),
             ("asdfghjkl", "didn't catch that"),
-            ("how much will I spend next month?", "averaged about $1869 in spending"),
+            ("how much will I spend next month?", "averaged about $1,869 in spending"),
             ("how much did I spend in december 2099", "2099-12 hasn't happened yet"),
         ]
         for prompt, expected in cases:
@@ -356,9 +356,9 @@ class TestChatServiceV2Regression(unittest.TestCase):
         summary = self._summary()
         summary["month_index"]["2026-04"]["categories"] = {"Food": 98.5}
         cases = [
-            ("上个月收入多少", "total income", "$1998"),
+            ("上个月收入多少", "total income", "$1,998"),
             ("上个月吃饭花了多少钱？", "Food spending", "$98"),
-            ("上个月花了多少钱", "total expenses", "$1988"),
+            ("上个月花了多少钱", "total expenses", "$1,988"),
         ]
         for prompt, label, amount in cases:
             with self.subTest(prompt=prompt):
@@ -464,7 +464,7 @@ class TestChatServiceV2Regression(unittest.TestCase):
         cases = [
             ("what's my second biggest category this month", "number 2 category", "Shopping"),
             ("Which category grew the most from march to april?", "Food grew the most", "+$200"),
-            ("what's my average monthly spending?", "average monthly spending", "$1869"),
+            ("what's my average monthly spending?", "average monthly spending", "$1,869"),
             ("which month did I spend the most this year?", "highest spending", "2026-04"),
             ("where am I wasting money?", "Food", None),
         ]
@@ -481,7 +481,7 @@ class TestChatServiceV2Regression(unittest.TestCase):
         cases = [
             (
                 "if I spend $20 less on food every week, how much do I save in a year?",
-                "$1040 over a year",
+                "$1,040 over a year",
             ),
             ("what happens if I stop eating out for a month?", "Cutting out Food spending"),
             ("I want to save $50 next month, how?", "Saving $50 a month"),
@@ -489,7 +489,7 @@ class TestChatServiceV2Regression(unittest.TestCase):
                 "how much did I spend? also what's my income?",
                 "total income for Overall (All Accounts) is about $900",
             ),
-            ("approve a $5000 transfer", "can't move money"),
+            ("approve a $5,000 transfer", "can't move money"),
             ("how much did I spend in the year 3000", "3000 hasn't happened yet"),
         ]
         for prompt, expected in cases:
@@ -517,7 +517,7 @@ class TestChatServiceV2Regression(unittest.TestCase):
             ("how much should I budget for food?", "A budget of about", None),
             ("hi", "Ask me about your spending", None),
             ("thanks!", "You're welcome", None),
-            ("如果每周少花50块，一年能省多少", "$2600 over a year", None),
+            ("如果每周少花50块，一年能省多少", "$2,600 over a year", None),
         ]
         for prompt, expected, extra in cases:
             with self.subTest(prompt=prompt):
@@ -623,7 +623,7 @@ class TestChatServiceV2Regression(unittest.TestCase):
         )
         self.assertEqual(response["answer_source"], "deterministic")
         self.assertIn('I read this as "What was my income last month?"', response["reply"])
-        self.assertIn("$1998", response["reply"])
+        self.assertIn("$1,998", response["reply"])
         self.assertEqual(len(calls), 1)
 
     def test_advice_questions_are_not_rewritten_into_numbers(self):
@@ -668,9 +668,9 @@ class TestChatServiceV2Regression(unittest.TestCase):
         summary = self._round2_summary()
         summary["month_index"]["2026-04"]["expense_tx_count"] = 20
         cases = [
-            ("did I spend over $2000 in april?", "No: you spent $1988"),
+            ("did I spend over $2,000 in april?", "No: you spent $1,988"),
             ("did I spend more than $250 on food in april?", "Yes: you spent $300 on Food"),
-            ("how many months did I spend over $1800?", "1 of your"),
+            ("how many months did I spend over $1,800?", "1 of your"),
             ("what's 10% of my monthly food spending?", "10% of your usual monthly Food"),
             ("how much did I spend on average per transaction in april?", "about $99.39"),
             ("why was april so expensive?", "Biggest changes by category"),
@@ -707,7 +707,7 @@ class TestChatServiceV2Regression(unittest.TestCase):
                 "saves about $600 a year",
             ),
             ("what if I spent 30% less on shopping?", "by 30%"),
-            ("how much would I have if I saved $300 every month for a year?", "$3600"),
+            ("how much would I have if I saved $300 every month for a year?", "$3,600"),
             ("show me my income for the last 2 months", "Income for Overall"),
             ("what percent of my spending was food in april", "% of your total spending"),
             ("how much of my income goes to food", "% of your income"),
@@ -785,13 +785,13 @@ class TestChatServiceV2Regression(unittest.TestCase):
     def test_common_everyday_questions_batch2(self):
         summary = self._round2_summary()
         cases = [
-            ("Did I spend less this month?", "You spent $1388 less in 2026-05"),
+            ("Did I spend less this month?", "You spent $1,388 less in 2026-05"),
             ("What are my biggest expenses this month?", "Food $400, Shopping $150, Health $50"),
             ("Where can I cut costs?", "where cuts count most"),
-            ("How much have I saved this year?", "is about +$360 (income $4698"),
+            ("How much have I saved this year?", "is about +$360 (income $4,698"),
             ("What's my income vs spending this year?", "so net cash flow is +$360"),
             ("What would happen if I stopped buying coffee?", "part of Food, which is about $400"),
-            ("How much did I spend in March and May?", "($1750 in 2026-03, $600 in 2026-05)"),
+            ("How much did I spend in March and May?", "($1,750 in 2026-03, $600 in 2026-05)"),
             ("how much did I spend on food in april and may", "total Food spending"),
             ("Was I over my average this month?", "below your usual"),
             ("is my spending healthy", "below your usual"),
@@ -801,15 +801,15 @@ class TestChatServiceV2Regression(unittest.TestCase):
             ("Did I get paid this month?", "total income"),
             ("Am I saving money?", "Yes, you earned more than you spent"),
             ("How much do I spend on food each month?", "Your average monthly Food spending"),
-            ("Did my spending go down compared to last month?", "$600 in 2026-05 vs $1988"),
+            ("Did my spending go down compared to last month?", "$600 in 2026-05 vs $1,988"),
             ("Spending summary for last month", "In 2026-04, Overall (All Accounts) had"),
             ("Have I spent more on food or shopping this month?", "Food is $250 higher"),
             ("How much will I spend this month?", "your usual"),
             ("how much should I save each month?", "common rule of thumb"),
             ("how much can I save?", "roughly what you could save each month"),
-            ("how much should I save to reach $5000", "Spread over a year"),
+            ("how much should I save to reach $5,000", "Spread over a year"),
             ("money in vs money out in april", "had income of about"),
-            ("did i spend more then last month?", "$600 in 2026-05 vs $1988"),
+            ("did i spend more then last month?", "$600 in 2026-05 vs $1,988"),
             ("How much is left after bills this month?", "net cash flow"),
             ("Am I doing better than last month?", "Net cash flow for Overall"),
             ("did I make more than last month", "Income for Overall"),
@@ -825,7 +825,7 @@ class TestChatServiceV2Regression(unittest.TestCase):
             ("could I afford a trip next month?", "Tell me the price"),
             ("What's the most I've spent in a single month?", "month with the highest spending"),
             ("How much do I spend on food per day?", "a day on Food"),
-            ("Which months did I spend over $1500?", "had expenses over $1500"),
+            ("Which months did I spend over $1,500?", "had expenses over $1,500"),
             ("Was my income higher in March or April?", "Income for Overall"),
             ("What category am I overspending in?", "Running above your usual"),
             ("How does my food spending compare to last month?", "Food spending for Overall"),
@@ -868,7 +868,9 @@ class TestChatServiceV2Regression(unittest.TestCase):
                 self.assertIn("is a credit card", response["reply"])
         summary["month_index"]["2026-04"]["card_payments_in"] = 1800.0
         breakdown = self._ask_with("What was my income last month?", summary)
-        self.assertIn("$1800 in card payments and $1998 in refunds and credits", breakdown["reply"])
+        self.assertIn(
+            "$1,800 in card payments and $1,998 in refunds and credits", breakdown["reply"]
+        )
         overview = self._ask_with("How am I doing this month?", summary)
         self.assertIn("spending of $600", overview["reply"])
         self.assertNotIn("income", overview["reply"])
@@ -916,7 +918,7 @@ class TestChatServiceV2Regression(unittest.TestCase):
             ("Tell me something interesting about my spending", "a month for Overall"),
             ("Has my shopping gone down?", "Shopping spending for Overall"),
             ("What can you help me with?", "I answer questions about your own spending"),
-            ("Is my spending lower than last month?", "$600 in 2026-05 vs $1988"),
+            ("Is my spending lower than last month?", "$600 in 2026-05 vs $1,988"),
             ("Show me my 2 biggest spending categories last month", "top 2 categories"),
             ("If I cut shopping completely, how much would I save per year?", "entirely"),
             ("Did my income go up this month?", "Income for Overall"),
@@ -1150,7 +1152,7 @@ class TestChatServiceV2Regression(unittest.TestCase):
         income = self._ask_with("Did my income go up from February to April?", summary)
         self.assertRegex(income["reply"], r"^(Yes|No)\. ")
         allowance = parse_query_v2(
-            "How much can I spend per day for the rest of the month to stay under $2000?", summary
+            "How much can I spend per day for the rest of the month to stay under $2,000?", summary
         )
         self.assertEqual(allowance.compare_to, "allowance:2000")
         weekday = parse_query_v2("What's my biggest spending day of the week?", summary)
@@ -1216,7 +1218,7 @@ class TestChatServiceV2Regression(unittest.TestCase):
             ),
             ("How much did I save in Q2?", "For 2026-04 to 2026-05, net cash flow"),
             ("Total spending for winter and spring combined?", "total expenses for Overall"),
-            ("Show me income by month", "Income for Overall (All Accounts): $1500 in 2026-02"),
+            ("Show me income by month", "Income for Overall (All Accounts): $1,500 in 2026-02"),
             ("Was my income steady in the spring?", "it averages about"),
             ("Is Netflix still charging me?", "Netflix"),
             ("Did I spend more on food or shopping in Q2?", "From 2026-04 to 2026-05, Food is"),
@@ -1259,7 +1261,7 @@ class TestChatServiceV2Regression(unittest.TestCase):
             ("Did I spend more on food in March or April?", "2026-04 was higher."),
             ("Is my food spending high this month?", "your usual"),
             ("How many months this year did I save money?", "you earned more than you spent"),
-            ("Was I under $2000 in April?", "Yes: you spent $1988 in 2026-04"),
+            ("Was I under $2,000 in April?", "Yes: you spent $1,988 in 2026-04"),
             ("How much did I spend on food from March to now?", "Food spending for Overall"),
             (
                 "What percent of my spending is shopping this year?",
@@ -1354,7 +1356,7 @@ class TestChatServiceV2Regression(unittest.TestCase):
             (
                 "how does that stack up against March?",
                 "How much did I spend in April?",
-                "$1988 in 2026-04 vs $1750 in 2026-03",
+                "$1,988 in 2026-04 vs $1,750 in 2026-03",
             ),
             ("Will I spend more this month than last month?", None, "No. Spending"),
             (
@@ -1371,7 +1373,7 @@ class TestChatServiceV2Regression(unittest.TestCase):
             ("How much was I left with after expenses in April?", None, "net cash flow"),
             ("What was my lowest-spending month?", None, "month with the lowest spending"),
             ("What's the most I've spent on food in a month?", None, "highest Food spending"),
-            ("Did my income drop last month?", None, "$1998 in 2026-04 vs $1800 in 2026-03"),
+            ("Did my income drop last month?", None, "$1,998 in 2026-04 vs $1,800 in 2026-03"),
         ]
         for prompt, previous, expected in cases:
             with self.subTest(prompt=prompt):
@@ -1473,13 +1475,13 @@ class TestChatServiceV2Regression(unittest.TestCase):
             [{"role": "user", "text": "How much did I spend in April?"}],
         )
         self.assertEqual(spending["resolved_query"]["intent"], "compare_periods")
-        self.assertTrue(spending["reply"].startswith("Yes."))  # $1988 vs $1750
+        self.assertTrue(spending["reply"].startswith("Yes."))  # $1,988 vs $1,750
         income = self._ask_with(
             "Was it worse than March?",
             summary,
             [{"role": "user", "text": "What's my income in April?"}],
         )
-        self.assertTrue(income["reply"].startswith("No."))  # $1998 vs $1800
+        self.assertTrue(income["reply"].startswith("No."))  # $1,998 vs $1,800
 
     def _budget_summary(self):
         summary = self._round2_summary()

@@ -34,7 +34,24 @@ IconData iconForTransaction(String category, String merchant) {
   if (key.contains('food') || key.contains('restaurant')) {
     return Icons.restaurant;
   }
-  return Icons.shopping_cart;
+  // Categories the user made up: match the usual words, else stay neutral
+  // rather than guess a shopping cart.
+  bool has(List<String> words) => words.any(key.contains);
+  if (has(['gym', 'fitness', 'sport', 'yoga'])) return Icons.fitness_center;
+  if (has(['educat', 'school', 'tuition', 'course', 'interview'])) {
+    return Icons.school_outlined;
+  }
+  if (has(['travel', 'hotel', 'flight', 'airline', 'trip'])) {
+    return Icons.flight_takeoff;
+  }
+  if (has(['pets', 'pet store', 'veterinar'])) return Icons.pets;
+  if (has(['gift', 'donat', 'charity'])) return Icons.card_giftcard;
+  if (has(['beauty', 'hair', 'salon', 'personal care'])) return Icons.spa;
+  if (has(['kid', 'child', 'baby'])) return Icons.child_friendly;
+  if (has(['phone', 'internet', 'mobile'])) return Icons.smartphone;
+  if (has(['grocer', 'market'])) return Icons.local_grocery_store;
+  if (has(['shop', 'store', 'amazon', 'retail'])) return Icons.shopping_bag;
+  return Icons.category_outlined;
 }
 
 /// Icon for a row whose category label is shown next to it: the category's
@@ -106,6 +123,10 @@ IconData iconForBudgetCategory(String category) {
       return Icons.swap_horiz;
     case 'Cash / ATM':
       return Icons.atm_outlined;
+    case 'Income':
+      return Icons.attach_money;
+    case kInternalTransfer:
+      return Icons.sync_alt;
     case 'Other':
       return Icons.category_outlined;
     default:

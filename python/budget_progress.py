@@ -3,7 +3,10 @@
 The app computes this in Dart and discards it; alerts need it after a webhook, when no app is
 open. This is a line-for-line port of the rules the Budget page uses, so the two agree:
 
-  expense  = amount > 0, except credit card payments        (AppTransaction.expenseAmount)
+  kind     = spend | refund | income | internal              (AppTransaction.ownKind)
+             card payments and transfers between own accounts don't count; a refund
+             nets against the bucket of the purchase it pays back
+  expense  = amount for spend, minus amount for a refund      (AppTransaction.expenseAmount)
   bucket   = remembered rule for the transaction's rule key (category_match_rules)
              else classify_by_pfc_signals(...)             (CategoryService.classifyByPfcSignals)
   spent    = sum of amounts per bucket, matched to budget category names by normalized key
@@ -210,7 +213,249 @@ def is_credit_card_payment_row(row: dict) -> bool:
 
 
 def counts_as_spending(row: dict) -> bool:
-    return is_expense_row(row) and not is_credit_card_payment_row(row)
+    return row_kind(row) == "spend"
+
+
+# ── What counts (AppTransaction.ownKind / classifyTransactions) ─────────
+
+INTERNAL_TRANSFER = "Internal Transfer"
+
+_PEER_TO_PEER = ("zelle", "venmo", "paypal", "cash app", "apple cash")
+_OWN_TRANSFER_PFC = (
+    "TRANSFER_IN_ACCOUNT_TRANSFER",
+    "TRANSFER_OUT_ACCOUNT_TRANSFER",
+    "TRANSFER_IN_SAVINGS",
+    "TRANSFER_OUT_SAVINGS",
+    "TRANSFER_IN_INVESTMENT_AND_RETIREMENT_FUNDS",
+    "TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS",
+)
+_SPENDING_PFC = {
+    "FOOD_AND_DRINK",
+    "GENERAL_MERCHANDISE",
+    "GENERAL_SERVICES",
+    "ENTERTAINMENT",
+    "TRAVEL",
+    "TRANSPORTATION",
+    "PERSONAL_CARE",
+    "HOME_IMPROVEMENT",
+    "MEDICAL",
+    "RENT_AND_UTILITIES",
+    "BANK_FEES",
+}
+
+
+def is_peer_to_peer(text: str) -> bool:
+    lowered = text.lower()
+    return any(n in lowered for n in _PEER_TO_PEER)
+
+
+def is_own_account_transfer(name: str, description: str, pfc_detailed: str) -> bool:
+    """Money moved to or from one of the user's own accounts. Person-to-person apps are real
+    payments; cash isn't tracked, so withdrawals are spending and cash deposits income."""
+    text = f"{name} {description}".lower()
+    if is_peer_to_peer(text):
+        return False
+    if any(n in pfc_detailed.upper() for n in _OWN_TRANSFER_PFC):
+        return True
+    return re.search(r"\btransfer\b", text) is not None
+
+
+def _row_fields(row: dict) -> tuple[str, str, str, str]:
+    """(name, description, pfc_primary, pfc_detailed) as AppTransaction.fromMap reads them."""
+    name_raw = row.get("name")
+    merchant = (_coalesce(row.get("merchant_name")) or "").strip()
+    description = (_coalesce(name_raw)).strip()
+    if description:
+        name = description
+    elif merchant:
+        name = merchant
+    else:
+        name = "Unknown"
+    detailed = _coalesce(row.get("pfc_detailed"), row.get("category")).strip()
+    primary = _coalesce(row.get("pfc_primary")).strip()
+    return name, description, primary, detailed
+
+
+def _is_card_payment_credit(
+    amount: float, name: str, description: str, primary: str, detailed: str, account_type: str
+) -> bool:
+    """AppTransaction.isCardPaymentCredit: the card side of paying off a card."""
+    if amount >= 0:
+        return False
+    if "CREDIT_CARD_PAYMENT" in f"{detailed} {primary}".upper():
+        return True
+    text = f"{name.lower()} {description.lower()}"
+    kind = account_type.lower().strip()
+    if not kind:
+        return "payment thank you" in text
+    if kind != "credit" or _is_refund_like(text, primary, detailed):
+        return False
+    pfc = f"{primary} {detailed}".upper()
+    return (
+        "LOAN_DISBURSEMENTS" in pfc
+        or "LOAN_PAYMENTS" in pfc
+        or "TRANSFER_IN" in pfc
+        or "payment" in text
+        or "autopay" in text
+    )
+
+
+def _is_refund_like(text: str, primary: str, detailed: str) -> bool:
+    lowered = f"{text} {primary} {detailed}".lower().replace("_", " ")
+    return any(n in lowered for n in ("refund", "reversal", "returned", "return"))
+
+
+def kind_of(
+    amount: float,
+    name: str,
+    description: str,
+    pfc_primary: str,
+    pfc_detailed: str,
+    account_type: str = "",
+    user_category: str = "",
+) -> str:
+    """spend | refund | income | internal | none. user_category is a remembered rule:
+    Internal Transfer stops it counting, any other pick (except the old Fees & Transfers
+    catch-all) counts it, money in as income or a refund of that category."""
+    if amount == 0:
+        return "none"
+    if user_category == INTERNAL_TRANSFER:
+        return "internal"
+    if user_category and user_category != "Fees & Transfers":
+        if amount > 0:
+            return "spend"
+        return "income" if user_category == "Income" else "refund"
+    if "CREDIT_CARD_PAYMENT" in f"{pfc_detailed} {pfc_primary}".upper():
+        return "internal"
+    if _is_card_payment_credit(amount, name, description, pfc_primary, pfc_detailed, account_type):
+        return "internal"
+    if is_own_account_transfer(name, description, pfc_detailed):
+        return "internal"
+    if amount > 0:
+        return "spend"
+    text = f"{name.lower()} {description.lower()}"
+    if _is_refund_like(text, pfc_primary, pfc_detailed) or (
+        pfc_primary.upper().strip() in _SPENDING_PFC
+    ):
+        return "refund"
+    return "income"
+
+
+def row_kind(row: dict, user_category: str = "", account_type: str = "") -> str:
+    try:
+        amount = float(row.get("amount") or 0)
+    except (TypeError, ValueError):
+        return "none"
+    name, description, primary, detailed = _row_fields(row)
+    return kind_of(amount, name, description, primary, detailed, account_type, user_category)
+
+
+def merchant_match_key(name: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z ]", " ", name.lower())).strip()
+
+
+def row_id(row: dict) -> str:
+    provider = _coalesce(row.get("plaid_transaction_id")).strip()
+    if provider:
+        return provider
+    name = _row_fields(row)[0]
+    try:
+        amount = float(row.get("amount") or 0)
+    except (TypeError, ValueError):
+        amount = 0.0
+    return f"{name.lower()}|{amount:.2f}|{str(row.get('date') or '')[:10]}"
+
+
+def classify_rows(
+    tx_rows: list[dict],
+    remembered_rules: dict[str, str],
+    account_type_by_id: dict[str, str] | None = None,
+) -> dict[str, tuple[str, str]]:
+    """{row id: (kind, bucket)} (classifyTransactions). A refund from a merchant with an
+    earlier purchase of at least that amount on the same account, within 120 days, takes
+    that purchase's bucket."""
+    import datetime as _dt
+
+    account_type_by_id = account_type_by_id or {}
+    parsed = []
+    for row in tx_rows:
+        user_category = remembered_rules.get(rule_key_for_row(row), "")
+        account_id = _coalesce(row.get("plaid_account_id")).strip()
+        kind = row_kind(row, user_category, account_type_by_id.get(account_id, ""))
+        try:
+            day = _dt.date.fromisoformat(str(row.get("date") or "")[:10])
+        except ValueError:
+            day = None
+        name, description, _, _ = _row_fields(row)
+        try:
+            amount = abs(float(row.get("amount") or 0))
+        except (TypeError, ValueError):
+            amount = 0.0
+        parsed.append(
+            {
+                "id": row_id(row),
+                "kind": kind,
+                "bucket": budget_bucket_for_row(row, remembered_rules),
+                "user_category": user_category,
+                "account": account_id,
+                "day": day,
+                "amount": amount,
+                "key": merchant_match_key(name),
+                "p2p": is_peer_to_peer(f"{name} {description}"),
+            }
+        )
+    purchases: dict[str, list[dict]] = {}
+    for item in parsed:
+        if item["kind"] == "spend":
+            purchases.setdefault(item["key"], []).append(item)
+    out = {}
+    for item in parsed:
+        kind, bucket = item["kind"], item["bucket"]
+        if (
+            kind in ("income", "refund")
+            and item["key"]
+            and not item["p2p"]
+            and item["day"] is not None
+            and (not item["user_category"] or item["user_category"] == "Fees & Transfers")
+        ):
+            match = _matching_purchase(item, purchases.get(item["key"], []))
+            if match is not None:
+                kind, bucket = "refund", match["bucket"]
+        if kind == "internal" and not item["user_category"]:
+            bucket = INTERNAL_TRANSFER
+        out[item["id"]] = (kind, bucket)
+    return out
+
+
+def _matching_purchase(refund: dict, purchases: list[dict]) -> dict | None:
+    best = None
+    for purchase in purchases:
+        if refund["account"] and purchase["account"] and refund["account"] != purchase["account"]:
+            continue
+        if purchase["day"] is None:
+            continue
+        days = (refund["day"] - purchase["day"]).days
+        if days < 0 or days > 120:
+            continue
+        if purchase["amount"] + 0.005 < refund["amount"]:
+            continue
+        exact = abs(purchase["amount"] - refund["amount"]) < 0.005
+        if best is None:
+            best = purchase
+            continue
+        best_exact = abs(best["amount"] - refund["amount"]) < 0.005
+        if (exact and not best_exact) or (exact == best_exact and purchase["day"] > best["day"]):
+            best = purchase
+    return best
+
+
+def signed_spend(kind: str, amount: float) -> float:
+    """AppTransaction.expenseAmount: spending positive, a refund negative, else 0."""
+    if kind == "spend":
+        return abs(amount)
+    if kind == "refund":
+        return -abs(amount)
+    return 0.0
 
 
 def budget_bucket_for_row(row: dict, remembered_rules: dict[str, str]) -> str:
@@ -238,13 +483,16 @@ def build_budget_progress(
 ) -> list[dict]:
     """month is 'YYYY-MM'. Output items match what PredictService's burn-rate check reads."""
     spent_by_key: dict[str, float] = {}
+    kinds = classify_rows(tx_rows, remembered_rules)
     for row in tx_rows:
         if not str(row.get("date") or "").startswith(month):
             continue
-        if not counts_as_spending(row):
+        kind, bucket = kinds[row_id(row)]
+        amount = signed_spend(kind, float(row["amount"]))
+        if amount == 0:
             continue
-        key = normalize_category_key(budget_bucket_for_row(row, remembered_rules))
-        spent_by_key[key] = spent_by_key.get(key, 0.0) + abs(float(row["amount"]))
+        key = normalize_category_key(bucket)
+        spent_by_key[key] = spent_by_key.get(key, 0.0) + amount
 
     # A bucket with no budget row of its own counts toward "Other" when there is one, so the
     # cards add up to the month's expenses (BudgetService.cardKeyForBucket).
@@ -291,7 +539,17 @@ def _next_month_start(month: str) -> str:
     return f"{year + 1}-01-01" if mon == 12 else f"{year}-{mon + 1:02d}-01"
 
 
+REFUND_LOOKBACK_MONTHS = 4  # earlier purchases a refund in `month` can match
+
+
+def _months_before(month: str, count: int) -> str:
+    year, mon = (int(part) for part in month.split("-"))
+    index = year * 12 + (mon - 1) - count
+    return f"{index // 12}-{index % 12 + 1:02d}"
+
+
 def _fetch_month_transactions(user_id: str, month: str) -> list[dict]:
+    """The month's transactions plus the few months before, for refund matching."""
     rows: list[dict] = []
     start = 0
     while True:
@@ -301,7 +559,7 @@ def _fetch_month_transactions(user_id: str, month: str) -> list[dict]:
                 "plaid_transaction_id,amount,date,name,merchant_name,category,pfc_primary,pfc_detailed"
             )
             .eq("user_id", user_id)
-            .gte("date", f"{month}-01")
+            .gte("date", f"{_months_before(month, REFUND_LOOKBACK_MONTHS)}-01")
             .lt("date", _next_month_start(month))
             .order("date")
             .range(start, start + _PAGE_SIZE - 1)

@@ -236,7 +236,7 @@ class TestChatServiceContract(unittest.TestCase):
         self.assertEqual(response["resolved_query"]["intent"], "amount_lookup")
         self.assertEqual(response["resolved_query"]["period_type"], "year")
         self.assertIn("2026", response["reply"])
-        self.assertIn("$2100", response["reply"])
+        self.assertIn("$2,100", response["reply"])
 
     def test_chat_uses_frontend_v3_summary_for_rolling_days_amount(self):
         service = self._service_with_reply(

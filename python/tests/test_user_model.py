@@ -89,6 +89,14 @@ class CategoryMonthStatsTests(unittest.TestCase):
         ]
         self.assertEqual(user_model.build_category_month_stats(rows, {}), [])
 
+    def test_refund_nets_against_its_category(self):
+        stats = user_model.build_category_month_stats(
+            [food("2026-10-05", 40), food("2026-10-06", -25)], {}
+        )
+        self.assertEqual(
+            stats, [{"month": "2026-10", "category": "Food", "spent": 15.0, "tx_count": 1}]
+        )
+
     def test_remembered_rule_wins(self):
         rule_key = "chipotle|food and drink|food and drink restaurant"
         stats = user_model.build_category_month_stats(

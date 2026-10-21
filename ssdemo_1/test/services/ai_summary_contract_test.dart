@@ -113,6 +113,26 @@ void main() {
       if (seen.add(tx.dedupeKey)) tx,
   ];
   final now = DateTime.parse(_fixture['now'] as String);
+  // SyncService.buildResult: what counts, with the remembered rules; a refund
+  // takes the category of the purchase it pays back.
+  final rules = (_fixture['rules'] as Map<String, dynamic>)
+      .cast<String, String>();
+  final ruleCategories = <String, String>{
+    for (final row in rows)
+      AppTransaction.fromMap(row).id:
+          ?rules[CategoryService.instance.ruleKeyForRawTransaction(row)],
+  };
+  final classified = classifyTransactions(allTransactions, ruleCategories);
+  AppTransaction.kindById = classified.kinds;
+  for (final entry in classified.purchaseIdByRefundId.entries) {
+    if (ruleCategories.containsKey(entry.key)) continue;
+    reviewed[entry.key] = reviewed[entry.value] ?? reviewed[entry.key]!;
+  }
+  for (final tx in allTransactions) {
+    if (tx.kind == TxKind.internal && !ruleCategories.containsKey(tx.id)) {
+      reviewed[tx.id] = kInternalTransfer;
+    }
+  }
 
   group('ai summary contract', () {
     for (final raw in _fixture['cases'] as List) {

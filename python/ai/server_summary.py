@@ -28,7 +28,10 @@ import time
 from budget_progress import (
     budget_bucket_for_row,
     build_budget_progress,
+    classify_rows,
     is_credit_card_payment_row,
+    row_kind,
+    rule_key_for_row,
 )
 
 SUMMARY_VERSION = 3
@@ -82,6 +85,7 @@ class Tx:
         "raw_pfc_primary",
         "raw_pfc_detailed",
         "bucket",
+        "kind",
     )
 
     def __init__(self, row: dict, account_meta: dict, rules: dict[str, str]):
@@ -125,6 +129,8 @@ class Tx:
         )
         self.id = provider_id or self.dedupe_key
         self.bucket = budget_bucket_for_row(row, rules)
+        # build_transactions replaces this with the whole-list decision (refund matching).
+        self.kind = row_kind(row, rules.get(rule_key_for_row(row), ""), self.account_type)
 
     # ── AppTransaction getters ──
     @property
@@ -147,7 +153,12 @@ class Tx:
 
     @property
     def expense_amount(self) -> float:
-        return self.display_amount if self.is_expense and not self.is_credit_card_payment else 0.0
+        """Spending; negative for a refund. Own-account transfers count as nothing."""
+        if self.kind == "spend":
+            return self.display_amount
+        if self.kind == "refund":
+            return -self.display_amount
+        return 0.0
 
     def _is_refund_like(self) -> bool:
         text = (
@@ -179,7 +190,7 @@ class Tx:
 
     @property
     def income_amount(self) -> float:
-        return self.display_amount if self.is_income and not self.is_card_payment_credit else 0.0
+        return self.display_amount if self.kind == "income" else 0.0
 
     @property
     def card_payment_amount(self) -> float:
@@ -194,14 +205,25 @@ def build_transactions(
     wanted = set(account_ids) if account_ids else None
     seen: set[str] = set()
     out = []
+    unique_rows = []
     for row in tx_rows:
         tx = Tx(row, account_meta, rules)
         if tx.dedupe_key in seen:
             continue
+        unique_rows.append(row)
         seen.add(tx.dedupe_key)
         if wanted is not None and tx.account_id not in wanted:
             continue
         out.append(tx)
+    # Decided over every account, like the app: a refund can match a purchase on any of them.
+    account_types = {
+        account_id: str((meta or {}).get("account_type") or "").strip()
+        for account_id, meta in account_meta.items()
+    }
+    decided = classify_rows(unique_rows, rules, account_types)
+    for tx in out:
+        if tx.id in decided:
+            tx.kind, tx.bucket = decided[tx.id]
     return out
 
 
@@ -345,6 +367,27 @@ def build_summary(
                     windows_rolling[n]["income"] += income
             if tx.date.year == annual_year:
                 annual_income += income
+            if tx.kind == "refund":
+                # Money back for a purchase lowers spending in that purchase's category.
+                refund = tx.expense_amount
+                month_bucket["expenses"] += refund
+                day_bucket["expenses"] += refund
+                year_bucket["expenses"] += refund
+                for n in (7, 30, 90):
+                    if in_anchor[n]:
+                        windows_anchor[n]["expenses"] += refund
+                    if in_rolling[n]:
+                        windows_rolling[n]["expenses"] += refund
+                category_totals_all[category] = category_totals_all.get(category, 0.0) + refund
+                per_month = month_category_totals.setdefault(month_key, {})
+                per_month[category] = per_month.get(category, 0.0) + refund
+                if in_anchor[30]:
+                    category_totals_30d[category] = category_totals_30d.get(category, 0.0) + refund
+                if tx.date.year == annual_year:
+                    annual_expenses += refund
+                    annual_category_totals[category] = (
+                        annual_category_totals.get(category, 0.0) + refund
+                    )
         elif tx.is_expense:
             expense = tx.expense_amount
             transfer_like = _is_transfer_like_for_analysis(tx, category)

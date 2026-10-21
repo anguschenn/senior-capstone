@@ -73,7 +73,7 @@ class BudgetPaceSnapshot {
     final daily = List<double>.filled(dim + 1, 0);
     for (final tx in transactions) {
       if (tx.date.year != year || tx.date.month != month) continue;
-      if (!tx.isExpense) continue;
+      if (tx.expenseAmount == 0) continue;
       final day = tx.date.day.clamp(1, dim);
       daily[day] += tx.expenseAmount;
     }

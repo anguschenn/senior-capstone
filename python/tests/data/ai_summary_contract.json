@@ -372,7 +372,7 @@
         "category_index": {
           "Food": 288.9,
           "Entertainment": 6.25,
-          "Shopping": 195.0,
+          "Shopping": 165.0,
           "Bills & Utilities": 1500.0,
           "Subscriptions": 35.48,
           "Transport": 142.8,
@@ -390,44 +390,44 @@
         },
         "windows_anchor": {
           "last_7d": {
-            "income": 30.0,
-            "expenses": 63.75,
+            "income": 0.0,
+            "expenses": 33.75,
             "tx_count": 6
           },
           "last_30d": {
-            "income": 4030.0,
-            "expenses": 573.93,
+            "income": 4000.0,
+            "expenses": 543.93,
             "tx_count": 14,
             "expense_tx_count": 10
           },
           "last_90d": {
-            "income": 5980.0,
-            "expenses": 2204.7300000000005,
+            "income": 5950.0,
+            "expenses": 2174.7300000000005,
             "tx_count": 18
           }
         },
         "windows_rolling": {
           "last_7d": {
-            "income": 30.0,
-            "expenses": 63.75,
+            "income": 0.0,
+            "expenses": 33.75,
             "tx_count": 6
           },
           "last_30d": {
-            "income": 4030.0,
-            "expenses": 573.93,
+            "income": 4000.0,
+            "expenses": 543.93,
             "tx_count": 14,
             "expense_tx_count": 10
           },
           "last_90d": {
-            "income": 5980.0,
-            "expenses": 2204.7300000000005,
+            "income": 5950.0,
+            "expenses": 2174.7300000000005,
             "tx_count": 18
           }
         },
         "year_index": {
           "2026": {
-            "income": 7880.0,
-            "expenses": 2337.7300000000005,
+            "income": 7850.0,
+            "expenses": 2307.7300000000005,
             "tx_count": 22
           }
         },
@@ -521,18 +521,18 @@
             }
           },
           "2026-10": {
-            "income": 2030.0,
-            "expenses": 203.74,
+            "income": 2000.0,
+            "expenses": 173.74,
             "card_payments_in": 500.0,
             "card_payments_out": 500.0,
             "tx_count": 9,
             "expense_tx_count": 6,
             "top_category": {
               "name": "Shopping",
-              "amount": 120.0
+              "amount": 90.0
             },
             "categories": {
-              "Shopping": 120.0,
+              "Shopping": 90.0,
               "Food": 45.5,
               "Subscriptions": 19.99,
               "Transport": 12.0,
@@ -612,8 +612,8 @@
             "tx_count": 1
           },
           "2026-10-05": {
-            "income": 30.0,
-            "expenses": 0.0,
+            "income": 0.0,
+            "expenses": -30.0,
             "tx_count": 1
           },
           "2026-10-06": {
@@ -664,8 +664,8 @@
             },
             {
               "date": "2026-10-05",
-              "income": 30.0,
-              "expenses": 0.0,
+              "income": 0.0,
+              "expenses": -30.0,
               "tx_count": 1
             },
             {
@@ -790,7 +790,7 @@
             },
             {
               "month": "2026-10",
-              "expenses": 203.74
+              "expenses": 173.74
             },
             {
               "month": "2026-07",
@@ -857,13 +857,13 @@
           ]
         },
         "totals": {
-          "income_30d": 4030.0,
-          "expenses_30d": 573.93,
+          "income_30d": 4000.0,
+          "expenses_30d": 543.93,
           "net_30d": 3456.07,
           "tx_count_30d": 14,
           "expense_tx_count_30d": 10,
-          "income_month": 2030.0,
-          "expenses_month": 203.74,
+          "income_month": 2000.0,
+          "expenses_month": 173.74,
           "net_month": 1826.26
         },
         "top_expense_categories": [
@@ -873,7 +873,7 @@
           },
           {
             "category": "Shopping",
-            "amount": 120.0
+            "amount": 90.0
           },
           {
             "category": "Subscriptions",
@@ -921,7 +921,7 @@
             "date": "2026-10-07",
             "name": "Payment Thank You",
             "amount": -500.0,
-            "category": "Fees & Transfers",
+            "category": "Internal Transfer",
             "type": "LOAN_PAYMENTS",
             "account_id": "acc-card"
           },
@@ -930,7 +930,7 @@
             "date": "2026-10-06",
             "name": "Payment to Chase card",
             "amount": 500.0,
-            "category": "Fees & Transfers",
+            "category": "Internal Transfer",
             "type": "LOAN_PAYMENTS",
             "account_id": "acc-checking"
           }
@@ -961,8 +961,8 @@
         "annual_summary": {
           "year": 2026,
           "totals": {
-            "income_year": 7880.0,
-            "expenses_year": 2337.7300000000005,
+            "income_year": 7850.0,
+            "expenses_year": 2307.7300000000005,
             "net_year": 5542.2699999999995,
             "expense_tx_count_year": 16
           },
@@ -999,8 +999,8 @@
             },
             {
               "month": "2026-10",
-              "income": 2030.0,
-              "expenses": 203.74
+              "income": 2000.0,
+              "expenses": 173.74
             }
           ],
           "top_expense_categories_year": [
@@ -1014,7 +1014,7 @@
             },
             {
               "category": "Shopping",
-              "amount": 195.0
+              "amount": 165.0
             },
             {
               "category": "Transport",
@@ -1040,7 +1040,7 @@
             },
             {
               "month": "2026-10",
-              "expenses": 203.74
+              "expenses": 173.74
             },
             {
               "month": "2026-07",
@@ -1096,8 +1096,8 @@
             },
             {
               "month": "2026-10",
-              "expenses": 203.74,
-              "mom_change_pct": -0.891059197193868
+              "expenses": 173.74,
+              "mom_change_pct": -0.9071003480929745
             }
           ],
           "monthly_top_categories": [
@@ -1129,7 +1129,7 @@
             {
               "month": "2026-10",
               "category": "Shopping",
-              "amount": 120.0
+              "amount": 90.0
             }
           ],
           "daily_expense_totals": [
@@ -1199,7 +1199,7 @@
             },
             {
               "date": "2026-10-05",
-              "amount": 0.0
+              "amount": -30.0
             },
             {
               "date": "2026-10-06",
@@ -1306,7 +1306,7 @@
         "category_index": {
           "Food": 288.9,
           "Entertainment": 6.25,
-          "Shopping": 195.0,
+          "Shopping": 165.0,
           "Subscriptions": 35.48,
           "Transport": 142.8
         },
@@ -1340,26 +1340,26 @@
         },
         "windows_rolling": {
           "last_7d": {
-            "income": 30.0,
-            "expenses": 63.75,
+            "income": 0.0,
+            "expenses": 33.75,
             "tx_count": 5
           },
           "last_30d": {
-            "income": 30.0,
-            "expenses": 429.63,
+            "income": 0.0,
+            "expenses": 399.63,
             "tx_count": 9,
             "expense_tx_count": 7
           },
           "last_90d": {
-            "income": 30.0,
-            "expenses": 560.43,
+            "income": 0.0,
+            "expenses": 530.43,
             "tx_count": 11
           }
         },
         "year_index": {
           "2026": {
-            "income": 30.0,
-            "expenses": 668.43,
+            "income": 0.0,
+            "expenses": 638.43,
             "tx_count": 13
           }
         },
@@ -1441,18 +1441,18 @@
             }
           },
           "2026-10": {
-            "income": 30.0,
-            "expenses": 203.74,
+            "income": 0.0,
+            "expenses": 173.74,
             "card_payments_in": 500.0,
             "card_payments_out": 0.0,
             "tx_count": 7,
             "expense_tx_count": 5,
             "top_category": {
               "name": "Shopping",
-              "amount": 120.0
+              "amount": 90.0
             },
             "categories": {
-              "Shopping": 120.0,
+              "Shopping": 90.0,
               "Food": 45.5,
               "Subscriptions": 19.99,
               "Transport": 12.0,
@@ -1497,8 +1497,8 @@
             "tx_count": 1
           },
           "2026-10-05": {
-            "income": 30.0,
-            "expenses": 0.0,
+            "income": 0.0,
+            "expenses": -30.0,
             "tx_count": 1
           },
           "2026-10-07": {
@@ -1538,8 +1538,8 @@
             },
             {
               "date": "2026-10-05",
-              "income": 30.0,
-              "expenses": 0.0,
+              "income": 0.0,
+              "expenses": -30.0,
               "tx_count": 1
             },
             {
@@ -1622,7 +1622,7 @@
             },
             {
               "month": "2026-10",
-              "expenses": 203.74
+              "expenses": 173.74
             },
             {
               "month": "2026-07",
@@ -1737,7 +1737,7 @@
             "date": "2026-10-07",
             "name": "Payment Thank You",
             "amount": -500.0,
-            "category": "Fees & Transfers",
+            "category": "Internal Transfer",
             "type": "LOAN_PAYMENTS",
             "account_id": "acc-card"
           },
@@ -1777,8 +1777,8 @@
         "annual_summary": {
           "year": 2026,
           "totals": {
-            "income_year": 30.0,
-            "expenses_year": 668.43,
+            "income_year": 0.0,
+            "expenses_year": 638.43,
             "net_year": -638.43,
             "expense_tx_count_year": 11
           },
@@ -1810,8 +1810,8 @@
             },
             {
               "month": "2026-10",
-              "income": 30.0,
-              "expenses": 203.74
+              "income": 0.0,
+              "expenses": 173.74
             }
           ],
           "top_expense_categories_year": [
@@ -1821,7 +1821,7 @@
             },
             {
               "category": "Shopping",
-              "amount": 195.0
+              "amount": 165.0
             },
             {
               "category": "Transport",
@@ -1843,7 +1843,7 @@
             },
             {
               "month": "2026-10",
-              "expenses": 203.74
+              "expenses": 173.74
             },
             {
               "month": "2026-07",
@@ -1890,8 +1890,8 @@
             },
             {
               "month": "2026-10",
-              "expenses": 203.74,
-              "mom_change_pct": -0.09805657620965959
+              "expenses": 173.74,
+              "mom_change_pct": -0.23086458010536104
             }
           ],
           "monthly_top_categories": [
@@ -1923,7 +1923,7 @@
             {
               "month": "2026-10",
               "category": "Shopping",
-              "amount": 120.0
+              "amount": 90.0
             }
           ],
           "daily_expense_totals": [
@@ -1961,7 +1961,7 @@
             },
             {
               "date": "2026-10-05",
-              "amount": 0.0
+              "amount": -30.0
             },
             {
               "date": "2026-10-07",
@@ -2051,7 +2051,7 @@
         "category_index": {
           "Food": 288.9,
           "Entertainment": 6.25,
-          "Shopping": 195.0,
+          "Shopping": 165.0,
           "Bills & Utilities": 1500.0,
           "Subscriptions": 35.48,
           "Transport": 142.8,
@@ -2087,26 +2087,26 @@
         },
         "windows_rolling": {
           "last_7d": {
-            "income": 30.0,
-            "expenses": 63.75,
+            "income": 0.0,
+            "expenses": 33.75,
             "tx_count": 6
           },
           "last_30d": {
-            "income": 4030.0,
-            "expenses": 573.93,
+            "income": 4000.0,
+            "expenses": 543.93,
             "tx_count": 14,
             "expense_tx_count": 10
           },
           "last_90d": {
-            "income": 5980.0,
-            "expenses": 2204.7300000000005,
+            "income": 5950.0,
+            "expenses": 2174.7300000000005,
             "tx_count": 18
           }
         },
         "year_index": {
           "2026": {
-            "income": 7880.0,
-            "expenses": 2337.7300000000005,
+            "income": 7850.0,
+            "expenses": 2307.7300000000005,
             "tx_count": 22
           }
         },
@@ -2200,18 +2200,18 @@
             }
           },
           "2026-10": {
-            "income": 2030.0,
-            "expenses": 203.74,
+            "income": 2000.0,
+            "expenses": 173.74,
             "card_payments_in": 500.0,
             "card_payments_out": 500.0,
             "tx_count": 9,
             "expense_tx_count": 6,
             "top_category": {
               "name": "Shopping",
-              "amount": 120.0
+              "amount": 90.0
             },
             "categories": {
-              "Shopping": 120.0,
+              "Shopping": 90.0,
               "Food": 45.5,
               "Subscriptions": 19.99,
               "Transport": 12.0,
@@ -2301,8 +2301,8 @@
             "tx_count": 1
           },
           "2026-10-05": {
-            "income": 30.0,
-            "expenses": 0.0,
+            "income": 0.0,
+            "expenses": -30.0,
             "tx_count": 1
           },
           "2026-10-06": {
@@ -2353,8 +2353,8 @@
             },
             {
               "date": "2026-10-05",
-              "income": 30.0,
-              "expenses": 0.0,
+              "income": 0.0,
+              "expenses": -30.0,
               "tx_count": 1
             },
             {
@@ -2479,7 +2479,7 @@
             },
             {
               "month": "2026-10",
-              "expenses": 203.74
+              "expenses": 173.74
             },
             {
               "month": "2026-07",
@@ -2551,8 +2551,8 @@
           "net_30d": 0.0,
           "tx_count_30d": 0,
           "expense_tx_count_30d": 0,
-          "income_month": 7880.0,
-          "expenses_month": 2337.73,
+          "income_month": 7850.0,
+          "expenses_month": 2307.73,
           "net_month": 5542.27
         },
         "top_expense_categories": [],
@@ -2589,7 +2589,7 @@
             "date": "2026-10-07",
             "name": "Payment Thank You",
             "amount": -500.0,
-            "category": "Fees & Transfers",
+            "category": "Internal Transfer",
             "type": "LOAN_PAYMENTS",
             "account_id": "acc-card"
           },
@@ -2598,7 +2598,7 @@
             "date": "2026-10-06",
             "name": "Payment to Chase card",
             "amount": 500.0,
-            "category": "Fees & Transfers",
+            "category": "Internal Transfer",
             "type": "LOAN_PAYMENTS",
             "account_id": "acc-checking"
           }
@@ -2611,8 +2611,8 @@
         "annual_summary": {
           "year": 2026,
           "totals": {
-            "income_year": 7880.0,
-            "expenses_year": 2337.7300000000005,
+            "income_year": 7850.0,
+            "expenses_year": 2307.7300000000005,
             "net_year": 5542.2699999999995,
             "expense_tx_count_year": 16
           },
@@ -2649,8 +2649,8 @@
             },
             {
               "month": "2026-10",
-              "income": 2030.0,
-              "expenses": 203.74
+              "income": 2000.0,
+              "expenses": 173.74
             }
           ],
           "top_expense_categories_year": [
@@ -2664,7 +2664,7 @@
             },
             {
               "category": "Shopping",
-              "amount": 195.0
+              "amount": 165.0
             },
             {
               "category": "Transport",
@@ -2690,7 +2690,7 @@
             },
             {
               "month": "2026-10",
-              "expenses": 203.74
+              "expenses": 173.74
             },
             {
               "month": "2026-07",
@@ -2746,8 +2746,8 @@
             },
             {
               "month": "2026-10",
-              "expenses": 203.74,
-              "mom_change_pct": -0.891059197193868
+              "expenses": 173.74,
+              "mom_change_pct": -0.9071003480929745
             }
           ],
           "monthly_top_categories": [
@@ -2779,7 +2779,7 @@
             {
               "month": "2026-10",
               "category": "Shopping",
-              "amount": 120.0
+              "amount": 90.0
             }
           ],
           "daily_expense_totals": [
@@ -2849,7 +2849,7 @@
             },
             {
               "date": "2026-10-05",
-              "amount": 0.0
+              "amount": -30.0
             },
             {
               "date": "2026-10-06",

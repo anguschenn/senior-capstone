@@ -63,6 +63,9 @@ void main() {
           AppTransaction.fromMap(row).expenseAmount > 0,
           expected['counts_as_spending'],
         );
+        if (expected['kind'] != null) {
+          expect(AppTransaction.fromMap(row).ownKind().name, expected['kind']);
+        }
       });
     }
 

@@ -20,7 +20,7 @@ from .query_parser_v2 import (
     parse_query_v2,
 )
 from .query_planner_v2 import build_execution_plan_v2
-from .response_utils import describe_plaid_amount
+from .response_utils import describe_plaid_amount, group_dollar_amounts
 from .response_validator_v2 import validate_v2_response
 from .schemas import build_chat_response
 from .time_parsing import (
@@ -2271,6 +2271,8 @@ class ChatService:
             reply = str(response.get("reply", "") or "")
             if note not in reply:
                 response["reply"] = clamp_str(f"{reply} {note}".strip(), 2500)
+        if isinstance(response, dict) and isinstance(response.get("reply"), str):
+            response["reply"] = group_dollar_amounts(response["reply"])
         return response
 
     _ASKS_INCOME_RE = re.compile(

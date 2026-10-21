@@ -7,6 +7,7 @@ from budget_progress import (
     build_budget_progress,
     counts_as_spending,
     is_expense_row,
+    row_kind,
     rule_key_for_row,
 )
 
@@ -26,6 +27,8 @@ class BudgetBucketContractTests(unittest.TestCase):
                 self.assertEqual(budget_bucket_for_row(row, rules), expected["bucket"])
                 self.assertEqual(is_expense_row(row), expected["is_expense"])
                 self.assertEqual(counts_as_spending(row), expected["counts_as_spending"])
+                if "kind" in expected:
+                    self.assertEqual(row_kind(row), expected["kind"])
 
     def test_month_progress(self):
         for case in ("progress", "progress_unbudgeted"):

@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../core/config/api_config.dart';
 import '../core/config/env_config.dart';
+import '../constants/app_constants.dart';
 import '../core/config/supabase_client.dart';
 import '../models/app_models.dart';
 import '../utils/app_helpers.dart';
@@ -71,6 +72,7 @@ class SyncResult {
     required this.autoReviewedCategoryByTxId,
     required this.autoLowConfidenceReviewTxIds,
     this.budgetLimitsByMonth = const {},
+    this.ruleCategoryByTxId = const {},
   });
 
   final List<AppTransaction> transactions;
@@ -84,6 +86,9 @@ class SyncResult {
   final bool hasData;
   final Map<String, String> autoReviewedCategoryByTxId;
   final Set<String> autoLowConfidenceReviewTxIds;
+
+  /// Categories from the user's remembered rules (category_match_rules).
+  final Map<String, String> ruleCategoryByTxId;
 
   /// The focused year's limits per month ("2026-09" → category id → limit).
   final Map<String, Map<String, double>> budgetLimitsByMonth;
@@ -363,18 +368,34 @@ class SyncService {
     final autoReviewedCategoryByTxId = <String, String>{};
     final autoLowConfidenceReviewTxIds = <String>{};
 
+    // Categories the user decided (remembered rules), then what counts as
+    // spending, income, a refund or a transfer between their own accounts.
+    final ruleCategoryByTxId = <String, String>{};
+    for (int i = 0; i < txRows.length && i < parsed.length; i++) {
+      final key = CategoryService.instance.ruleKeyForRawTransaction(txRows[i]);
+      final remembered = key.isEmpty ? null : rememberedRules[key];
+      if (remembered != null && remembered.category.isNotEmpty) {
+        ruleCategoryByTxId[parsed[i].id] = remembered.category;
+      }
+    }
+    final classified = classifyTransactions(deduped, ruleCategoryByTxId);
+    AppTransaction.kindById = classified.kinds;
+
     for (int i = 0; i < txRows.length && i < parsed.length; i++) {
       final tx = parsed[i];
       final key = CategoryService.instance.ruleKeyForRawTransaction(txRows[i]);
       if (key.isEmpty) continue;
-      final remembered = rememberedRules[key];
-      if (remembered != null && remembered.category.isNotEmpty) {
-        autoReviewedCategoryByTxId[tx.id] = remembered.category;
+      final remembered = ruleCategoryByTxId[tx.id];
+      if (remembered != null) {
+        autoReviewedCategoryByTxId[tx.id] = remembered;
         continue;
       }
-      // A payment onto a card is a transfer (Fees & Transfers), not
-      // something to guess a category for.
-      if (tx.isCardPaymentCredit) continue;
+      // Money between the user's own accounts isn't something to guess a
+      // category for.
+      if (tx.kind == TxKind.internal) {
+        autoReviewedCategoryByTxId[tx.id] = kInternalTransfer;
+        continue;
+      }
       final decision = CategoryService.instance.classifyByPfcSignals(
         pfcPrimary: ((txRows[i]['pfc_primary'] as String?) ?? '').trim(),
         pfcDetailed:
@@ -389,10 +410,23 @@ class SyncService {
                 .trim(),
         transactionName: ((txRows[i]['name'] as String?) ?? '').trim(),
       );
-      autoReviewedCategoryByTxId[tx.id] = decision.category;
+      // Money in that counts as income reads as Income; the review queue
+      // still offers it when the signals were weak (a friend paying back a
+      // dinner belongs in Food).
+      autoReviewedCategoryByTxId[tx.id] = tx.kind == TxKind.income
+          ? 'Income'
+          : decision.category;
       if (decision.confidence == 'low') {
         autoLowConfidenceReviewTxIds.add(tx.id);
       }
+    }
+    // A refund lands in the category of the purchase it pays back.
+    for (final entry in classified.purchaseIdByRefundId.entries) {
+      if (ruleCategoryByTxId.containsKey(entry.key)) continue;
+      final purchaseCategory = autoReviewedCategoryByTxId[entry.value];
+      if (purchaseCategory == null) continue;
+      autoReviewedCategoryByTxId[entry.key] = purchaseCategory;
+      autoLowConfidenceReviewTxIds.remove(entry.key);
     }
     effectiveReviewedCategoryByTxId.addAll(autoReviewedCategoryByTxId);
 
@@ -524,6 +558,7 @@ class SyncService {
           dbSubscriptions.isNotEmpty,
       autoReviewedCategoryByTxId: autoReviewedCategoryByTxId,
       autoLowConfidenceReviewTxIds: autoLowConfidenceReviewTxIds,
+      ruleCategoryByTxId: ruleCategoryByTxId,
     );
   }
 }

@@ -1,4 +1,23 @@
+import '../constants/app_constants.dart';
 import '../utils/app_helpers.dart';
+
+/// How a transaction counts in spending and income totals.
+enum TxKind {
+  /// Money spent: counts in its category's spending.
+  spend,
+
+  /// Money back for a purchase: lowers its category's spending.
+  refund,
+
+  /// Money earned or received from someone else.
+  income,
+
+  /// Money moving between the user's own accounts (savings transfers, card
+  /// payments): shown in the list but never counted.
+  internal,
+
+  none,
+}
 
 // Normalized transaction model used by the UI after reading raw Supabase rows.
 class AppTransaction {
@@ -73,11 +92,99 @@ class AppTransaction {
     pfcPrimary: rawPfcPrimary,
   );
 
-  /// Spending contributed by this transaction. A credit card payment is money
-  /// moving between the user's own accounts: the purchases already count on
-  /// the card, so counting the payment from checking too would double-count.
-  double get expenseAmount =>
-      isExpense && !isCreditCardPayment ? displayAmount : 0;
+  /// Kinds for the loaded transactions, set by [classifyTransactions] so
+  /// remembered rules and refund matching apply. Ids missing here fall back to
+  /// [ownKind].
+  static Map<String, TxKind> kindById = const {};
+
+  TxKind get kind => kindById[id] ?? ownKind();
+
+  /// Spending contributed by this transaction: negative for a refund, so it
+  /// nets against its category. Transfers between the user's own accounts
+  /// (a card payment, a savings transfer) count as nothing:
+  /// the purchases already count when they happen.
+  double get expenseAmount => switch (kind) {
+    TxKind.spend => displayAmount,
+    TxKind.refund => -displayAmount,
+    _ => 0,
+  };
+
+  /// The kind from this transaction alone. [userCategory] is a category the
+  /// user picked or remembered: Internal Transfer stops it counting, Income
+  /// counts money in as income, a spending category counts money in as a
+  /// refund of that category.
+  TxKind ownKind({String userCategory = ''}) {
+    if (amount == 0) return TxKind.none;
+    if (userCategory == kInternalTransfer) return TxKind.internal;
+    // Any other pick counts it. Fees & Transfers is the old catch-all for
+    // payments and transfers, so it leaves the decision to the rules below.
+    if (userCategory.isNotEmpty && userCategory != 'Fees & Transfers') {
+      if (isExpense) return TxKind.spend;
+      return userCategory == 'Income' ? TxKind.income : TxKind.refund;
+    }
+    if (isCreditCardPayment || isCardPaymentCredit) return TxKind.internal;
+    if (isOwnAccountTransferBySignals(
+      name: name,
+      description: description,
+      pfcDetailed: rawPfcDetailed,
+    )) {
+      return TxKind.internal;
+    }
+    if (isExpense) return TxKind.spend;
+    if (_isRefundLike() || isSpendingPfc(rawPfcPrimary)) return TxKind.refund;
+    return TxKind.income;
+  }
+
+  /// Money moved to or from one of the user's own accounts. Person-to-person
+  /// apps (Zelle, Venmo...) are real payments, so they still count. Cash isn't
+  /// tracked, so a withdrawal counts as spending and a cash deposit as income.
+  /// The user can mark any of them as Internal Transfer.
+  static bool isOwnAccountTransferBySignals({
+    required String name,
+    required String description,
+    required String pfcDetailed,
+  }) {
+    final text = '$name $description'.toLowerCase();
+    if (isPeerToPeer(text)) return false;
+    final detailed = pfcDetailed.toUpperCase();
+    if (_ownTransferPfc.any(detailed.contains)) return true;
+    return RegExp(r'\btransfer\b').hasMatch(text);
+  }
+
+  static bool isPeerToPeer(String text) =>
+      _peerToPeerWords.any(text.toLowerCase().contains);
+
+  static const _peerToPeerWords = [
+    'zelle',
+    'venmo',
+    'paypal',
+    'cash app',
+    'apple cash',
+  ];
+
+  static const _ownTransferPfc = [
+    'TRANSFER_IN_ACCOUNT_TRANSFER',
+    'TRANSFER_OUT_ACCOUNT_TRANSFER',
+    'TRANSFER_IN_SAVINGS',
+    'TRANSFER_OUT_SAVINGS',
+    'TRANSFER_IN_INVESTMENT_AND_RETIREMENT_FUNDS',
+    'TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS',
+  ];
+
+  /// Plaid groups that are things you buy: money back in one is a refund.
+  static bool isSpendingPfc(String pfcPrimary) => const {
+    'FOOD_AND_DRINK',
+    'GENERAL_MERCHANDISE',
+    'GENERAL_SERVICES',
+    'ENTERTAINMENT',
+    'TRAVEL',
+    'TRANSPORTATION',
+    'PERSONAL_CARE',
+    'HOME_IMPROVEMENT',
+    'MEDICAL',
+    'RENT_AND_UTILITIES',
+    'BANK_FEES',
+  }.contains(pfcPrimary.toUpperCase().trim());
 
   /// The card side of paying off a credit card ("Payment Thank You"): money
   /// moving between the user's own accounts, so it isn't income. Refunds on
@@ -97,14 +204,14 @@ class AppTransaction {
         text.contains('autopay');
   }
 
-  double get incomeAmount =>
-      isIncome && !isCardPaymentCredit ? displayAmount : 0;
+  double get incomeAmount => kind == TxKind.income ? displayAmount : 0;
 
   /// Money paid onto a credit card, seen from the card's side.
   double get cardPaymentAmount => isCardPaymentCredit ? displayAmount : 0;
 
-  /// Label for money coming in: a card payment is a transfer, not income.
-  String get inflowLabel => isCardPaymentCredit ? 'Fees & Transfers' : 'Income';
+  /// Label for money coming in that has no category of its own.
+  String get inflowLabel =>
+      kind == TxKind.internal ? kInternalTransfer : 'Income';
 
   double get nonIncomeInflowAmount => isNonIncomeInflow ? displayAmount : 0;
 
@@ -499,4 +606,85 @@ class AccountOption {
   final double balance;
   final int txCount;
   final List<String> linkedAccountIds;
+}
+
+/// Kinds for a whole list of transactions, plus the purchase each refund
+/// belongs to. [userCategoryById] holds categories the user picked or has a
+/// remembered rule for. A refund is money back from a merchant with an
+/// earlier purchase of at least that amount on the same account.
+({Map<String, TxKind> kinds, Map<String, String> purchaseIdByRefundId})
+classifyTransactions(
+  List<AppTransaction> transactions,
+  Map<String, String> userCategoryById,
+) {
+  final kinds = <String, TxKind>{};
+  final purchaseIdByRefundId = <String, String>{};
+  final purchasesByMerchant = <String, List<AppTransaction>>{};
+  for (final tx in transactions) {
+    final userCategory = userCategoryById[tx.id] ?? '';
+    var kind = tx.ownKind(userCategory: userCategory);
+    if (kind == TxKind.spend) {
+      purchasesByMerchant
+          .putIfAbsent(merchantMatchKey(tx.name), () => [])
+          .add(tx);
+    }
+    kinds[tx.id] = kind;
+  }
+  for (final tx in transactions) {
+    final kind = kinds[tx.id];
+    if (kind != TxKind.income && kind != TxKind.refund) continue;
+    final userCategory = userCategoryById[tx.id] ?? '';
+    if (userCategory.isNotEmpty && userCategory != 'Fees & Transfers') {
+      continue;
+    }
+    final purchase = _matchingPurchase(
+      tx,
+      purchasesByMerchant[merchantMatchKey(tx.name)] ?? const [],
+    );
+    if (purchase == null) continue;
+    kinds[tx.id] = TxKind.refund;
+    purchaseIdByRefundId[tx.id] = purchase.id;
+  }
+  return (kinds: kinds, purchaseIdByRefundId: purchaseIdByRefundId);
+}
+
+/// A merchant name without digits, punctuation or extra spaces.
+String merchantMatchKey(String name) => name
+    .toLowerCase()
+    .replaceAll(RegExp(r'[^a-z ]'), ' ')
+    .replaceAll(RegExp(r'\s+'), ' ')
+    .trim();
+
+AppTransaction? _matchingPurchase(
+  AppTransaction refund,
+  List<AppTransaction> purchases,
+) {
+  if (merchantMatchKey(refund.name).isEmpty) return null;
+  // Money from a person is not a merchant handing a purchase back.
+  if (AppTransaction.isPeerToPeer('${refund.name} ${refund.description}')) {
+    return null;
+  }
+  AppTransaction? best;
+  for (final purchase in purchases) {
+    if (refund.accountId.isNotEmpty &&
+        purchase.accountId.isNotEmpty &&
+        refund.accountId != purchase.accountId) {
+      continue;
+    }
+    final days = refund.date.difference(purchase.date).inDays;
+    if (days < 0 || days > 120) continue;
+    if (purchase.displayAmount + 0.005 < refund.displayAmount) continue;
+    final exact = (purchase.displayAmount - refund.displayAmount).abs() < 0.005;
+    if (best == null) {
+      best = purchase;
+      continue;
+    }
+    final bestExact = (best.displayAmount - refund.displayAmount).abs() < 0.005;
+    if (exact && !bestExact) {
+      best = purchase;
+    } else if (exact == bestExact && purchase.date.isAfter(best.date)) {
+      best = purchase;
+    }
+  }
+  return best;
 }

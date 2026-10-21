@@ -1,5 +1,7 @@
 """Response formatting helpers shared by API routes."""
 
+import re
+
 from ai.validators import clamp_str
 
 
@@ -35,3 +37,11 @@ def describe_plaid_amount(amount) -> str:
     if value < 0:
         return f"received ${abs(value):.2f}"
     return "$0.00"
+
+
+_UNGROUPED_DOLLARS_RE = re.compile(r"(?<![\d,])\$(\d{4,})(?=(\.\d+)?(?!\d|,\d))")
+
+
+def group_dollar_amounts(text: str) -> str:
+    """$1127.50 -> $1,127.50, the way the app shows money. Amounts already grouped stay."""
+    return _UNGROUPED_DOLLARS_RE.sub(lambda m: f"${int(m.group(1)):,}", text)

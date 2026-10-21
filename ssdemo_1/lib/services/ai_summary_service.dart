@@ -303,6 +303,42 @@ class AiSummaryService {
         if (tx.date.year == annualYear) {
           annualIncome += income;
         }
+        if (tx.kind == TxKind.refund) {
+          // Money back for a purchase lowers spending in its category.
+          final refund = tx.expenseAmount;
+          monthBucket['expenses'] =
+              (monthBucket['expenses'] as double) + refund;
+          dayBucket['expenses'] = (dayBucket['expenses'] as double) + refund;
+          yearlyBucket['expenses'] =
+              (yearlyBucket['expenses'] as double) + refund;
+          if (inAnchorWindow(tx.date, cutoff30d)) expenses30d += refund;
+          if (!tx.date.isBefore(rollingCutoff30d)) {
+            expenses30dRolling += refund;
+          }
+          if (inAnchorWindow(tx.date, cutoff7d)) expenses7d += refund;
+          if (!tx.date.isBefore(rollingCutoff7d)) expenses7dRolling += refund;
+          if (inAnchorWindow(tx.date, cutoff90d)) expenses90d += refund;
+          if (!tx.date.isBefore(rollingCutoff90d)) {
+            expenses90dRolling += refund;
+          }
+          categoryTotalsAll[effectiveCategory] =
+              (categoryTotalsAll[effectiveCategory] ?? 0) + refund;
+          final monthCategoryBucket = monthCategoryTotals.putIfAbsent(
+            monthKey,
+            () => <String, double>{},
+          );
+          monthCategoryBucket[effectiveCategory] =
+              (monthCategoryBucket[effectiveCategory] ?? 0) + refund;
+          if (inAnchorWindow(tx.date, cutoff30d)) {
+            categoryTotals30d[effectiveCategory] =
+                (categoryTotals30d[effectiveCategory] ?? 0) + refund;
+          }
+          if (tx.date.year == annualYear) {
+            annualExpenses += refund;
+            annualCategoryTotals[effectiveCategory] =
+                (annualCategoryTotals[effectiveCategory] ?? 0) + refund;
+          }
+        }
       } else if (tx.isExpense) {
         final expense = tx.expenseAmount;
         final isTransferLikeForTotals = _isTransferLikeForTotals(

@@ -419,51 +419,10 @@ class BudgetService {
       } else {
         if (txDate.year != now.year || txDate.month != now.month) continue;
       }
-      final rawAmount = row['amount'];
-      final amount = rawAmount is num
-          ? rawAmount.toDouble()
-          : double.tryParse('$rawAmount') ?? 0;
-      final pfcDetailed =
-          ((row['pfc_detailed'] as String?) ??
-                  (row['category'] as String?) ??
-                  '')
-              .trim();
-      final pfcPrimary = ((row['pfc_primary'] as String?) ?? '').trim();
-      final pfcExpense = AppTransaction.isExpenseByPfc(
-        pfcDetailed: pfcDetailed,
-        pfcPrimary: pfcPrimary,
-      );
-      final pfcIncome = AppTransaction.isIncomeByPfc(
-        pfcDetailed: pfcDetailed,
-        pfcPrimary: pfcPrimary,
-      );
-      final pfcKnown = AppTransaction.isKnownByPfc(
-        pfcDetailed: pfcDetailed,
-        pfcPrimary: pfcPrimary,
-      );
-      final accountName = ((row['account_name'] as String?) ?? '').trim();
-      final accountType = ((row['account_type'] as String?) ?? '').trim();
-      final accountSubtype = ((row['subtype'] as String?) ?? '').trim();
-      final usesDepository = AppTransaction.usesDepositoryPolarity(
-        accountName: accountName,
-        accountType: accountType,
-        accountSubtype: accountSubtype,
-      );
-      final isDepositoryAccount = accountType.toLowerCase() == 'depository';
-      final fallbackExpense = isDepositoryAccount
-          ? amount > 0
-          : (usesDepository ? amount < 0 : amount > 0);
-      final isExpense = pfcKnown ? (pfcExpense && !pfcIncome) : fallbackExpense;
-      if (!isExpense) {
-        continue;
-      }
-      if (AppTransaction.isCreditCardPaymentByPfc(
-        pfcDetailed: pfcDetailed,
-        pfcPrimary: pfcPrimary,
-      )) {
-        continue;
-      }
-      final expenseAmount = amount.abs();
+      // Same rules as the parsed transaction (AppTransaction.expenseAmount):
+      // refunds net against their category, own-account transfers don't count.
+      final expenseAmount = AppTransaction.fromMap(row).expenseAmount;
+      if (expenseAmount == 0) continue;
       final bucket = _categoryService.budgetBucketForRawTransaction(
         row,
         reviewedCategoryByTxId,
@@ -522,7 +481,7 @@ class BudgetService {
     const preset = kPresetBudgetCategories;
     final spentMap = <String, double>{for (final p in preset) p: 0};
     for (final tx in txs) {
-      if (!tx.isExpense) continue;
+      if (tx.expenseAmount == 0) continue;
       if (yearly) {
         if (tx.date.year != now.year) continue;
       } else {
@@ -556,7 +515,7 @@ class BudgetService {
     const preset = kPresetBudgetCategories;
     final spentMap = <String, double>{for (final p in preset) p: 0};
     for (final tx in txs) {
-      if (!tx.isExpense) continue;
+      if (tx.expenseAmount == 0) continue;
       final bucket = _categoryService.budgetBucketFor(
         tx,
         reviewedCategoryByTxId,
@@ -590,7 +549,7 @@ class BudgetService {
     // Year view: also by month, for cards that count only budgeted months.
     final spentByMonth = <int, Map<String, double>>{};
     for (final tx in txs) {
-      if (!tx.isExpense) continue;
+      if (tx.expenseAmount == 0) continue;
       if (!allTime) {
         if (yearly) {
           if (tx.date.year != focusMonth.year) continue;

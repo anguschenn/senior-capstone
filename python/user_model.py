@@ -19,10 +19,11 @@ import datetime as dt
 import math
 
 from budget_progress import (
-    budget_bucket_for_row,
     build_budget_progress,
-    counts_as_spending,
+    classify_rows,
     normalize_category_key,
+    row_id,
+    signed_spend,
 )
 from supabase_repo import supabase
 
@@ -72,17 +73,25 @@ def build_category_month_stats(tx_rows: list[dict], rules: dict[str, str]) -> li
     """Spend and count per (month, bucket). Buckets are the raw budget_bucket_for_row names,
     before the Budget page folds unbudgeted ones into "Other"."""
     totals: dict[tuple[str, str], list] = {}
+    kinds = classify_rows(tx_rows, rules)
     for row in tx_rows:
         month = str(row.get("date") or "")[:7]
-        if len(month) != 7 or not counts_as_spending(row):
+        if len(month) != 7:
             continue
-        bucket = budget_bucket_for_row(row, rules)[:64] or "Other"
+        kind, bucket = kinds[row_id(row)]
+        amount = signed_spend(kind, float(row["amount"]))
+        if amount == 0:
+            continue
+        bucket = bucket[:64] or "Other"
         entry = totals.setdefault((month, bucket), [0.0, 0])
-        entry[0] += abs(float(row["amount"]))
-        entry[1] += 1
+        entry[0] += amount
+        if kind == "spend":
+            entry[1] += 1
+    # A refund can outweigh a month's purchases in its bucket; spending never goes below 0.
     return [
-        {"month": month, "category": bucket, "spent": round(spent, 2), "tx_count": count}
+        {"month": month, "category": bucket, "spent": round(max(spent, 0.0), 2), "tx_count": count}
         for (month, bucket), (spent, count) in sorted(totals.items())
+        if spent > 0 or count
     ]
 
 
