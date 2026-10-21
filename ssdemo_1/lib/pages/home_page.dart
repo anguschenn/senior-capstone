@@ -167,7 +167,7 @@ class HomePage extends StatelessWidget {
         padding: EdgeInsets.only(bottom: 24 + tabBarClearance(context)),
         children: [
           LargeTitle(
-            'SmartSpend',
+            'Wallet',
             trailing: [
               CircleIconButton(
                 key: const ValueKey('wallet-settings'),
