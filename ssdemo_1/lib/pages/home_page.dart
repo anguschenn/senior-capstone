@@ -707,6 +707,16 @@ class _FlowThumbnail extends StatelessWidget {
   final List<AppTransaction> transactions;
   final List<BudgetCategoryProgress> budgetProgress;
   final DateTime selectedMonth;
+
+  bool get _monthFinished {
+    if (isAllYearOption(selectedMonth)) return false;
+    final now = DateTime.now();
+    return DateTime(
+      selectedMonth.year,
+      selectedMonth.month + 1,
+    ).isBefore(DateTime(now.year, now.month, 1).add(const Duration(days: 1)));
+  }
+
   final VoidCallback? onTap;
 
   @override
@@ -792,16 +802,19 @@ class _FlowThumbnail extends StatelessWidget {
                         snapshot.isOverBudget ? 'over budget' : 'budget left',
                         style: TextStyle(fontSize: 13, color: c.muted),
                       ),
-                      const SizedBox(height: 8),
-                      StatusPill(
-                        label: snapshot.isUnderPace
-                            ? '${dollars(snapshot.paceDelta, decimals: 0)} under pace'
-                            : '${dollars(snapshot.paceDelta, decimals: 0)} over pace',
-                        background: snapshot.isUnderPace
-                            ? c.goodTint
-                            : c.bad.withValues(alpha: 0.16),
-                        foreground: snapshot.isUnderPace ? c.good : c.bad,
-                      ),
+                      // A finished month has no pace left to be on.
+                      if (!_monthFinished) ...[
+                        const SizedBox(height: 8),
+                        StatusPill(
+                          label: snapshot.isUnderPace
+                              ? '${dollars(snapshot.paceDelta, decimals: 0)} under pace'
+                              : '${dollars(snapshot.paceDelta, decimals: 0)} over pace',
+                          background: snapshot.isUnderPace
+                              ? c.goodTint
+                              : c.bad.withValues(alpha: 0.16),
+                          foreground: snapshot.isUnderPace ? c.good : c.bad,
+                        ),
+                      ],
                     ],
                   ),
                 ),

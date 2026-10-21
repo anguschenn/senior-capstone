@@ -298,11 +298,23 @@ class _BudgetPageState extends State<BudgetPage> {
     return 'Total all-time expenses';
   }
 
+  /// All spending in the period, as on Cash Flow. Not the cards' total: in
+  /// the Year view those count only the months that had a budget.
   double _selectedRangeExpensesValue() {
-    return activeBudgetProgress.fold<double>(
-      0,
-      (sum, item) => sum + item.spent,
-    );
+    final focus = widget.selectedMonth;
+    double total = 0;
+    for (final tx in widget.transactions) {
+      if (viewMode == BudgetViewMode.month &&
+          !isAllYearOption(focus) &&
+          (tx.date.year != focus.year || tx.date.month != focus.month)) {
+        continue;
+      }
+      if (viewMode != BudgetViewMode.all && tx.date.year != focus.year) {
+        continue;
+      }
+      total += tx.expenseAmount;
+    }
+    return total;
   }
 
   @override
