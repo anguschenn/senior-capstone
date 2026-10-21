@@ -12,5 +12,6 @@ Future<void> main() async {
   await AppSupabase.init();
   ApiConfig.init();
   await AppearanceController.instance.load();
+  await AllAccountsStyleController.instance.load();
   runApp(const SmartSpendApp());
 }

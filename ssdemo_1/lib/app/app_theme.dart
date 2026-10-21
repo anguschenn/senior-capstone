@@ -246,3 +246,33 @@ class AppearanceController extends ValueNotifier<ThemeMode> {
     } catch (_) {}
   }
 }
+
+/// Look of the All Accounts wallet card. Temporary: a debug-build chooser
+/// while the style is picked; only the chosen one stays.
+enum AllAccountsStyle { blend, stripes, classic }
+
+class AllAccountsStyleController extends ValueNotifier<AllAccountsStyle> {
+  AllAccountsStyleController._() : super(AllAccountsStyle.blend);
+
+  static final instance = AllAccountsStyleController._();
+  static const _prefsKey = 'all_accounts_style';
+
+  Future<void> load() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getString(_prefsKey);
+      value = AllAccountsStyle.values.firstWhere(
+        (s) => s.name == saved,
+        orElse: () => AllAccountsStyle.blend,
+      );
+    } catch (_) {}
+  }
+
+  Future<void> set(AllAccountsStyle style) async {
+    value = style;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_prefsKey, style.name);
+    } catch (_) {}
+  }
+}

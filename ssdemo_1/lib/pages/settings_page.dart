@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../app/app_theme.dart';
@@ -389,9 +390,103 @@ class AppearancePage extends StatelessWidget {
                     style: TextStyle(fontSize: 12.5, color: c.muted),
                   ),
                 ),
+                // Temporary, debug builds only: try the All Accounts card
+                // styles side by side, then keep the chosen one.
+                if (kDebugMode) const _AllAccountsStylePicker(),
               ],
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+class _AllAccountsStylePicker extends StatelessWidget {
+  const _AllAccountsStylePicker();
+
+  static const _labels = {
+    AllAccountsStyle.blend: 'Blend',
+    AllAccountsStyle.stripes: 'Stripes',
+    AllAccountsStyle.classic: 'Classic',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final controller = AllAccountsStyleController.instance;
+    final colors = AppPalette.walletCards.take(2).toList();
+    final mixed = Color.lerp(colors[0], colors[1], 0.5)!;
+
+    Widget preview(AllAccountsStyle style) => Container(
+      height: 56,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: style == AllAccountsStyle.classic ? AppPalette.walletAll : mixed,
+        gradient: style == AllAccountsStyle.blend
+            ? LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: colors,
+              )
+            : null,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      alignment: Alignment.topCenter,
+      child: style == AllAccountsStyle.stripes
+          ? Row(
+              children: [
+                for (final color in colors)
+                  Expanded(child: Container(height: 4, color: color)),
+              ],
+            )
+          : null,
+    );
+
+    return ValueListenableBuilder<AllAccountsStyle>(
+      valueListenable: controller,
+      builder: (context, current, _) => Section(
+        margin: const EdgeInsets.fromLTRB(16, 18, 16, 10),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'All Accounts card (test)',
+              style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                for (final (i, style) in AllAccountsStyle.values.indexed) ...[
+                  if (i > 0) const SizedBox(width: 12),
+                  Expanded(
+                    child: GestureDetector(
+                      key: ValueKey('all-accounts-style-${style.name}'),
+                      onTap: () => controller.set(style),
+                      child: Column(
+                        children: [
+                          preview(style),
+                          const SizedBox(height: 6),
+                          Text(
+                            _labels[style]!,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          Icon(
+                            current == style
+                                ? Icons.radio_button_checked
+                                : Icons.radio_button_unchecked,
+                            color: current == style ? c.text : c.muted,
+                            size: 20,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
         ),
       ),
     );

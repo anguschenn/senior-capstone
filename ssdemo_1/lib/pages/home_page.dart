@@ -465,8 +465,15 @@ class WalletCardStack extends StatelessWidget {
   static const double _cardHeight = 172;
   static const int _maxBehind = 4;
 
+  // Rebuilds when the All Accounts style is switched in Appearance.
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      ValueListenableBuilder<AllAccountsStyle>(
+        valueListenable: AllAccountsStyleController.instance,
+        builder: (context, _, _) => _stack(context),
+      );
+
+  Widget _stack(BuildContext context) {
     final c = context.colors;
     final ids = [kAllAccountsId, for (final a in accountOptions) a.accountId];
     final selected = ids.contains(selectedAccountId)
@@ -483,8 +490,13 @@ class WalletCardStack extends StatelessWidget {
     final behind = overflow ? others.take(_maxBehind - 1).toList() : others;
     final strips = behind.length + (overflow ? 1 : 0);
 
+    final allStyle = AllAccountsStyleController.instance.value;
     Color colorFor(String id) {
-      if (id == kAllAccountsId) return _blend(accountColors);
+      if (id == kAllAccountsId) {
+        return allStyle == AllAccountsStyle.classic || accountColors.isEmpty
+            ? AppPalette.walletAll
+            : _blend(accountColors);
+      }
       final i = accountOptions.indexWhere((a) => a.accountId == id);
       return AppPalette.walletCards[i % AppPalette.walletCards.length];
     }
@@ -526,7 +538,10 @@ class WalletCardStack extends StatelessWidget {
         decoration: BoxDecoration(
           color: colorFor(id),
           // All Accounts: the account colours flow into each other.
-          gradient: id == kAllAccountsId && accountColors.length > 1
+          gradient:
+              id == kAllAccountsId &&
+                  allStyle == AllAccountsStyle.blend &&
+                  accountColors.length > 1
               ? LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -561,7 +576,9 @@ class WalletCardStack extends StatelessWidget {
                   ),
                   // All Accounts shows what it is made of: each account's
                   // colour as overlapping coins.
-                  if (id == kAllAccountsId && accountColors.length > 1) ...[
+                  if (id == kAllAccountsId &&
+                      allStyle != AllAccountsStyle.classic &&
+                      accountColors.length > 1) ...[
                     _ColorCoins(colors: accountColors, ring: colorFor(id)),
                     const SizedBox(width: 8),
                   ],
@@ -618,7 +635,35 @@ class WalletCardStack extends StatelessWidget {
                   if (v.abs() < 150) return;
                   move(v < 0 ? 1 : -1);
                 },
-          child: body,
+          child:
+              id == kAllAccountsId &&
+                  allStyle == AllAccountsStyle.stripes &&
+                  accountColors.length > 1
+              ? Stack(
+                  children: [
+                    body,
+                    // A band along the top, one block per account colour.
+                    Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(16),
+                        ),
+                        child: Row(
+                          children: [
+                            for (final color in accountColors)
+                              Expanded(
+                                child: Container(height: 6, color: color),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              : body,
         ),
       );
     }
