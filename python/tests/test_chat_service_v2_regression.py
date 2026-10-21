@@ -782,6 +782,19 @@ class TestChatServiceV2Regression(unittest.TestCase):
                 self.assertEqual(response["answer_source"], "deterministic")
                 self.assertIn(expected, response["reply"])
 
+    def test_top_categories_for_a_named_year(self):
+        summary = self._round2_summary()
+        cases = [
+            ("What are my top 3 spending categories in 2026?", "In 2026 so far, your top 3"),
+            ("top 3 categories this year", "In 2026 so far, your top 3"),
+            ("What are my top 3 spending categories in April 2026?", "For 2026-04"),
+        ]
+        for prompt, expected in cases:
+            with self.subTest(prompt=prompt):
+                response = self._ask_with(prompt, summary)
+                self.assertEqual(response["answer_source"], "deterministic")
+                self.assertIn(expected, response["reply"])
+
     def test_common_everyday_questions_batch2(self):
         summary = self._round2_summary()
         cases = [

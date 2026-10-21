@@ -410,9 +410,11 @@ def build_summary(
             if tx.date.year == annual_year:
                 annual_expenses += expense
                 annual_expense_tx_count += 1
-                if not transfer_like:
+                if expense:
                     annual_expenses_only.append(tx)
-            if not transfer_like:
+            # Whatever still counts as spending (a move between own accounts counts 0) belongs
+            # to its category, so categories add up to the total, as on the Budget page.
+            if expense:
                 category_totals_all[category] = category_totals_all.get(category, 0.0) + expense
                 per_month = month_category_totals.setdefault(month_key, {})
                 per_month[category] = per_month.get(category, 0.0) + expense

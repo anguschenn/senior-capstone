@@ -373,6 +373,7 @@
           "Food": 288.9,
           "Entertainment": 6.25,
           "Shopping": 165.0,
+          "Fees & Transfers": 144.3,
           "Bills & Utilities": 1500.0,
           "Subscriptions": 35.48,
           "Transport": 142.8,
@@ -517,6 +518,7 @@
             "categories": {
               "Bills & Utilities": 1500.0,
               "Food": 210.4,
+              "Fees & Transfers": 144.3,
               "Subscriptions": 15.49
             }
           },
@@ -872,6 +874,10 @@
             "amount": 255.9
           },
           {
+            "category": "Fees & Transfers",
+            "amount": 144.3
+          },
+          {
             "category": "Shopping",
             "amount": 90.0
           },
@@ -882,10 +888,6 @@
           {
             "category": "Transport",
             "amount": 12.0
-          },
-          {
-            "category": "Entertainment",
-            "amount": 6.25
           }
         ],
         "recent_transactions": [
@@ -1015,6 +1017,10 @@
             {
               "category": "Shopping",
               "amount": 165.0
+            },
+            {
+              "category": "Fees & Transfers",
+              "amount": 144.3
             },
             {
               "category": "Transport",
@@ -1248,10 +1254,10 @@
               "category": "Transport"
             },
             {
-              "date": "2026-05-02",
-              "name": "Target",
-              "amount": 75.0,
-              "category": "Shopping"
+              "date": "2026-09-20",
+              "name": "Zelle payment to Sam",
+              "amount": 80.0,
+              "category": "Fees & Transfers"
             }
           ]
         }
@@ -2052,6 +2058,7 @@
           "Food": 288.9,
           "Entertainment": 6.25,
           "Shopping": 165.0,
+          "Fees & Transfers": 144.3,
           "Bills & Utilities": 1500.0,
           "Subscriptions": 35.48,
           "Transport": 142.8,
@@ -2196,6 +2203,7 @@
             "categories": {
               "Bills & Utilities": 1500.0,
               "Food": 210.4,
+              "Fees & Transfers": 144.3,
               "Subscriptions": 15.49
             }
           },
@@ -2667,6 +2675,10 @@
               "amount": 165.0
             },
             {
+              "category": "Fees & Transfers",
+              "amount": 144.3
+            },
+            {
               "category": "Transport",
               "amount": 142.8
             },
@@ -2898,10 +2910,10 @@
               "category": "Transport"
             },
             {
-              "date": "2026-05-02",
-              "name": "Target",
-              "amount": 75.0,
-              "category": "Shopping"
+              "date": "2026-09-20",
+              "name": "Zelle payment to Sam",
+              "amount": 80.0,
+              "category": "Fees & Transfers"
             }
           ]
         }

@@ -3534,14 +3534,17 @@ def _category_rank_spec(text, summary, scope):
     else:
         raw = top_n.group(1) or top_n.group(2) or top_n.group(3)
         mode = f"top:{int(raw) if raw.isdigit() else _NUMBER_WORDS[raw]}"
-    if re.search(r"\b(this year|so far this year|year to date)\b", text) and (
-        mode.startswith("top:") or re.match(r"^rank:\d$", mode)
-    ):
+    # "this year", or a year with no month ("top 3 categories in 2026"): the whole year.
+    named_year = re.search(r"\b(20\d{2})\b", text)
+    whole_year = re.search(r"\b(this year|so far this year|year to date)\b", text) or (
+        named_year and not _transaction_list_month(text, summary)
+    )
+    if whole_year and (mode.startswith("top:") or re.match(r"^rank:\d$", mode)):
         return QuerySpec(
             task_type="top_category_lookup",
             metric="top_category",
             period_type="year",
-            period_key=str(_selected_year(summary)),
+            period_key=named_year.group(1) if named_year else str(_selected_year(summary)),
             scope=scope,
             reason_mode=mode,
         )
@@ -4863,13 +4866,30 @@ def _by_category_spec(text, summary, scope):
         and not re.search(r"\b(why|change|changed|compare|compared|vs|versus|than)\b", text)
     ):
         return None
+    top_n = _TOP_N_RE.search(text)
+    if top_n:
+        raw = top_n.group(1) or top_n.group(2) or top_n.group(3)
+        mode = f"top:{int(raw) if raw.isdigit() else _NUMBER_WORDS[raw]}"
+    else:
+        mode = "top:12"
+    # A year with no month ("spending categories in 2026"): the whole year.
+    named_year = re.search(r"\b(20\d{2})\b", text)
+    if named_year and not _transaction_list_month(text, summary):
+        return QuerySpec(
+            task_type="top_category_lookup",
+            metric="top_category",
+            period_type="year",
+            period_key=named_year.group(1),
+            scope=scope,
+            reason_mode=mode,
+        )
     return QuerySpec(
         task_type="top_category_lookup",
         metric="top_category",
         period_type="month",
         period_key=_period_for(text, summary),
         scope=scope,
-        reason_mode="top:12",
+        reason_mode=mode,
     )
 
 

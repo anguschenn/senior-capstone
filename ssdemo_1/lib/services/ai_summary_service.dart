@@ -397,11 +397,14 @@ class AiSummaryService {
           annualExpenseTxCount += 1;
         }
 
-        if (tx.date.year == annualYear && !isTransferLikeForAnalysis) {
+        // Whatever still counts as spending (a move between own accounts
+        // counts 0) belongs to its category, so categories add up to the
+        // total, as on the Budget page.
+        if (tx.date.year == annualYear && expense != 0) {
           annualExpensesOnly.add(tx);
         }
 
-        if (!isTransferLikeForAnalysis) {
+        if (expense != 0) {
           categoryTotalsAll[effectiveCategory] =
               (categoryTotalsAll[effectiveCategory] ?? 0) + expense;
 

@@ -509,47 +509,51 @@ void main() {
       expect(march['categories'], {'Transport': 30.0, 'Food': 20.0});
     });
 
-    test('transfer-like filtering uses pfc signals and name patterns', () {
-      final now = DateTime.now();
-      final result = AiSummaryService.instance.build(
-        transactions: [
-          _tx(
-            id: 'c1',
-            date: now.subtract(const Duration(days: 2)),
-            amount: 60,
-            category: 'Other',
-            name: 'Payment to Chase card ending 4191',
-            rawPfcPrimary: 'LOAN_PAYMENTS',
-            rawPfcDetailed: 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT',
-          ),
-          _tx(
-            id: 'c2',
-            date: now.subtract(const Duration(days: 1)),
-            amount: 12.99,
-            category: 'Other',
-            name: 'Spotify',
-            rawPfcPrimary: 'OTHER',
-            rawPfcDetailed: 'OTHER_OTHER',
-          ),
-          _tx(
-            id: 'c3',
-            date: now.subtract(const Duration(days: 1)),
-            amount: 5,
-            category: 'Other',
-            name: 'MONTHLY SERVICE FEE',
-            rawPfcPrimary: 'OTHER',
-            rawPfcDetailed: 'OTHER_OTHER',
-          ),
-        ],
-        budgetProgress: const [],
-        stats: _stats(),
-        selectedAccountId: kAllAccountsId,
-        scopeLabel: 'All',
-      );
+    test(
+      'spending that looks like a transfer still counts in its category',
+      () {
+        final now = DateTime.now();
+        final result = AiSummaryService.instance.build(
+          transactions: [
+            _tx(
+              id: 'c1',
+              date: now.subtract(const Duration(days: 2)),
+              amount: 60,
+              category: 'Other',
+              name: 'Payment to Chase card ending 4191',
+              rawPfcPrimary: 'LOAN_PAYMENTS',
+              rawPfcDetailed: 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT',
+            ),
+            _tx(
+              id: 'c2',
+              date: now.subtract(const Duration(days: 1)),
+              amount: 12.99,
+              category: 'Other',
+              name: 'Spotify',
+              rawPfcPrimary: 'OTHER',
+              rawPfcDetailed: 'OTHER_OTHER',
+            ),
+            _tx(
+              id: 'c3',
+              date: now.subtract(const Duration(days: 1)),
+              amount: 5,
+              category: 'Other',
+              name: 'MONTHLY SERVICE FEE',
+              rawPfcPrimary: 'OTHER',
+              rawPfcDetailed: 'OTHER_OTHER',
+            ),
+          ],
+          budgetProgress: const [],
+          stats: _stats(),
+          selectedAccountId: kAllAccountsId,
+          scopeLabel: 'All',
+        );
 
-      final categoryIndex = result['category_index'] as Map<String, dynamic>;
-      // Card payment is transfer-like and excluded from category aggregation.
-      expect(categoryIndex['Other'], closeTo(17.99, 0.0001));
-    });
+        final categoryIndex = result['category_index'] as Map<String, dynamic>;
+        // The card isn't linked, so paying it is spending and counts in its
+        // category: categories add up to the total, as on the Budget page.
+        expect(categoryIndex['Other'], closeTo(77.99, 0.0001));
+      },
+    );
   });
 }
