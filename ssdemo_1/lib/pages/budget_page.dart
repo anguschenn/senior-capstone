@@ -635,6 +635,11 @@ class _BudgetPageState extends State<BudgetPage> {
         children: [
           entry(BudgetStatusDot.over, 'Over budget or pace'),
           entry(BudgetStatusDot.high, 'High usage'),
+          // Healthy cards carry no dot, so problems stand out.
+          Text(
+            'No dot: on track',
+            style: TextStyle(fontSize: 12.5, color: c.muted),
+          ),
         ],
       ),
     );
