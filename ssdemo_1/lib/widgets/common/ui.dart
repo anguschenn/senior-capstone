@@ -704,7 +704,11 @@ Future<T?> showOptionSheet<T>({
       maxWidth: width,
       maxHeight: size.height * 0.6,
     ),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+    // A hairline edge keeps the menu visible over the dark page.
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(14),
+      side: BorderSide(color: c.line, width: 0.8),
+    ),
     menuPadding: const EdgeInsets.symmetric(vertical: 4),
     semanticLabel: title,
     items: [
