@@ -661,7 +661,9 @@ class _FlowThumbnail extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Expanded(
+                ConstrainedBox(
+                  // Numbers take what they need; the chart gets the rest.
+                  constraints: const BoxConstraints(maxWidth: 170),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

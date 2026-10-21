@@ -233,6 +233,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
       required bool selected,
       required VoidCallback onTap,
       Color? dot,
+      IconData? trailingIcon,
     }) {
       return Padding(
         padding: const EdgeInsets.only(right: 8),
@@ -259,16 +260,29 @@ class _TransactionsPageState extends State<TransactionsPage> {
                     ),
                     const SizedBox(width: 6),
                   ],
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
+                  Flexible(
+                    child: Text(
+                      label,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: selected
+                            ? (dot != null ? AppPalette.ink : c.onButton)
+                            : c.text,
+                      ),
+                    ),
+                  ),
+                  if (trailingIcon != null) ...[
+                    const SizedBox(width: 4),
+                    Icon(
+                      trailingIcon,
+                      size: 16,
                       color: selected
                           ? (dot != null ? AppPalette.ink : c.onButton)
                           : c.text,
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
@@ -460,18 +474,19 @@ class _TransactionsPageState extends State<TransactionsPage> {
                           ),
                         ),
                       },
-                      SizedBox(
-                        height: 40,
-                        child: ListView(
-                          scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.fromLTRB(16, 4, 8, 2),
+                      // One filter button opens the full category list with
+                      // counts; a chosen category shows next to it with an ×.
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 8, 2),
+                        child: Row(
                           children: [
                             chip(
                               key: const ValueKey('tx-category-filter'),
                               label: categoryFilter.isEmpty
                                   ? 'All categories (${periodTransactions.length})'
-                                  : 'All categories',
+                                  : 'Category',
                               selected: categoryFilter.isEmpty,
+                              trailingIcon: Icons.keyboard_arrow_down_rounded,
                               onTap: () async {
                                 final picked = await showOptionSheet<String>(
                                   context: context,
@@ -487,15 +502,16 @@ class _TransactionsPageState extends State<TransactionsPage> {
                                 }
                               },
                             ),
-                            for (final name in categoryNames)
-                              chip(
-                                label: name,
-                                dot: colorForDetailedCategory(name),
-                                selected: categoryFilter == name,
-                                onTap: () => setState(
-                                  () => categoryFilter = categoryFilter == name
-                                      ? ''
-                                      : name,
+                            if (categoryFilter.isNotEmpty)
+                              Flexible(
+                                child: chip(
+                                  key: const ValueKey('tx-category-clear'),
+                                  label: categoryFilter,
+                                  dot: colorForDetailedCategory(categoryFilter),
+                                  selected: true,
+                                  trailingIcon: Icons.close_rounded,
+                                  onTap: () =>
+                                      setState(() => categoryFilter = ''),
                                 ),
                               ),
                           ],
