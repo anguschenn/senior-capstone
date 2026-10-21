@@ -237,4 +237,30 @@ void main() {
     expect(kinds['lunch'], TxKind.spend);
     expect(kinds['friend'], TxKind.income);
   });
+
+  test('each move pairs with the closest arrival, in any order', () {
+    AppTransaction move(String id, String account, double amount, int day) =>
+        _tx(
+          id: id,
+          amount: amount,
+          name: 'ONLINE TRANSFER',
+          date: DateTime(2026, 10, day),
+          pfcPrimary: amount > 0 ? 'TRANSFER_OUT' : 'TRANSFER_IN',
+          accountId: account,
+          accountType: 'depository',
+        );
+    final rows = [
+      move('in-late', 'savings', -500, 12),
+      move('out-2', 'checking', 500, 11),
+      move('in-early', 'savings', -500, 2),
+      move('out-1', 'checking', 500, 1),
+      move('out-3', 'checking', 500, 20),
+    ];
+    for (final order in [rows, rows.reversed.toList()]) {
+      final kinds = classifyTransactions(order, const {}).kinds;
+      expect(kinds['out-1'], TxKind.internal);
+      expect(kinds['out-2'], TxKind.internal);
+      expect(kinds['out-3'], TxKind.spend);
+    }
+  });
 }

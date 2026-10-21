@@ -647,25 +647,39 @@ void _pairOwnTransfers(
     );
   }
 
-  final outflows = transactions
-      .where((tx) => tx.amount > 0 && candidate(tx))
-      .toList();
-  final inflows = transactions
-      .where((tx) => tx.amount < 0 && candidate(tx))
-      .toList();
+  int byDateThenId(AppTransaction a, AppTransaction b) {
+    final byDate = a.date.compareTo(b.date);
+    return byDate != 0 ? byDate : a.id.compareTo(b.id);
+  }
+
+  // Oldest first, each taking the closest-dated match, so the app and the
+  // server pair the same rows whatever order they arrive in.
+  final outflows =
+      transactions.where((tx) => tx.amount > 0 && candidate(tx)).toList()
+        ..sort(byDateThenId);
+  final inflows =
+      transactions.where((tx) => tx.amount < 0 && candidate(tx)).toList()
+        ..sort(byDateThenId);
   final paired = <String>{};
   for (final out in outflows) {
+    AppTransaction? best;
+    var bestGap = 0;
     for (final into in inflows) {
       if (paired.contains(into.id) || into.accountId == out.accountId) {
         continue;
       }
       if ((into.displayAmount - out.displayAmount).abs() >= 0.005) continue;
-      if (into.date.difference(out.date).inDays.abs() > 5) continue;
-      paired.addAll([out.id, into.id]);
-      kinds[out.id] = TxKind.internal;
-      kinds[into.id] = TxKind.internal;
-      break;
+      final gap = into.date.difference(out.date).inDays.abs();
+      if (gap > 5) continue;
+      if (best == null || gap < bestGap) {
+        best = into;
+        bestGap = gap;
+      }
     }
+    if (best == null) continue;
+    paired.addAll([out.id, best.id]);
+    kinds[out.id] = TxKind.internal;
+    kinds[best.id] = TxKind.internal;
   }
 }
 

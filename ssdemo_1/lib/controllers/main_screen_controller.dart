@@ -516,8 +516,11 @@ class MainScreenController extends ChangeNotifier {
 
   /// Re-decides what counts as spending, income, a refund or a transfer
   /// between own accounts, with the categories the user picked this session.
+  /// Hidden accounts still count: hiding only takes them off the screen, so a
+  /// move into a hidden savings account is still not spending (as on the
+  /// server, which never sees what is hidden).
   void _reclassify() {
-    AppTransaction.kindById = classifyTransactions(liveTransactions, {
+    AppTransaction.kindById = classifyTransactions(_allTransactions, {
       ..._ruleCategoryByTxId,
       for (final txId in manualReviewedTxIds)
         if (reviewedCategoryByTxId[txId] != null)

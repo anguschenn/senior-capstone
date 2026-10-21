@@ -20,6 +20,7 @@ Not reproduced: category picks a user has made in the current app session but no
 confirmed. Those live only in app memory until confirmed into category_match_rules.
 """
 
+import datetime as dt
 import re
 
 from supabase_repo import supabase
@@ -325,7 +326,6 @@ def classify_rows(
     """{row id: (kind, bucket)} (classifyTransactions). A refund from a merchant with an
     earlier purchase of at least that amount on the same account, within 120 days, takes
     that purchase's bucket."""
-    import datetime as _dt
 
     account_type_by_id = account_type_by_id or {}
     parsed = []
@@ -334,7 +334,7 @@ def classify_rows(
         account_id = _coalesce(row.get("plaid_account_id")).strip()
         kind = row_kind(row, user_category, account_type_by_id.get(account_id, ""))
         try:
-            day = _dt.date.fromisoformat(str(row.get("date") or "")[:10])
+            day = dt.date.fromisoformat(str(row.get("date") or "")[:10])
         except ValueError:
             day = None
         name, description, primary, detailed = _row_fields(row)
@@ -408,20 +408,30 @@ def _pair_own_transfers(parsed: list[dict]) -> None:
             return False
         return item["kind"] in ("spend", "income") and not item["p2p"] and item["transfer_like"]
 
-    outflows = [i for i in parsed if i["signed"] > 0 and candidate(i)]
-    inflows = [i for i in parsed if i["signed"] < 0 and candidate(i)]
+    # Oldest first, each taking the closest-dated match, so the app and the server pair
+    # the same rows whatever order they arrive in.
+    def by_date_then_id(item: dict):
+        return (item["day"], item["id"])
+
+    outflows = sorted((i for i in parsed if i["signed"] > 0 and candidate(i)), key=by_date_then_id)
+    inflows = sorted((i for i in parsed if i["signed"] < 0 and candidate(i)), key=by_date_then_id)
     paired: set[str] = set()
     for out in outflows:
+        best, best_gap = None, 0
         for into in inflows:
             if into["id"] in paired or into["account"] == out["account"]:
                 continue
             if abs(into["amount"] - out["amount"]) >= 0.005:
                 continue
-            if abs((into["day"] - out["day"]).days) > 5:
+            gap = abs((into["day"] - out["day"]).days)
+            if gap > 5:
                 continue
-            paired.update((out["id"], into["id"]))
-            out["kind"] = into["kind"] = "internal"
-            break
+            if best is None or gap < best_gap:
+                best, best_gap = into, gap
+        if best is None:
+            continue
+        paired.update((out["id"], best["id"]))
+        out["kind"] = best["kind"] = "internal"
 
 
 def _matching_purchase(refund: dict, purchases: list[dict]) -> dict | None:
@@ -537,6 +547,7 @@ def _next_month_start(month: str) -> str:
 
 
 REFUND_LOOKBACK_MONTHS = 4  # earlier purchases a refund in `month` can match
+PAIR_LOOKAHEAD_DAYS = 5  # a move on the 31st can arrive in the other account days later
 
 
 def _months_before(month: str, count: int) -> str:
@@ -546,7 +557,9 @@ def _months_before(month: str, count: int) -> str:
 
 
 def _fetch_month_transactions(user_id: str, month: str) -> list[dict]:
-    """The month's transactions plus the few months before, for refund matching."""
+    """The month's transactions plus the few months before, for refund matching, and the
+    first days after, so a move between own accounts at month end still pairs."""
+    end = dt.date.fromisoformat(_next_month_start(month)) + dt.timedelta(days=PAIR_LOOKAHEAD_DAYS)
     rows: list[dict] = []
     start = 0
     while True:
@@ -558,7 +571,7 @@ def _fetch_month_transactions(user_id: str, month: str) -> list[dict]:
             )
             .eq("user_id", user_id)
             .gte("date", f"{_months_before(month, REFUND_LOOKBACK_MONTHS)}-01")
-            .lt("date", _next_month_start(month))
+            .lt("date", end.isoformat())
             .order("date")
             .range(start, start + _PAGE_SIZE - 1)
             .execute()

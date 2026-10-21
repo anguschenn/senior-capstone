@@ -1,5 +1,6 @@
 import json
 import unittest
+import unittest.mock
 from pathlib import Path
 
 from budget_progress import (
@@ -93,3 +94,42 @@ class OwnTransferPairingTests(unittest.TestCase):
         self.assertEqual(
             kinds, {"out": "internal", "in": "internal", "lunch": "spend", "friend": "income"}
         )
+
+
+class PairingEdgeTests(unittest.TestCase):
+    def _row(self, tid, account, amount, day):
+        return {
+            "plaid_transaction_id": tid,
+            "plaid_account_id": account,
+            "amount": amount,
+            "date": day,
+            "name": "ONLINE TRANSFER",
+            "merchant_name": None,
+            "pfc_primary": "TRANSFER_OUT" if amount > 0 else "TRANSFER_IN",
+            "pfc_detailed": "",
+        }
+
+    def test_each_move_pairs_with_the_closest_arrival_in_any_order(self):
+        from budget_progress import classify_rows
+
+        rows = [
+            self._row("in-late", "savings", -500, "2026-10-12"),
+            self._row("out-2", "checking", 500, "2026-10-11"),
+            self._row("in-early", "savings", -500, "2026-10-02"),
+            self._row("out-1", "checking", 500, "2026-10-01"),
+            self._row("out-3", "checking", 500, "2026-10-20"),
+        ]
+        for order in (rows, list(reversed(rows))):
+            kinds = {k: v[0] for k, v in classify_rows(order, {}).items()}
+            self.assertEqual(kinds["out-1"], "internal")
+            self.assertEqual(kinds["out-2"], "internal")
+            self.assertEqual(kinds["out-3"], "spend")
+
+    def test_month_end_fetch_reaches_into_the_next_month(self):
+        import budget_progress
+
+        with unittest.mock.patch.object(budget_progress, "supabase") as db:
+            query = db.table.return_value.select.return_value.eq.return_value.gte.return_value
+            query.lt.return_value.order.return_value.range.return_value.execute.return_value.data = []
+            budget_progress._fetch_month_transactions("u1", "2026-10")
+            query.lt.assert_called_once_with("date", "2026-11-06")
