@@ -666,7 +666,7 @@ def build_summary(
 
 
 def parse_context(raw) -> dict | None:
-    """The app's `context` block: {account_ids: [...], scope_label, selected_month
+    """The app's `context` block: {account_ids: [...], hidden_account_ids: [...], scope_label, selected_month
     ('YYYY-MM', or 'YYYY' for the all-year view), today: 'YYYY-MM-DD', tz}. None when unusable."""
     if not isinstance(raw, dict):
         return None
@@ -683,12 +683,19 @@ def parse_context(raw) -> dict | None:
         month = selected
     else:
         month = _month_key(today)
-    ids = raw.get("account_ids")
-    account_ids = sorted(
-        {str(a).strip()[:128] for a in ids if str(a).strip()} if isinstance(ids, list) else set()
-    )[:20]
+
+    def id_list(key: str) -> list[str]:
+        ids = raw.get(key)
+        return sorted(
+            {str(a).strip()[:128] for a in ids if str(a).strip()}
+            if isinstance(ids, list)
+            else set()
+        )[:20]
+
     return {
-        "account_ids": account_ids,
+        "account_ids": id_list("account_ids"),
+        # Hidden in the app: left out everywhere, as if never linked.
+        "hidden_account_ids": id_list("hidden_account_ids"),
         "scope_label": str(raw.get("scope_label") or "")[:64],
         "month": month,
         "all_year": all_year,
@@ -721,7 +728,9 @@ def summary_for(user_id: str, context: dict, tx_rows=None) -> dict:
     caller falls back to the app-sent summary."""
     from user_model import fetch_budget_rows
 
-    key = (user_id, tuple(context["account_ids"]), context["month"], context["all_year"])
+    hidden = context.get("hidden_account_ids") or []
+    key = (user_id, tuple(context["account_ids"]), tuple(hidden), context["month"])
+    key += (context["all_year"],)
     key += (context["today"].isoformat(),)
     now_ts = time.time()
     with _cache_lock:
@@ -730,20 +739,18 @@ def summary_for(user_id: str, context: dict, tx_rows=None) -> dict:
             return hit[1]
 
     rows, account_meta, rules, names = _load(user_id, tx_rows)
+    if hidden:
+        hidden_set = set(hidden)
+        rows = [r for r in rows if str(r.get("plaid_account_id") or "").strip() not in hidden_set]
     account_ids = context["account_ids"]
     txs = build_transactions(rows, account_meta, rules, account_ids or None)
     progress = []
     if not context["all_year"]:
-        visible_ids = set(account_ids)
-        visible_rows = (
-            [r for r in rows if str(r.get("plaid_account_id") or "").strip() in visible_ids]
-            if account_ids
-            else rows
-        )
+        # Budgets cover every linked account, whichever one is selected (as in the app).
         progress = build_budget_progress(
             fetch_budget_rows(user_id, context["month"]),
             names,
-            visible_rows,
+            rows,
             rules,
             context["month"],
         )

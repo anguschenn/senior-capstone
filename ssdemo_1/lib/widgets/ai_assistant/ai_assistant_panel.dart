@@ -38,7 +38,7 @@ class AIAssistantPanel extends StatefulWidget {
     this.selectedMonth,
     this.initialPrompt,
     this.contextLabel,
-    this.someAccountsHidden = false,
+    this.hiddenAccountIds = const [],
   });
 
   final Uri chatApiUri;
@@ -58,8 +58,8 @@ class AIAssistantPanel extends StatefulWidget {
   /// Where the panel was opened from, e.g. "From Budget · Food · October".
   final String? contextLabel;
 
-  /// The user hid an account: "all accounts" means the shown ones only.
-  final bool someAccountsHidden;
+  /// Accounts the user hid: left out of every answer, as if never linked.
+  final List<String> hiddenAccountIds;
 
   @override
   State<AIAssistantPanel> createState() => _AIAssistantPanelState();
@@ -180,11 +180,10 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
     }
     final accountIds = accountId != kAllAccountsId
         ? (option?.linkedAccountIds.toList() ?? [accountId])
-        : widget.someAccountsHidden
-        ? [for (final a in widget.accountOptions) ...a.linkedAccountIds]
         : const <String>[];
     return AiApiClient.chatContext(
       accountIds: accountIds,
+      hiddenAccountIds: widget.hiddenAccountIds,
       selectedMonth: month,
       allYear: isAllYearOption(month),
       scopeLabel: '${_activeSummary['scope_label'] ?? ''}',

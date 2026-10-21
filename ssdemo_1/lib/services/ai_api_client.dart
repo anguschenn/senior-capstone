@@ -62,6 +62,7 @@ class AiApiClient {
     required DateTime selectedMonth,
     required bool allYear,
     required String scopeLabel,
+    List<String> hiddenAccountIds = const [],
     DateTime? now,
   }) {
     final today = now ?? DateTime.now();
@@ -74,6 +75,7 @@ class AiApiClient {
       'scope_label': scopeLabel,
       'today': '${today.year}-${two(today.month)}-${two(today.day)}',
       'tz': today.timeZoneName,
+      if (hiddenAccountIds.isNotEmpty) 'hidden_account_ids': hiddenAccountIds,
     };
   }
 

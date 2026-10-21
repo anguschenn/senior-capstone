@@ -108,7 +108,7 @@ class _MainScreenState extends State<MainScreen> {
         selectedMonth: c.selectedMonth,
         initialPrompt: prompt,
         contextLabel: contextLabel,
-        someAccountsHidden: c.hiddenAccountIds.isNotEmpty,
+        hiddenAccountIds: c.hiddenTransactionAccountIds.toList()..sort(),
       ),
     );
   }

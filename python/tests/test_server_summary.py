@@ -99,6 +99,7 @@ class ContextTests(unittest.TestCase):
             }
         )
         self.assertEqual(parsed["account_ids"], ["a", "b"])
+        self.assertEqual(parsed["hidden_account_ids"], [])
         self.assertEqual(parsed["month"], "2026-09")
         self.assertFalse(parsed["all_year"])
         self.assertEqual(parsed["today"], dt.date(2026, 10, 10))
@@ -132,6 +133,73 @@ class ContextTests(unittest.TestCase):
         self.assertIs(first, second)
         self.assertEqual(loads, ["cache-user", "cache-user"])
         self.assertEqual(first["month_index"]["2026-10"]["card_payments_out"], 500)
+
+
+class HiddenAccountTests(unittest.TestCase):
+    ROWS = [
+        {
+            "plaid_transaction_id": "pay",
+            "plaid_account_id": "checking",
+            "amount": 330,
+            "date": "2026-10-01",
+            "name": "Payment to Chase card ending in 4191",
+            "pfc_primary": "LOAN_PAYMENTS",
+            "pfc_detailed": "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT",
+        },
+        {
+            "plaid_transaction_id": "thanks",
+            "plaid_account_id": "card",
+            "amount": -330,
+            "date": "2026-10-01",
+            "name": "Payment Thank You-Mobile",
+            "pfc_primary": "LOAN_DISBURSEMENTS",
+            "pfc_detailed": "LOAN_DISBURSEMENTS_OTHER_DISBURSEMENT",
+        },
+        {
+            "plaid_transaction_id": "lunch",
+            "plaid_account_id": "card",
+            "amount": 50,
+            "date": "2026-10-02",
+            "name": "Chipotle",
+            "merchant_name": "Chipotle",
+            "pfc_primary": "FOOD_AND_DRINK",
+            "pfc_detailed": "FOOD_AND_DRINK_RESTAURANT",
+        },
+    ]
+    META = {
+        "checking": {"plaid_account_id": "checking", "account_type": "depository"},
+        "card": {"plaid_account_id": "card", "account_type": "credit"},
+    }
+
+    def _summary(self, **context):
+        context = server_summary.parse_context(
+            {"selected_month": "2026-10", "today": "2026-10-10", **context}
+        )
+        server_summary.invalidate("hidden-user")
+        with (
+            mock.patch.object(
+                server_summary, "_load", return_value=(self.ROWS, self.META, {}, {"c-food": "Food"})
+            ),
+            mock.patch(
+                "user_model.fetch_budget_rows",
+                return_value=[{"id": "b", "category_id": "c-food", "monthly_limit": 100}],
+            ),
+            mock.patch.object(server_summary, "fetch_alert_history", return_value=[]),
+        ):
+            return server_summary.summary_for("hidden-user", context)
+
+    def test_a_hidden_card_counts_as_never_linked(self):
+        shown = self._summary()
+        self.assertEqual(shown["month_index"]["2026-10"]["expenses"], 50)
+        hidden = self._summary(hidden_account_ids=["card"])
+        # The card's lunch is gone and paying it from checking is now spending.
+        self.assertEqual(hidden["month_index"]["2026-10"]["expenses"], 330)
+
+    def test_budgets_cover_all_accounts_when_one_is_selected(self):
+        summary = self._summary(account_ids=["checking"])
+        self.assertEqual(
+            summary["budgets"]["items"], [{"category": "Food", "spent": 50.0, "limit": 100.0}]
+        )
 
 
 class AlertHistoryTests(unittest.TestCase):

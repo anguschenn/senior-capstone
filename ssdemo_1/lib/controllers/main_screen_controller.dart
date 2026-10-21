@@ -516,11 +516,10 @@ class MainScreenController extends ChangeNotifier {
 
   /// Re-decides what counts as spending, income, a refund or a transfer
   /// between own accounts, with the categories the user picked this session.
-  /// Hidden accounts still count: hiding only takes them off the screen, so a
-  /// move into a hidden savings account is still not spending (as on the
-  /// server, which never sees what is hidden).
+  /// A hidden account is left out like one that was never linked, so paying
+  /// a hidden card from checking is spending (its purchases no longer count).
   void _reclassify() {
-    AppTransaction.kindById = classifyTransactions(_allTransactions, {
+    AppTransaction.kindById = classifyTransactions(liveTransactions, {
       ..._ruleCategoryByTxId,
       for (final txId in manualReviewedTxIds)
         if (reviewedCategoryByTxId[txId] != null)
@@ -579,19 +578,23 @@ class MainScreenController extends ChangeNotifier {
     );
   }
 
+  /// Every Plaid account id behind the hidden accounts.
+  Set<String> get hiddenTransactionAccountIds => {
+    for (final a in _allAccountOptions)
+      if (hiddenAccountIds.contains(a.accountId)) ...{
+        a.accountId,
+        ...a.linkedAccountIds,
+      },
+  };
+
   void _applyHiddenAccounts() {
-    final hiddenOptions = _allAccountOptions
-        .where((a) => hiddenAccountIds.contains(a.accountId))
-        .toList();
-    if (hiddenOptions.isEmpty) {
+    final hiddenIds = hiddenTransactionAccountIds;
+    if (hiddenIds.isEmpty) {
       liveTransactions = _allTransactions;
       liveAccountOptions = _allAccountOptions;
       liveStats = _allStats;
       return;
     }
-    final hiddenIds = {
-      for (final a in hiddenOptions) ...{a.accountId, ...a.linkedAccountIds},
-    };
     liveTransactions = _allTransactions
         .where((tx) => !hiddenIds.contains(tx.accountId))
         .toList();

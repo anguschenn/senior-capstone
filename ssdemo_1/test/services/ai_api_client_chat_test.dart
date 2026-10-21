@@ -81,4 +81,23 @@ void main() {
     expect(all['selected_month'], '2026');
     expect(all['account_ids'], ['a']);
   });
+
+  test('hidden accounts are sent only when there are some', () {
+    final none = AiApiClient.chatContext(
+      accountIds: const [],
+      selectedMonth: DateTime(2026, 10),
+      allYear: false,
+      scopeLabel: 'All',
+    );
+    expect(none.containsKey('hidden_account_ids'), isFalse);
+    final hidden = AiApiClient.chatContext(
+      accountIds: const [],
+      hiddenAccountIds: const ['card'],
+      selectedMonth: DateTime(2026, 10),
+      allYear: false,
+      scopeLabel: 'All',
+    );
+    expect(hidden['hidden_account_ids'], ['card']);
+    expect(hidden['account_ids'], isEmpty);
+  });
 }
