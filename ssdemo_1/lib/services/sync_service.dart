@@ -466,6 +466,9 @@ class SyncService {
       yearLimitByCategoryId: raw.yearBudgetRows.isEmpty
           ? null
           : BudgetService.yearLimitsByCategoryId(raw.yearBudgetRows),
+      yearMonthsByCategoryId: raw.yearBudgetRows.isEmpty
+          ? null
+          : BudgetService.yearMonthsByCategoryId(raw.yearBudgetRows),
     );
     final effectiveBudgetProgress = budgetProgress.isNotEmpty
         ? budgetProgress

@@ -365,6 +365,23 @@ class BudgetService {
     return out;
   }
 
+  /// The months (1-12) each category has a limit above zero.
+  static Map<String, Set<int>> yearMonthsByCategoryId(
+    List<Map<String, dynamic>> yearRows,
+  ) {
+    final out = <String, Set<int>>{};
+    for (final row in yearRows) {
+      final categoryId = (row['category_id'] as String?)?.trim();
+      if (categoryId == null || categoryId.isEmpty) continue;
+      final raw = row['monthly_limit'];
+      final limit = raw is num ? raw.toDouble() : double.tryParse('$raw') ?? 0;
+      final month = int.tryParse('${row['month_year']}'.split('-').last);
+      if (limit <= 0 || month == null) continue;
+      out.putIfAbsent(categoryId, () => <int>{}).add(month);
+    }
+    return out;
+  }
+
   List<BudgetCategoryProgress> buildProgressFromRows({
     required List<Map<String, dynamic>> budgetRows,
     required Map<String, String> categoryMap,
@@ -373,6 +390,7 @@ class BudgetService {
     required bool yearly,
     required Map<String, String> reviewedCategoryByTxId,
     Map<String, double>? yearLimitByCategoryId,
+    Map<String, Set<int>>? yearMonthsByCategoryId,
   }) {
     final spentByCategoryName = <String, double>{};
     for (final row in txRows) {
@@ -471,6 +489,7 @@ class BudgetService {
               : yearLimitByCategoryId == null
               ? monthlyLimit * 12
               : yearLimitByCategoryId[categoryId] ?? 0,
+          budgetedMonths: yearly ? (yearMonthsByCategoryId?[categoryId]) : null,
         ),
       );
     }
@@ -551,6 +570,8 @@ class BudgetService {
   }) {
     if (template.isEmpty) return const <BudgetCategoryProgress>[];
     final spentByCategory = <String, double>{};
+    // Year view: also by month, for cards that count only budgeted months.
+    final spentByMonth = <int, Map<String, double>>{};
     for (final tx in txs) {
       if (!tx.isExpense) continue;
       if (!allTime) {
@@ -569,18 +590,38 @@ class BudgetService {
       );
       final key = normalizeCategoryKey(bucket);
       spentByCategory[key] = (spentByCategory[key] ?? 0) + tx.expenseAmount;
+      final month = spentByMonth.putIfAbsent(tx.date.month, () => {});
+      month[key] = (month[key] ?? 0) + tx.expenseAmount;
     }
-    final spentByCard = _foldIntoCards(spentByCategory, {
+    final cardKeys = {
       for (final item in template) normalizeCategoryKey(item.title),
-    });
+    };
+    final spentByCard = _foldIntoCards(spentByCategory, cardKeys);
+    final spentByMonthCard = {
+      for (final e in spentByMonth.entries)
+        e.key: _foldIntoCards(e.value, cardKeys),
+    };
+    double spentFor(BudgetCategoryProgress item) {
+      final key = normalizeCategoryKey(item.title);
+      final months = item.budgetedMonths;
+      if (!yearly || allTime || months == null || months.isEmpty) {
+        return spentByCard[key] ?? 0;
+      }
+      return months.fold<double>(
+        0,
+        (sum, m) => sum + (spentByMonthCard[m]?[key] ?? 0),
+      );
+    }
+
     final rebased = template
         .map(
           (item) => BudgetCategoryProgress(
             budgetId: item.budgetId,
             categoryId: item.categoryId,
             title: item.title,
-            spent: spentByCard[normalizeCategoryKey(item.title)] ?? 0,
+            spent: spentFor(item),
             limit: item.limit,
+            budgetedMonths: item.budgetedMonths,
           ),
         )
         .toList();

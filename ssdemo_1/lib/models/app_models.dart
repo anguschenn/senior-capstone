@@ -360,6 +360,7 @@ class BudgetCategoryProgress {
     required this.spent,
     required this.limit,
     this.paceApplies = true,
+    this.budgetedMonths,
   });
 
   final String budgetId;
@@ -373,6 +374,11 @@ class BudgetCategoryProgress {
   /// nothing left to project, only over or under the limit.
   final bool paceApplies;
 
+  /// Year view only: the months (1-12) whose limits make up [limit]. Spending
+  /// counts for those months alone, so a month with no budget can't put the
+  /// year over. Null or empty: the whole year.
+  final Set<int>? budgetedMonths;
+
   /// The same figures with no month-end projection.
   BudgetCategoryProgress withoutPace() => BudgetCategoryProgress(
     budgetId: budgetId,
@@ -381,6 +387,7 @@ class BudgetCategoryProgress {
     spent: spent,
     limit: limit,
     paceApplies: false,
+    budgetedMonths: budgetedMonths,
   );
 
   double get ratio {

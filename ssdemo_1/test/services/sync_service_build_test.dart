@@ -177,6 +177,7 @@ void main() {
     );
     final year = service.buildResult(raw, const {}, asOf: _asOf);
     expect(year.budgetProgressYear.single.limit, 500);
+    expect(year.budgetProgressYear.single.budgetedMonths, {8, 9});
     // Without the year's rows (an older saved copy) it falls back to x12.
     final old = service.buildResult(_raw(), const {}, asOf: _asOf);
     expect(old.budgetProgressYear.single.limit, 2400);

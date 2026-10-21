@@ -125,7 +125,8 @@ class BudgetAiAnalysisCard extends StatelessWidget {
             ),
           if (error.isEmpty && canGenerate && suggestion == null)
             const Text(
-              'Suggestion: current pace is healthy; keep spending patterns stable.',
+              // Nothing judged yet: don't claim the pace is fine.
+              'Tap Generate for suggestions on this period.',
               style: TextStyle(fontWeight: FontWeight.w500),
             ),
           if (showSuggestion) ...[

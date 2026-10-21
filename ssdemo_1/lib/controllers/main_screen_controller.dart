@@ -587,6 +587,7 @@ class MainScreenController extends ChangeNotifier {
         title: item.title,
         spent: item.spent,
         limit: limit,
+        budgetedMonths: item.budgetedMonths,
       );
     }).toList();
   }

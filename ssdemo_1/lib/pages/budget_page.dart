@@ -181,6 +181,10 @@ class _BudgetPageState extends State<BudgetPage> {
     }
 
     final ordered = orderedBudgetProgress;
+    // All time: biggest spending first, as there are no limits to rank by.
+    if (viewMode == BudgetViewMode.all) {
+      return ordered..sort((a, b) => b.spent.compareTo(a.spent));
+    }
     final position = {for (final (i, b) in ordered.indexed) b.budgetId: i};
     return ordered..sort((a, b) {
       final byRank = rank(a).compareTo(rank(b));
@@ -445,7 +449,12 @@ class _BudgetPageState extends State<BudgetPage> {
                 ? _budgetList(context)
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [_statusLegend(context), _budgetStack(context)],
+                    children: [
+                      // All time has no limits, so no dots to explain.
+                      if (viewMode != BudgetViewMode.all)
+                        _statusLegend(context),
+                      _budgetStack(context),
+                    ],
                   ),
           ),
         if (_editing)
@@ -668,7 +677,8 @@ class _BudgetPageState extends State<BudgetPage> {
               );
             },
           ),
-        if (unset.isNotEmpty) _unsetBudgetsRow(context, unset),
+        if (unset.isNotEmpty && viewMode != BudgetViewMode.all)
+          _unsetBudgetsRow(context, unset),
       ],
     );
   }
@@ -827,7 +837,7 @@ class _BudgetPageState extends State<BudgetPage> {
     final lead = _topCategory();
     if (lead == null) return 'No expense activity yet';
     if (lead.spent <= 0 || lead.ratio <= 0) return 'No expense activity yet';
-    return '${lead.title} (${(lead.ratio * 100).toStringAsFixed(0)}%)';
+    return '${lead.title} (${(lead.usedRatio * 100).toStringAsFixed(0)}%)';
   }
 
   /// Categories over budget or projected to finish the month over it
@@ -924,7 +934,17 @@ class _BudgetPageState extends State<BudgetPage> {
     }
 
     if (lead.ratio >= 1) {
-      return 'Budget Insight: ${lead.title} is over limit for $_insightPeriod.';
+      final over = [
+        for (final b in activeBudgetProgress)
+          if (b.isOverBudget) b.title,
+      ];
+      final names = over.length <= 1
+          ? lead.title
+          : over.length == 2
+          ? '${over[0]} and ${over[1]}'
+          : '${over[0]}, ${over[1]} and ${over.length - 2} more';
+      return 'Budget Insight: $names ${over.length > 1 ? 'are' : 'is'} '
+          'over limit for $_insightPeriod.';
     }
     if (lead.ratio >= 0.8) {
       return 'Budget Insight: ${lead.title} is close to limit for $_insightPeriod.';
@@ -939,7 +959,7 @@ class _BudgetPageState extends State<BudgetPage> {
   BudgetCategoryProgress? _topCategory() {
     if (activeBudgetProgress.isEmpty) return null;
     final sorted = [...activeBudgetProgress]
-      ..sort((a, b) => b.ratio.compareTo(a.ratio));
+      ..sort((a, b) => b.usedRatio.compareTo(a.usedRatio));
     final lead = sorted.first;
     if (lead.spent <= 0 || lead.ratio <= 0) return null;
     return lead;
