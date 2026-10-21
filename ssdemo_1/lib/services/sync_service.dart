@@ -199,8 +199,9 @@ class SyncService {
           .get(uri, headers: _backendHeaders())
           .timeout(const Duration(seconds: 15));
       if (response.statusCode != 200) return null;
-      final progress = parseBudgetProgressResponse(jsonDecode(response.body));
-      return progress.isEmpty ? null : progress;
+      // Empty means the month has no budget rows: the page shows spending
+      // without limits instead of borrowing another month's.
+      return parseBudgetProgressResponse(jsonDecode(response.body));
     } catch (_) {
       return null;
     }

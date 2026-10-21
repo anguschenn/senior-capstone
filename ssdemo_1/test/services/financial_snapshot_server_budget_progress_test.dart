@@ -157,4 +157,19 @@ void main() {
       expect(snapshot.budgetProgress.where((b) => b.spent == 999), isEmpty);
     },
   );
+
+  for (final account in [kAllAccountsId, _acctA]) {
+    test('the server found no budget rows for the month ($account): '
+        'spending shows with no limit, not another month\'s', () {
+      final controller = _controllerWith(
+        selectedAccountId: account,
+        selectedMonth: focusMonth,
+        serverBudgetProgress: const [],
+        serverBudgetProgressMonth: focusMonth,
+      );
+      final snapshot = FinancialSnapshotService.instance.build(controller);
+      expect(_food(snapshot).spent, 42);
+      expect(_food(snapshot).limit, 0);
+    });
+  }
 }

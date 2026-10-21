@@ -463,7 +463,8 @@ class _BudgetPageState extends State<BudgetPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // All time has no limits, so no dots to explain.
-                      if (viewMode != BudgetViewMode.all)
+                      if (viewMode != BudgetViewMode.all &&
+                          activeBudgetProgress.any((b) => b.hasLimit))
                         _statusLegend(context),
                       _budgetStack(context),
                     ],
@@ -570,6 +571,13 @@ class _BudgetPageState extends State<BudgetPage> {
               'Budgets are set per month. Pick Month or Year to see '
               'what is left to spend.',
               key: const ValueKey('budget-all-time-note'),
+              style: TextStyle(fontSize: 14, color: c.muted),
+            )
+          else if (budgeted <= 0)
+            Text(
+              'No budget was set for $_insightPeriod, so there is nothing '
+              'to be over. Spending is shown below.',
+              key: const ValueKey('budget-none-set-note'),
               style: TextStyle(fontSize: 14, color: c.muted),
             )
           else ...[

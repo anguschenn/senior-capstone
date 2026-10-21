@@ -57,17 +57,36 @@ class FinancialSnapshotService {
     // account, Year/All-time view, or no server data yet -- falls back to
     // the existing Dart computation, unchanged.
     final serverMonth = controller.serverBudgetProgressMonth;
-    final useServerBudgetProgress =
-        targetAccountId == kAllAccountsId &&
+    final serverForFocus =
         !isAllYearOption(focusMonth) &&
         controller.serverBudgetProgress != null &&
         serverMonth != null &&
         serverMonth.year == focusMonth.year &&
         serverMonth.month == focusMonth.month;
+    // The server found no budget rows for this month (e.g. a month before
+    // budgets were set): show its spending with no limits, for any account,
+    // rather than this month's limits applied to it.
+    final noBudgetsThisMonth =
+        serverForFocus && controller.serverBudgetProgress!.isEmpty;
+    final useServerBudgetProgress =
+        targetAccountId == kAllAccountsId &&
+        serverForFocus &&
+        !noBudgetsThisMonth;
     final visibleBudgetProgress = useServerBudgetProgress
         ? controller.serverBudgetProgress!
         : _rebaseProgressFromTemplate(
-            template: controller.liveBudgetProgress,
+            template: noBudgetsThisMonth
+                ? [
+                    for (final b in controller.liveBudgetProgress)
+                      BudgetCategoryProgress(
+                        budgetId: b.budgetId,
+                        categoryId: b.categoryId,
+                        title: b.title,
+                        spent: 0,
+                        limit: 0,
+                      ),
+                  ]
+                : controller.liveBudgetProgress,
             txs: visibleTransactions,
             focusMonth: focusMonth,
             yearly: isAllYearOption(focusMonth),

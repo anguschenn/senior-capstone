@@ -487,6 +487,8 @@ class MainScreenController extends ChangeNotifier {
         monthYear: monthYear,
       );
       syncStatus = 'Budget saved.';
+      // A month that had no rows has one now: pick up the server's view.
+      unawaited(_refreshServerBudgetProgress());
     } catch (e) {
       // Keep optimistic UI state even when persistence fails.
       syncStatus = 'Saved locally, but DB update failed: $e';
