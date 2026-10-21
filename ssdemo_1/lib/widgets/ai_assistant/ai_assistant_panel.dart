@@ -315,12 +315,8 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
           // Response or loading/error
           if (turn.response == null && turn.error == null)
             const Padding(
-              padding: EdgeInsets.only(left: 4),
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
+              padding: EdgeInsets.fromLTRB(6, 8, 0, 4),
+              child: TypingDots(),
             ),
 
           if (turn.error != null)
@@ -557,15 +553,8 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
                             foregroundColor: c.onButton,
                             disabledBackgroundColor: c.raised,
                           ),
-                          icon: _sending
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.arrow_upward_rounded),
+                          // Greyed out while waiting; the dots show progress.
+                          icon: const Icon(Icons.arrow_upward_rounded),
                         ),
                       ),
                     ),

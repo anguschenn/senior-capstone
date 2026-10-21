@@ -407,6 +407,72 @@ class ScopeLine extends StatelessWidget {
   }
 }
 
+/// Three dots bouncing one after another: "the assistant is typing".
+class TypingDots extends StatefulWidget {
+  const TypingDots({super.key, this.color});
+
+  final Color? color;
+
+  @override
+  State<TypingDots> createState() => _TypingDotsState();
+}
+
+class _TypingDotsState extends State<TypingDots>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1200),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = widget.color ?? context.colors.muted;
+    final still = MediaQuery.of(context).disableAnimations;
+    return Semantics(
+      label: 'Thinking',
+      child: AnimatedBuilder(
+        animation: _ctrl,
+        builder: (context, _) => Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var i = 0; i < 3; i++) ...[
+              if (i > 0) const SizedBox(width: 5),
+              Transform.translate(
+                // Each dot hops in turn, a third of the loop apart.
+                offset: Offset(
+                  0,
+                  still ? 0 : -5 * _hop((_ctrl.value - i * 0.18) % 1.0),
+                ),
+                child: Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 0 → 1 → 0 over the first 40% of the loop, then rest.
+  static double _hop(double t) {
+    if (t > 0.4) return 0;
+    final x = t / 0.4;
+    return 4 * x * (1 - x);
+  }
+}
+
 /// Small "✦ Why?" chip that opens the AI with a question filled in.
 class AskChip extends StatelessWidget {
   const AskChip({super.key, required this.label, required this.onTap});
