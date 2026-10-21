@@ -116,7 +116,8 @@ class FinancialSnapshotService {
                         limit: 0,
                       ),
                   ]
-                : controller.liveBudgetProgress,
+                : _monthTemplate(controller, focusMonth) ??
+                      controller.liveBudgetProgress,
             txs: visibleTransactions,
             focusMonth: focusMonth,
             yearly: isAllYearOption(focusMonth),
@@ -193,6 +194,47 @@ class FinancialSnapshotService {
       stats: stats,
       spendingSummary: spendingSummary,
     );
+  }
+
+  /// The focus month's own limits from the loaded year's budget rows, so a
+  /// past month doesn't borrow this month's budget while the server's
+  /// answer is pending or unavailable. Null when that year wasn't loaded.
+  List<BudgetCategoryProgress>? _monthTemplate(
+    MainScreenController controller,
+    DateTime focusMonth,
+  ) {
+    if (isAllYearOption(focusMonth)) return null;
+    final byMonth = controller.liveBudgetLimitsByMonth;
+    final year = '${focusMonth.year}-';
+    if (!byMonth.keys.any((k) => k.startsWith(year))) return null;
+    final key = '$year${focusMonth.month.toString().padLeft(2, '0')}';
+    final limits = byMonth[key] ?? const <String, double>{};
+    final names = {
+      for (final c in controller.liveCategoryOptions) c.id: c.name,
+    };
+    final known = controller.liveBudgetProgress
+        .map((b) => b.categoryId)
+        .toSet();
+    return [
+      for (final b in controller.liveBudgetProgress)
+        BudgetCategoryProgress(
+          budgetId: b.budgetId,
+          categoryId: b.categoryId,
+          title: b.title,
+          spent: 0,
+          limit: limits[b.categoryId] ?? 0,
+        ),
+      // Categories budgeted that month but not in the loaded month.
+      for (final entry in limits.entries)
+        if (!known.contains(entry.key) && names[entry.key] != null)
+          BudgetCategoryProgress(
+            budgetId: 'month-${entry.key}',
+            categoryId: entry.key,
+            title: names[entry.key]!,
+            spent: 0,
+            limit: entry.value,
+          ),
+    ];
   }
 
   List<BudgetCategoryProgress> _rebaseProgressFromTemplate({

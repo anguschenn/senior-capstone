@@ -194,4 +194,31 @@ void main() {
     expect(_food(snapshot).spent, 42);
     expect(_food(snapshot).limit, 0);
   });
+
+  test('no server answer for a past month: uses that month\'s own limits', () {
+    final controller =
+        _controllerWith(
+            selectedAccountId: kAllAccountsId,
+            selectedMonth: focusMonth,
+          )
+          ..liveCategoryOptions = const [
+            CategoryOption(id: 'c1', name: 'Food'),
+            CategoryOption(id: 'c2', name: 'Travel'),
+          ]
+          ..liveBudgetLimitsByMonth = const {
+            '2026-09': {'c1': 500, 'c2': 200},
+            '2026-10': {'c1': 300},
+          };
+    final snapshot = FinancialSnapshotService.instance.build(controller);
+    expect(_food(snapshot).limit, 500);
+    expect(
+      snapshot.budgetProgress.firstWhere((b) => b.title == 'Travel').limit,
+      200,
+    );
+
+    // A month of the loaded year with no rows has no limits.
+    controller.selectedMonth = DateTime(2026, 7, 1);
+    final july = FinancialSnapshotService.instance.build(controller);
+    expect(_food(july).limit, 0);
+  });
 }

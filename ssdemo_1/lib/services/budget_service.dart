@@ -365,6 +365,23 @@ class BudgetService {
     return out;
   }
 
+  /// Each month's limits ("2026-09" → category id → limit), so a past month
+  /// shows its own budget even before the server answers for it.
+  static Map<String, Map<String, double>> limitsByMonth(
+    List<Map<String, dynamic>> yearRows,
+  ) {
+    final out = <String, Map<String, double>>{};
+    for (final row in yearRows) {
+      final categoryId = (row['category_id'] as String?)?.trim();
+      final month = '${row['month_year'] ?? ''}'.trim();
+      if (categoryId == null || categoryId.isEmpty || month.isEmpty) continue;
+      final raw = row['monthly_limit'];
+      final limit = raw is num ? raw.toDouble() : double.tryParse('$raw') ?? 0;
+      out.putIfAbsent(month, () => <String, double>{})[categoryId] = limit;
+    }
+    return out;
+  }
+
   /// The months (1-12) each category has a limit above zero.
   static Map<String, Set<int>> yearMonthsByCategoryId(
     List<Map<String, dynamic>> yearRows,

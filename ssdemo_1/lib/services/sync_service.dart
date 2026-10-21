@@ -70,6 +70,7 @@ class SyncResult {
     required this.hasData,
     required this.autoReviewedCategoryByTxId,
     required this.autoLowConfidenceReviewTxIds,
+    this.budgetLimitsByMonth = const {},
   });
 
   final List<AppTransaction> transactions;
@@ -83,6 +84,9 @@ class SyncResult {
   final bool hasData;
   final Map<String, String> autoReviewedCategoryByTxId;
   final Set<String> autoLowConfidenceReviewTxIds;
+
+  /// The focused year's limits per month ("2026-09" → category id → limit).
+  final Map<String, Map<String, double>> budgetLimitsByMonth;
 }
 
 /// A [SyncResult] rebuilt from the on-device copy, and when that copy was saved.
@@ -500,6 +504,7 @@ class SyncService {
       budgetProgress: effectiveBudgetProgress,
       budgetProgressYear: effectiveBudgetProgressYear,
       budgetProgressAll: effectiveBudgetProgressAll,
+      budgetLimitsByMonth: BudgetService.limitsByMonth(raw.yearBudgetRows),
       categoryOptions: userCategories,
       accountOptions: accountOptions,
       stats: DashboardStats(

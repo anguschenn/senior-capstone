@@ -54,6 +54,9 @@ class MainScreenController extends ChangeNotifier {
   List<BudgetCategoryProgress> liveBudgetProgressYear = const [];
   List<BudgetCategoryProgress> liveBudgetProgressAll = const [];
 
+  /// The loaded year's limits per month ("2026-09" → category id → limit).
+  Map<String, Map<String, double>> liveBudgetLimitsByMonth = const {};
+
   /// Current-month budget progress from GET /api/budget_progress (all
   /// accounts, no per-account filter -- see SyncService.fetchServerBudgetProgress).
   /// Null when unavailable (error, no budget rows yet, or stale for the
@@ -365,6 +368,7 @@ class MainScreenController extends ChangeNotifier {
     liveBudgetProgress = const [];
     liveBudgetProgressYear = const [];
     liveBudgetProgressAll = const [];
+    liveBudgetLimitsByMonth = const {};
     liveCategoryOptions = const [];
     liveAccountOptions = const [];
     serverBudgetProgress = null;
@@ -478,8 +482,15 @@ class MainScreenController extends ChangeNotifier {
     syncStatus = 'Saving budget...';
     _notifyListenersSafe();
 
+    final monthYear = _monthKey(normalizedMonthOption(selectedMonth));
+    liveBudgetLimitsByMonth = {
+      ...liveBudgetLimitsByMonth,
+      monthYear: {
+        ...?liveBudgetLimitsByMonth[monthYear],
+        target.categoryId: monthlyLimit,
+      },
+    };
     try {
-      final monthYear = _monthKey(normalizedMonthOption(selectedMonth));
       await BudgetService.instance.upsertMonthlyBudgetByCategoryTitle(
         userId: AuthService.instance.currentUserId,
         categoryTitle: target.title,
@@ -505,6 +516,7 @@ class MainScreenController extends ChangeNotifier {
     liveBudgetProgress = result.budgetProgress;
     liveBudgetProgressYear = result.budgetProgressYear;
     liveBudgetProgressAll = result.budgetProgressAll;
+    liveBudgetLimitsByMonth = result.budgetLimitsByMonth;
     liveCategoryOptions = result.categoryOptions;
     liveAccountOptions = result.accountOptions;
     liveStats = result.stats;
