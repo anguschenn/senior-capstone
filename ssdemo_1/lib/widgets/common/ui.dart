@@ -659,14 +659,14 @@ Future<T?> showOptionSheet<T>({
       ? Offset(size.width / 2, size.height / 3)
       : overlay.globalToLocal(_lastPointerDown!);
   // Opens just below the tap, kept inside the screen.
-  final left = (tap.dx - 24).clamp(8.0, size.width - 228);
+  final left = (tap.dx - 24).clamp(8.0, size.width - 268);
   final top = tap.dy + 14;
   return showMenu<T>(
     context: context,
     position: RelativeRect.fromLTRB(
       left,
       top,
-      size.width - left - 220,
+      size.width - left - 260,
       size.height - top,
     ),
     initialValue: selected,
@@ -675,7 +675,8 @@ Future<T?> showOptionSheet<T>({
     elevation: 10,
     shadowColor: c.cardShadow,
     constraints: BoxConstraints(
-      minWidth: 220,
+      // One width for every menu so they all look alike.
+      minWidth: 260,
       maxWidth: 260,
       maxHeight: size.height * 0.6,
     ),
