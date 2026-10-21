@@ -88,6 +88,10 @@ class _BudgetPageState extends State<BudgetPage> {
   Timer? _toastTimer;
   static const _toastLifetime = Duration(seconds: 12);
 
+  /// The popups showed once and folded away; switching months doesn't bring
+  /// them back until the app is opened again.
+  bool _toastsDone = false;
+
   @override
   void dispose() {
     _toastTimer?.cancel();
@@ -97,7 +101,10 @@ class _BudgetPageState extends State<BudgetPage> {
   void _startToastTimer(List<BudgetCategoryProgress> shown) {
     _toastTimer = Timer(_toastLifetime, () {
       if (!mounted) return;
-      setState(() => _dismissedAlertKeys.addAll(shown.map(_alertKey)));
+      setState(() {
+        _dismissedAlertKeys.addAll(shown.map(_alertKey));
+        _toastsDone = true;
+      });
       _toastTimer = null;
     });
   }
@@ -162,6 +169,24 @@ class _BudgetPageState extends State<BudgetPage> {
       return ai.compareTo(bi);
     });
     return ordered;
+  }
+
+  /// Cards needing attention first (over, then running high), each group
+  /// keeping the user's order, so every month reads the same way.
+  List<BudgetCategoryProgress> get _cardsByStatus {
+    int rank(BudgetCategoryProgress b) {
+      if (b.isOverBudget || b.isBurnRateHigh) return 0;
+      if (b.isWarning) return 1;
+      return 2;
+    }
+
+    final ordered = orderedBudgetProgress;
+    final position = {for (final (i, b) in ordered.indexed) b.budgetId: i};
+    return ordered..sort((a, b) {
+      final byRank = rank(a).compareTo(rank(b));
+      if (byRank != 0) return byRank;
+      return position[a.budgetId]!.compareTo(position[b.budgetId]!);
+    });
   }
 
   bool _hasEnoughAiData() {
@@ -279,10 +304,12 @@ class _BudgetPageState extends State<BudgetPage> {
   @override
   Widget build(BuildContext context) {
     // Budget page combines editable category limits with lightweight insight text.
-    final alerts = _overspendCategories()
-        .where((c) => !_dismissedAlertKeys.contains(_alertKey(c)))
-        .take(4)
-        .toList();
+    final alerts = _toastsDone
+        ? const <BudgetCategoryProgress>[]
+        : _overspendCategories()
+              .where((c) => !_dismissedAlertKeys.contains(_alertKey(c)))
+              .take(4)
+              .toList();
     // Tabs stay alive in the background: only count time while visible.
     if (alerts.isNotEmpty && _toastTimer == null && widget.isVisible) {
       _startToastTimer(alerts);
@@ -313,6 +340,12 @@ class _BudgetPageState extends State<BudgetPage> {
 
   String _alertKey(BudgetCategoryProgress item) =>
       '${widget.selectedMonth.year}-${widget.selectedMonth.month}|${item.budgetId}';
+
+  String get _insightPeriod => switch (viewMode) {
+    BudgetViewMode.month => periodLabelForSelection(widget.selectedMonth),
+    BudgetViewMode.year => '${widget.selectedMonth.year}',
+    BudgetViewMode.all => 'all time',
+  };
 
   String get _periodLabel => switch (viewMode) {
     BudgetViewMode.month => periodLabelForSelection(widget.selectedMonth),
@@ -465,10 +498,25 @@ class _BudgetPageState extends State<BudgetPage> {
     );
   }
 
+  /// Income minus spending for the view's period, the same figure the Cash
+  /// Flow page shows for that month, year or all time.
+  double get _periodNet {
+    if (viewMode == BudgetViewMode.month) {
+      return widget.stats.cashFlowNetThisMonth;
+    }
+    final year = widget.selectedMonth.year;
+    double net = 0;
+    for (final tx in widget.transactions) {
+      if (viewMode == BudgetViewMode.year && tx.date.year != year) continue;
+      net += tx.incomeAmount - tx.expenseAmount;
+    }
+    return net;
+  }
+
   /// "Left to spend" hero with the period's cash flow under it.
   Widget _budgetHeader(BuildContext context) {
     final c = context.colors;
-    final net = widget.stats.cashFlowNetThisMonth;
+    final net = _periodNet;
     final positive = net >= 0;
     final budgeted = activeBudgetProgress
         .where((b) => b.hasLimit)
@@ -496,31 +544,40 @@ class _BudgetPageState extends State<BudgetPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            left >= 0 ? 'Left to spend' : 'Over budget',
-            style: TextStyle(fontSize: 13, color: c.muted),
-          ),
-          const SizedBox(height: 2),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                dollars(left, decimals: 0),
-                style: TextStyle(
-                  fontSize: 34,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.8,
-                  color: left >= 0 ? c.text : c.bad,
+          if (viewMode == BudgetViewMode.all)
+            Text(
+              'Budgets are set per month. Pick Month or Year to see '
+              'what is left to spend.',
+              key: const ValueKey('budget-all-time-note'),
+              style: TextStyle(fontSize: 14, color: c.muted),
+            )
+          else ...[
+            Text(
+              left >= 0 ? 'Left to spend' : 'Over budget',
+              style: TextStyle(fontSize: 13, color: c.muted),
+            ),
+            const SizedBox(height: 2),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(
+                  dollars(left, decimals: 0),
+                  style: TextStyle(
+                    fontSize: 34,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.8,
+                    color: left >= 0 ? c.text : c.bad,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                'of ${dollars(budgeted, decimals: 0)} budgeted',
-                style: TextStyle(fontSize: 14, color: c.muted),
-              ),
-            ],
-          ),
+                const SizedBox(width: 6),
+                Text(
+                  'of ${dollars(budgeted, decimals: 0)} budgeted',
+                  style: TextStyle(fontSize: 14, color: c.muted),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 10),
           Divider(height: 1, thickness: 0.5, color: c.line),
           const SizedBox(height: 10),
@@ -552,7 +609,7 @@ class _BudgetPageState extends State<BudgetPage> {
     // Categories with no budget and no spending fold into one row at the end
     // so they don't take a full card each.
     final items = [
-      for (final b in orderedBudgetProgress)
+      for (final b in _cardsByStatus)
         if (b.hasLimit || b.spent > 0) b,
     ];
     final unset = [
@@ -857,10 +914,10 @@ class _BudgetPageState extends State<BudgetPage> {
     }
 
     if (lead.ratio >= 1) {
-      return 'Budget Insight: ${lead.title} is over limit for selected month.';
+      return 'Budget Insight: ${lead.title} is over limit for $_insightPeriod.';
     }
     if (lead.ratio >= 0.8) {
-      return 'Budget Insight: ${lead.title} is close to limit for selected month.';
+      return 'Budget Insight: ${lead.title} is close to limit for $_insightPeriod.';
     }
     if (unbudgeted.isNotEmpty) {
       return 'Budget Insight: budgeted categories are within limits.'

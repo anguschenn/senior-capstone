@@ -141,8 +141,13 @@ class _TransactionsPageState extends State<TransactionsPage> {
     if (categoryFilter.isNotEmpty) {
       categoryCounts.putIfAbsent(categoryFilter, () => 0);
     }
+    // Busiest categories first, so the common ones don't sit below the fold.
     final categoryNames = categoryCounts.keys.toList()
-      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      ..sort((a, b) {
+        final byCount = categoryCounts[b]!.compareTo(categoryCounts[a]!);
+        if (byCount != 0) return byCount;
+        return a.toLowerCase().compareTo(b.toLowerCase());
+      });
 
     final filtered = _sorted(
       periodTransactions.where((tx) {

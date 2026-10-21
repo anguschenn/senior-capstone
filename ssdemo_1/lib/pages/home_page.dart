@@ -47,6 +47,8 @@ class HomePage extends StatelessWidget {
     required this.syncing,
     required this.onAddBank,
     required this.accountOptions,
+    this.onReconnect,
+    this.onRefresh,
     required this.selectedAccountId,
     required this.selectedMonth,
     required this.monthOptions,
@@ -83,6 +85,8 @@ class HomePage extends StatelessWidget {
   final bool bankSyncBusy;
   final String syncStatus;
   final VoidCallback onAddBank;
+  final VoidCallback? onReconnect;
+  final VoidCallback? onRefresh;
   final List<AccountOption> accountOptions;
   final String selectedAccountId;
   final DateTime selectedMonth;
@@ -165,12 +169,6 @@ class HomePage extends StatelessWidget {
             'Wallet',
             trailing: [
               CircleIconButton(
-                key: const ValueKey('wallet-add-bank'),
-                icon: Icons.add_rounded,
-                tooltip: 'Add Bank',
-                onPressed: busy ? null : onAddBank,
-              ),
-              CircleIconButton(
                 key: const ValueKey('wallet-settings'),
                 icon: Icons.settings_outlined,
                 tooltip: 'Settings',
@@ -183,7 +181,32 @@ class HomePage extends StatelessWidget {
                 ? '${monthOptionLabel(selectedMonth)} · Syncing…'
                 : monthOptionLabel(selectedMonth),
             onTap: () => _showMonthPicker(context),
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+            padding: const EdgeInsets.fromLTRB(20, 0, 14, 4),
+            // Bank shortcuts, also in Settings.
+            actions: [
+              CircleIconButton(
+                key: const ValueKey('wallet-add-bank'),
+                icon: Icons.add_rounded,
+                tooltip: 'Add Bank',
+                onPressed: busy ? null : onAddBank,
+              ),
+              if (accountOptions.isNotEmpty && onReconnect != null)
+                CircleIconButton(
+                  key: const ValueKey('wallet-reconnect'),
+                  icon: Icons.link_rounded,
+                  tooltip: 'Reconnect',
+                  onPressed: busy ? null : onReconnect,
+                ),
+              if (onRefresh != null)
+                CircleIconButton(
+                  key: const ValueKey('wallet-refresh'),
+                  icon: Icons.refresh_rounded,
+                  tooltip: syncStatus.isEmpty
+                      ? 'Refresh Data'
+                      : 'Refresh Data · $syncStatus',
+                  onPressed: busy ? null : onRefresh,
+                ),
+            ],
           ),
           WalletCardStack(
             accountOptions: accountOptions,

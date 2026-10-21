@@ -71,6 +71,9 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final List<_ChatTurn> _turns = [];
+
+  /// The saved chat is still on its way; show dots, not the empty hint.
+  bool _loadingHistory = false;
   String? _selectedAccountId;
   bool _sending = false;
 
@@ -100,11 +103,17 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
     final userId = _userId;
     if (userId == null) return;
     final accountId = _resolvedAccountId;
+    // Called from initState or right after a setState, so the next build
+    // picks this up without one of its own.
+    _loadingHistory = true;
     final saved = await _store.load(userId, accountId);
-    if (!mounted || accountId != _resolvedAccountId || _turns.isNotEmpty) {
+    if (!mounted || accountId != _resolvedAccountId) return;
+    if (_turns.isNotEmpty) {
+      setState(() => _loadingHistory = false);
       return;
     }
     setState(() {
+      _loadingHistory = false;
       _turns.addAll([
         for (final turn in saved)
           _ChatTurn(
@@ -476,6 +485,12 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
                   itemCount: _turns.isEmpty ? 1 : _turns.length,
                   itemBuilder: (_, i) {
+                    if (_turns.isEmpty && _loadingHistory) {
+                      return const Padding(
+                        padding: EdgeInsets.only(top: 60),
+                        child: Center(child: TypingDots()),
+                      );
+                    }
                     if (_turns.isEmpty) {
                       return Padding(
                         padding: const EdgeInsets.only(top: 60),
@@ -494,28 +509,30 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
               ),
 
               // Suggestions fill the box; nothing is sent until send is tapped.
-              // They wrap onto a second line instead of running off the edge.
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
-                  children: [
-                    for (final s in _suggestions)
-                      ActionChip(
-                        label: Text(s),
-                        labelStyle: TextStyle(fontSize: 13, color: c.text),
-                        backgroundColor: c.card,
-                        side: BorderSide.none,
-                        shape: const StadiumBorder(),
-                        visualDensity: VisualDensity.compact,
-                        onPressed: _sending
-                            ? null
-                            : () => setState(() => _controller.text = s),
-                      ),
-                  ],
+              // They wrap onto a second line instead of running off the edge,
+              // and step aside once there is a chat to read.
+              if (_turns.isEmpty && !_loadingHistory)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      for (final s in _suggestions)
+                        ActionChip(
+                          label: Text(s),
+                          labelStyle: TextStyle(fontSize: 13, color: c.text),
+                          backgroundColor: c.card,
+                          side: BorderSide.none,
+                          shape: const StadiumBorder(),
+                          visualDensity: VisualDensity.compact,
+                          onPressed: _sending
+                              ? null
+                              : () => setState(() => _controller.text = s),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
 
               // Input
               Padding(

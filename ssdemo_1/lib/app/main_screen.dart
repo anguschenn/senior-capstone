@@ -206,6 +206,8 @@ class _MainScreenState extends State<MainScreen> {
         bankSyncBusy: c.refreshingInBackground,
         syncStatus: c.syncStatus,
         onAddBank: c.connectBankAndPullData,
+        onReconnect: c.reauthenticateBank,
+        onRefresh: c.refreshLiveDataOnly,
         accountOptions: c.liveAccountOptions,
         selectedAccountId: c.selectedAccountId,
         reviewedCategoryByTxId: c.reviewedCategoryByTxId,

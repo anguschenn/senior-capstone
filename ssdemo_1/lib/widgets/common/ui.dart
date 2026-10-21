@@ -354,6 +354,7 @@ class ScopeLine extends StatelessWidget {
     required this.label,
     this.onTap,
     this.trailing,
+    this.actions = const [],
     this.padding = const EdgeInsets.fromLTRB(20, 0, 20, 2),
   });
 
@@ -362,6 +363,9 @@ class ScopeLine extends StatelessWidget {
 
   /// Muted text on the right, e.g. "42 transactions".
   final String? trailing;
+
+  /// Small buttons on the right, e.g. the Wallet's bank shortcuts.
+  final List<Widget> actions;
   final EdgeInsetsGeometry padding;
 
   @override
@@ -401,6 +405,7 @@ class ScopeLine extends StatelessWidget {
           ),
           if (trailing != null)
             Text(trailing!, style: style.copyWith(fontSize: 13)),
+          ...actions,
         ],
       ),
     );
@@ -574,7 +579,7 @@ Future<T?> showOptionSheet<T>({
     elevation: 0,
     builder: (context) {
       final c = context.colors;
-      final maxHeight = MediaQuery.sizeOf(context).height * 0.62;
+      final maxHeight = MediaQuery.sizeOf(context).height * 0.75;
       return SafeArea(
         minimum: const EdgeInsets.only(bottom: 8),
         child: Padding(

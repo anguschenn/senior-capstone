@@ -179,24 +179,29 @@ class _BudgetInsightBannerState extends State<BudgetInsightBanner> {
       children: [
         Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
         for (var i = 0; i < categories.length; i++) ...[
-          if (i > 0)
-            Text(
-              i == categories.length - 1 ? 'and' : ',',
-              style: const TextStyle(fontWeight: FontWeight.w500),
-            ),
-          GestureDetector(
-            onTap: onCategoryTap == null
-                ? null
-                : () => onCategoryTap!(categories[i]),
-            child: Text(
-              categories[i],
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                color: linkColor,
-                decoration: TextDecoration.underline,
-                decorationColor: linkColor,
+          if (i > 0 && i == categories.length - 1)
+            const Text('and', style: TextStyle(fontWeight: FontWeight.w500)),
+          // The comma sits right after its name, not spaced off like a word.
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              GestureDetector(
+                onTap: onCategoryTap == null
+                    ? null
+                    : () => onCategoryTap!(categories[i]),
+                child: Text(
+                  categories[i],
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: linkColor,
+                    decoration: TextDecoration.underline,
+                    decorationColor: linkColor,
+                  ),
+                ),
               ),
-            ),
+              if (i < categories.length - 2)
+                const Text(',', style: TextStyle(fontWeight: FontWeight.w500)),
+            ],
           ),
         ],
       ],
