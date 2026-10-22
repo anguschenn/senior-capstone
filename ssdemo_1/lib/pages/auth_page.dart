@@ -183,9 +183,7 @@ class _AuthPageState extends State<AuthPage> {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final motion = MediaQuery.of(context).disableAnimations
-        ? Duration.zero
-        : const Duration(milliseconds: 250);
+    final motion = motionDuration(context, 250);
 
     // The old content fades out in the first half and the new one fades in
     // in the second, so the two are never seen on top of each other.

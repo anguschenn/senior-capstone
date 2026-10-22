@@ -134,9 +134,7 @@ class _AuthGateState extends State<_AuthGate> {
             return ColoredBox(
               color: context.colors.background,
               child: AnimatedSwitcher(
-                duration: MediaQuery.of(context).disableAnimations
-                    ? Duration.zero
-                    : const Duration(milliseconds: 300),
+                duration: motionDuration(context, 300),
                 switchInCurve: Curves.easeOutCubic,
                 layoutBuilder: (current, _) =>
                     current ?? const SizedBox.shrink(),

@@ -246,6 +246,12 @@ TextStyle _fieldLabelStyle(AppColors c) => WidgetStateTextStyle.resolveWith(
       TextStyle(color: states.contains(WidgetState.error) ? c.bad : c.muted),
 );
 
+/// An animation [ms] long, or none when the system asks for reduced motion.
+Duration motionDuration(BuildContext context, int ms) =>
+    MediaQuery.of(context).disableAnimations
+    ? Duration.zero
+    : Duration(milliseconds: ms);
+
 /// How much a button grows or shrinks for [states].
 double _pressScale(
   Set<WidgetState> states, {
@@ -264,9 +270,7 @@ double _pressScale(
 Widget _scaled(BuildContext context, double scale, Widget? child) =>
     AnimatedScale(
       scale: scale,
-      duration: MediaQuery.of(context).disableAnimations
-          ? Duration.zero
-          : const Duration(milliseconds: 150),
+      duration: motionDuration(context, 150),
       curve: Curves.easeOutCubic,
       child: child,
     );
