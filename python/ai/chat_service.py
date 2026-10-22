@@ -1947,12 +1947,6 @@ class ChatService:
         if "last month" not in text:
             return None
 
-        annual = summary.get("annual_summary") if isinstance(summary, dict) else {}
-        annual_year = int(annual.get("year", 0) or 0) if isinstance(annual, dict) else 0
-        if annual_year <= 0:
-            annual_year = date_cls.today().year
-
-        period_key = ""
         period_key = self._previous_month_key(summary)
         if not period_key:
             return None
