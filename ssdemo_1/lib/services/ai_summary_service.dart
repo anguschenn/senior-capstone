@@ -86,29 +86,6 @@ class AiSummaryService {
     return value;
   }
 
-  bool _isTransferLikeForTotals(
-    AppTransaction txForTotals,
-    String categoryForTotals,
-  ) {
-    // Keep AI spending/income totals aligned with dashboard totals:
-    // do not exclude transfer-like transactions from top-line math.
-    if (txForTotals.id.isEmpty && categoryForTotals.isNotEmpty) {
-      // no-op: references keep analyzer happy while preserving disabled behavior
-    }
-    return false;
-  }
-
-  bool _isTransferLikeIncome(
-    AppTransaction txForIncome,
-    String categoryForIncome,
-  ) {
-    // Keep AI income totals aligned with dashboard totals.
-    if (txForIncome.id.isEmpty && categoryForIncome.isNotEmpty) {
-      // no-op: references keep analyzer happy while preserving disabled behavior
-    }
-    return false;
-  }
-
   bool _isTransferLikeForAnalysis(AppTransaction tx, String category) {
     if (!tx.isExpense) return false;
     final primarySignal = tx.rawPfcPrimary.toLowerCase();
@@ -278,9 +255,6 @@ class AiSummaryService {
       }
 
       if (tx.isIncome) {
-        if (_isTransferLikeIncome(tx, effectiveCategory)) {
-          continue;
-        }
         // Card payments aren't income; keep their total so chat can say so.
         monthBucket['card_payments_in'] =
             (monthBucket['card_payments_in'] as double) + tx.cardPaymentAmount;
@@ -347,10 +321,6 @@ class AiSummaryService {
         }
       } else if (tx.isExpense) {
         final expense = tx.expenseAmount;
-        final isTransferLikeForTotals = _isTransferLikeForTotals(
-          tx,
-          effectiveCategory,
-        );
         final isTransferLikeForAnalysis = _isTransferLikeForAnalysis(
           tx,
           effectiveCategory,
@@ -363,12 +333,6 @@ class AiSummaryService {
 
         if (isTransferLikeForAnalysis) {
           transferLikeExpenseTxCount += 1;
-        }
-
-        // Exclude transfer/payment-like outflows from spending math so
-        // "expenses" aligns with user-facing discretionary spend.
-        if (isTransferLikeForTotals) {
-          continue;
         }
 
         monthBucket['expenses'] = (monthBucket['expenses'] as double) + expense;
