@@ -101,6 +101,17 @@ void main() {
     expect(find.text('Panera'), findsOneWidget);
   });
 
+  testWidgets('category counts follow the search', (tester) async {
+    await _pump(tester);
+    await tester.enterText(find.byType(TextField), 'pan');
+    await tester.pumpAndSettle();
+    expect(find.text('All categories (1)'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('tx-category-filter')));
+    await tester.pumpAndSettle();
+    expect(find.text('Food (1)'), findsOneWidget);
+    expect(find.text('Shopping (1)'), findsNothing);
+  });
+
   testWidgets('sorts by date or amount, either direction', (tester) async {
     await _pump(tester);
     List<String> order() {

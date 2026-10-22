@@ -144,10 +144,24 @@ class _TransactionsPageState extends State<TransactionsPage> {
       return true;
     }).toList();
 
-    // Categories in the selected range, with counts, for the filter menu. A
-    // chosen category stays listed (at 0) after a range change empties it.
+    final q = query.trim().toLowerCase();
+    final searched = q.isEmpty
+        ? periodTransactions
+        : periodTransactions.where((tx) {
+            return tx.name.toLowerCase().contains(q) ||
+                tx.category.toLowerCase().contains(q) ||
+                tx.primaryCategory.toLowerCase().contains(q) ||
+                (widget.reviewedCategoryByTxId[tx.id]?.toLowerCase().contains(
+                      q,
+                    ) ??
+                    false);
+          }).toList();
+
+    // Categories in the selected range that match the search, with counts,
+    // for the filter menu. A chosen category stays listed (at 0) after a
+    // range change or search empties it.
     final categoryCounts = <String, int>{};
-    for (final tx in periodTransactions) {
+    for (final tx in searched) {
       final label = _categoryLabel(tx);
       categoryCounts[label] = (categoryCounts[label] ?? 0) + 1;
     }
@@ -163,18 +177,12 @@ class _TransactionsPageState extends State<TransactionsPage> {
       });
 
     final filtered = _sorted(
-      periodTransactions.where((tx) {
-        if (categoryFilter.isNotEmpty && _categoryLabel(tx) != categoryFilter) {
-          return false;
-        }
-        if (query.trim().isEmpty) return true;
-        final q = query.toLowerCase();
-        return tx.name.toLowerCase().contains(q) ||
-            tx.category.toLowerCase().contains(q) ||
-            tx.primaryCategory.toLowerCase().contains(q) ||
-            (widget.reviewedCategoryByTxId[tx.id]?.toLowerCase().contains(q) ??
-                false);
-      }).toList(),
+      searched
+          .where(
+            (tx) =>
+                categoryFilter.isEmpty || _categoryLabel(tx) == categoryFilter,
+          )
+          .toList(),
     );
 
     final c = context.colors;
@@ -477,7 +485,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
                             chip(
                               key: const ValueKey('tx-category-filter'),
                               label: categoryFilter.isEmpty
-                                  ? 'All categories (${periodTransactions.length})'
+                                  ? 'All categories (${searched.length})'
                                   : 'Category',
                               selected: categoryFilter.isEmpty,
                               trailingIcon: Icons.keyboard_arrow_down_rounded,
@@ -487,7 +495,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
                                   title: 'Category',
                                   values: ['', ...categoryNames],
                                   labelOf: (name) => name.isEmpty
-                                      ? 'All categories (${periodTransactions.length})'
+                                      ? 'All categories (${searched.length})'
                                       : '$name (${categoryCounts[name]})',
                                   selected: categoryFilter,
                                 );
