@@ -240,23 +240,6 @@ class BudgetService {
     return out;
   }
 
-  Future<void> updateBudgetLimit(
-    String budgetId,
-    double monthlyLimit,
-    String userId,
-  ) async {
-    if (monthlyLimit < 0) return;
-    if (budgetId.startsWith('preset_')) return;
-    await _writeUserLimit(
-      (values) => AppSupabase.client
-          .from('budgets')
-          .update(values)
-          .eq('id', budgetId)
-          .eq('user_id', userId),
-      {'monthly_limit': monthlyLimit},
-    );
-  }
-
   Future<void> upsertMonthlyBudgetByCategoryTitle({
     required String userId,
     required String categoryTitle,
