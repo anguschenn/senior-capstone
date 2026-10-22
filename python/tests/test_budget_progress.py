@@ -61,6 +61,19 @@ class BudgetBucketContractTests(unittest.TestCase):
         food = next(item for item in cleaned if item["category"] == "Food")
         self.assertAlmostEqual(food["ratio"], 278.25 / 300, places=3)
 
+    def test_a_transaction_stored_twice_counts_once(self):
+        spec = FIXTURE["progress"]
+
+        def food_spent(rows):
+            progress = build_budget_progress(
+                spec["budgets"], spec["categories"], rows, FIXTURE["rules"], spec["month"]
+            )
+            return next(item["spent"] for item in progress if item["category"] == "Food")
+
+        coffee = next(r for r in spec["transactions"] if r["plaid_transaction_id"] == "tx-1")
+        once = food_spent(spec["transactions"])
+        self.assertEqual(food_spent(spec["transactions"] + [dict(coffee)]), once)
+
 
 if __name__ == "__main__":
     unittest.main()

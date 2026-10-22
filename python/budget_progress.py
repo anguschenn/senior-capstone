@@ -495,10 +495,16 @@ def build_budget_progress(
     spent_by_key: dict[str, float] = {}
     if kinds is None:
         kinds = classify_rows(tx_rows, remembered_rules)
+    counted: set[str] = set()
     for row in tx_rows:
         if not str(row.get("date") or "").startswith(month):
             continue
-        kind, bucket = kinds[row_id(row)]
+        # A transaction stored twice counts once, as the app de-duplicates on sync.
+        rid = row_id(row)
+        if rid in counted:
+            continue
+        counted.add(rid)
+        kind, bucket = kinds[rid]
         amount = signed_spend(kind, float(row["amount"]))
         if amount == 0:
             continue
