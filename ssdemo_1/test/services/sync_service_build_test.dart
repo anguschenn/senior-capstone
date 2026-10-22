@@ -162,6 +162,17 @@ void main() {
       expect(year.spent, 125); // t1 + t2 + t4, all in 2026
     });
 
+    test('a transaction stored twice counts once in budget progress', () {
+      final result = service.buildResult(
+        _raw(extraTx: [_tx('t1', '2026-09-20', 40)]),
+        const {},
+        asOf: _asOf,
+      );
+
+      expect(_food(result.budgetProgress).spent, 100);
+      expect(_food(result.budgetProgressYear).spent, 125);
+    });
+
     test('applies remembered category rules', () {
       final key = CategoryService.instance.buildRuleKey(
         merchantName: 'Merchant t1',

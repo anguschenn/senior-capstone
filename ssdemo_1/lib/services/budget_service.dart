@@ -393,6 +393,7 @@ class BudgetService {
     Map<String, Set<int>>? yearMonthsByCategoryId,
   }) {
     final spentByCategoryName = <String, double>{};
+    final counted = <String>{};
     for (final row in txRows) {
       final rawDate = (row['date'] as String?) ?? '';
       final txDate = DateTime.tryParse(rawDate);
@@ -402,9 +403,12 @@ class BudgetService {
       } else {
         if (txDate.year != now.year || txDate.month != now.month) continue;
       }
+      final tx = AppTransaction.fromMap(row);
+      // A transaction stored twice counts once, as in SyncService's list.
+      if (!counted.add(tx.dedupeKey)) continue;
       // Same rules as the parsed transaction (AppTransaction.expenseAmount):
       // refunds net against their category, own-account transfers don't count.
-      final expenseAmount = AppTransaction.fromMap(row).expenseAmount;
+      final expenseAmount = tx.expenseAmount;
       if (expenseAmount == 0) continue;
       final bucket = _categoryService.budgetBucketForRawTransaction(
         row,
