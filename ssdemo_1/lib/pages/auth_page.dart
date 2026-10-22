@@ -180,35 +180,6 @@ class _AuthPageState extends State<AuthPage> {
     });
   }
 
-  /// A filled field with its label inside the box. An outline border would
-  /// float the label up onto the border line, outside the fill.
-  InputDecoration _field(
-    AppColors c, {
-    required String label,
-    String? helper,
-    String? error,
-    Widget? suffix,
-  }) {
-    final labelStyle = WidgetStateTextStyle.resolveWith(
-      (states) => TextStyle(
-        color: states.contains(WidgetState.error) ? c.bad : c.muted,
-      ),
-    );
-    return InputDecoration(
-      labelText: label,
-      labelStyle: labelStyle,
-      floatingLabelStyle: labelStyle,
-      helperText: helper,
-      helperStyle: TextStyle(color: c.muted),
-      errorText: error,
-      suffixIcon: suffix,
-      border: UnderlineInputBorder(
-        borderSide: BorderSide.none,
-        borderRadius: BorderRadius.circular(12),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
@@ -291,10 +262,9 @@ class _AuthPageState extends State<AuthPage> {
                           autofillHints: const [AutofillHints.username],
                           textInputAction: TextInputAction.next,
                           onSubmitted: (_) => _passwordFocusNode.requestFocus(),
-                          decoration: _field(
-                            c,
-                            label: 'Email',
-                            error: _emailError,
+                          decoration: InputDecoration(
+                            labelText: 'Email',
+                            errorText: _emailError,
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -317,13 +287,12 @@ class _AuthPageState extends State<AuthPage> {
                               _submit();
                             }
                           },
-                          decoration: _field(
-                            c,
-                            label: 'Password',
+                          decoration: InputDecoration(
+                            labelText: 'Password',
                             // New accounts see the rule before they hit it.
-                            helper: _isSignUp ? _passwordRule : null,
-                            error: _passwordError,
-                            suffix: IconButton(
+                            helperText: _isSignUp ? _passwordRule : null,
+                            errorText: _passwordError,
+                            suffixIcon: IconButton(
                               tooltip: _passwordVisible
                                   ? 'Hide password'
                                   : 'Show password',
@@ -354,10 +323,9 @@ class _AuthPageState extends State<AuthPage> {
                                     ],
                                     textInputAction: TextInputAction.done,
                                     onSubmitted: (_) => _submit(),
-                                    decoration: _field(
-                                      c,
-                                      label: 'Confirm password',
-                                      error: _confirmError,
+                                    decoration: InputDecoration(
+                                      labelText: 'Confirm password',
+                                      errorText: _confirmError,
                                     ),
                                   ),
                                 )

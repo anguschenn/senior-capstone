@@ -219,10 +219,15 @@ class AppTheme {
         filled: true,
         fillColor: c.raised,
         isDense: true,
-        border: OutlineInputBorder(
+        // An underline border with no line, not an outline: an outline
+        // floats the label up onto its edge, half outside the fill.
+        border: UnderlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
         ),
+        labelStyle: _fieldLabelStyle(c),
+        floatingLabelStyle: _fieldLabelStyle(c),
+        helperStyle: TextStyle(color: c.muted),
         hintStyle: TextStyle(color: c.muted),
       ),
       progressIndicatorTheme: ProgressIndicatorThemeData(color: c.text),
@@ -233,6 +238,13 @@ class AppTheme {
     );
   }
 }
+
+/// Field labels in the muted text colour, or red while the field has an
+/// error.
+TextStyle _fieldLabelStyle(AppColors c) => WidgetStateTextStyle.resolveWith(
+  (states) =>
+      TextStyle(color: states.contains(WidgetState.error) ? c.bad : c.muted),
+);
 
 /// How much a button grows or shrinks for [states].
 double _pressScale(
