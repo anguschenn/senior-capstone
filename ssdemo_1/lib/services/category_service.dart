@@ -14,11 +14,11 @@ class CategoryService {
   const CategoryService._();
   static const instance = CategoryService._();
 
-  String _norm(String raw) => raw
-      .trim()
-      .toLowerCase()
-      .replaceAll(RegExp(r'[_\s]+'), ' ')
-      .replaceAll(RegExp(r'\s+'), ' ');
+  // Built once: _norm runs for every transaction on each sync.
+  static final _separators = RegExp(r'[_\s]+');
+
+  String _norm(String raw) =>
+      raw.trim().toLowerCase().replaceAll(_separators, ' ');
 
   String _normToken(String raw) {
     final v = _norm(raw);

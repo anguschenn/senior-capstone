@@ -60,8 +60,11 @@ String shortDate(DateTime value, {bool alwaysShowYear = false}) {
       : '${months[value.month - 1]} ${value.day}';
 }
 
+// Built once: these run for every transaction on each rebuild.
+final _whitespace = RegExp(r'\s+');
+
 String normalizeCategoryKey(String raw) {
-  return raw.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+  return raw.trim().toLowerCase().replaceAll(_whitespace, ' ');
 }
 
 String prettifyCategoryLabel(String raw) {
@@ -69,7 +72,7 @@ String prettifyCategoryLabel(String raw) {
   if (cleaned.isEmpty) return 'Uncategorized';
   final spaced = cleaned.replaceAll('_', ' ').toLowerCase();
   return spaced
-      .split(RegExp(r'\s+'))
+      .split(_whitespace)
       .where((part) => part.isNotEmpty)
       .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
       .join(' ');
