@@ -966,18 +966,21 @@ Future<T?> _showPopover<T>({
   );
 }
 
-/// Popover card body: rounded panel with a title row, content and a
-/// Cancel / OK footer, like the iOS calendar popover.
+/// Popover card body: rounded panel with a title row and content, and a
+/// Cancel / OK footer when a choice takes more than one tap (a date range).
+/// Pickers where one tap is the whole choice leave [footer] off.
 class _PickerCard extends StatelessWidget {
   const _PickerCard({
     required this.header,
     required this.body,
-    required this.onOk,
+    this.onOk,
+    this.footer = true,
   });
 
   final Widget header;
   final Widget body;
   final VoidCallback? onOk;
+  final bool footer;
 
   @override
   Widget build(BuildContext context) {
@@ -1024,18 +1027,20 @@ class _PickerCard extends StatelessWidget {
             header,
             const SizedBox(height: 8),
             body,
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                button(
-                  'Cancel',
-                  () => Navigator.of(context).pop(),
-                  primary: false,
-                ),
-                const SizedBox(width: 14),
-                button('OK', onOk, primary: true),
-              ],
-            ),
+            if (footer) ...[
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  button(
+                    'Cancel',
+                    () => Navigator.of(context).pop(),
+                    primary: false,
+                  ),
+                  const SizedBox(width: 14),
+                  button('OK', onOk, primary: true),
+                ],
+              ),
+            ],
           ],
         ),
       ),
@@ -1049,11 +1054,15 @@ class _PickerHeader extends StatelessWidget {
     required this.title,
     required this.onPrevious,
     required this.onNext,
+    this.showArrows = true,
   });
 
   final String title;
   final VoidCallback? onPrevious;
   final VoidCallback? onNext;
+
+  /// Off when there is only one page (one year): no dead arrows.
+  final bool showArrows;
 
   @override
   Widget build(BuildContext context) {
@@ -1074,8 +1083,11 @@ class _PickerHeader extends StatelessWidget {
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
           ),
         ),
-        arrow(Icons.chevron_left_rounded, onPrevious, 'Previous'),
-        arrow(Icons.chevron_right_rounded, onNext, 'Next'),
+        if (showArrows) ...[
+          arrow(Icons.chevron_left_rounded, onPrevious, 'Previous'),
+          arrow(Icons.chevron_right_rounded, onNext, 'Next'),
+        ] else
+          const SizedBox(height: 48),
       ],
     );
   }
@@ -1156,10 +1168,11 @@ const _monthShort = [
   'Dec',
 ];
 
-/// Month picker as a calendar-style popover: "‹ 2026 ›" header, a 4×3
-/// grid of months (only [options] can be picked), an "All of 2026" choice
-/// when [options] has that year's all-year entry, then Cancel / OK.
-/// [options] uses the app's month values (day 1, or day 2 for All Year).
+/// Month picker as a calendar-style popover: "2026 ‹ ›" header, a
+/// "Whole year" capsule when [options] has that year's all-year entry, and
+/// a 4×3 grid of months (only [options] can be picked). One tap picks and
+/// closes. [options] uses the app's month values (day 1, or day 2 for All
+/// Year).
 Future<DateTime?> showMonthGridPicker({
   required BuildContext context,
   required List<DateTime> options,
@@ -1173,17 +1186,24 @@ Future<DateTime?> showMonthGridPicker({
   return _showPopover<DateTime>(
     context: context,
     title: 'Month',
-    width: 360,
+    width: 320,
     builder: (context, _) {
       var year = selected.year;
-      DateTime picked = selected;
       return StatefulBuilder(
         builder: (context, setState) {
+          final c = context.colors;
           final yi = years.indexOf(year);
           final allYear = DateTime(year, 1, 2);
+          void pick(DateTime value) => Navigator.of(context).pop(value);
+          // A past month that can't be picked had no transactions.
+          final anyEmpty = [
+            for (var m = 1; m <= 12; m++) DateTime(year, m, 1),
+          ].any((m) => !optionSet.contains(m) && !m.isAfter(now));
           return _PickerCard(
+            footer: false,
             header: _PickerHeader(
               title: '$year',
+              showArrows: years.length > 1,
               onPrevious: yi > 0
                   ? () => setState(() => year = years[yi - 1])
                   : null,
@@ -1192,14 +1212,15 @@ Future<DateTime?> showMonthGridPicker({
                   : null,
             ),
             body: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (optionSet.contains(allYear))
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: _PickerCell(
-                      label: 'All of $year',
-                      selected: picked == allYear,
-                      onTap: () => setState(() => picked = allYear),
+                    padding: const EdgeInsets.fromLTRB(2, 0, 0, 6),
+                    child: _CapsuleChoice(
+                      label: 'Whole year',
+                      selected: selected == allYear,
+                      onTap: () => pick(allYear),
                     ),
                   ),
                 for (var row = 0; row < 3; row++)
@@ -1212,12 +1233,12 @@ Future<DateTime?> showMonthGridPicker({
                               final m = DateTime(year, row * 4 + col + 1, 1);
                               return _PickerCell(
                                 label: _monthShort[m.month - 1],
-                                height: 52,
-                                selected: !isAllYear(picked) && picked == m,
+                                height: 46,
+                                selected: !isAllYear(selected) && selected == m,
                                 current:
                                     m.year == now.year && m.month == now.month,
                                 onTap: optionSet.contains(m)
-                                    ? () => setState(() => picked = m)
+                                    ? () => pick(m)
                                     : null,
                               );
                             },
@@ -1225,9 +1246,16 @@ Future<DateTime?> showMonthGridPicker({
                         ),
                     ],
                   ),
+                if (anyEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(6, 8, 6, 0),
+                    child: Text(
+                      'Grey months have no transactions.',
+                      style: TextStyle(fontSize: 12, color: c.muted),
+                    ),
+                  ),
               ],
             ),
-            onOk: () => Navigator.of(context).pop(picked),
           );
         },
       );
@@ -1235,7 +1263,45 @@ Future<DateTime?> showMonthGridPicker({
   );
 }
 
-/// Year picker as a calendar-style popover: a grid of [years], Cancel / OK.
+/// Small outlined capsule that fills when chosen ("Whole year").
+class _CapsuleChoice extends StatelessWidget {
+  const _CapsuleChoice({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Material(
+      color: selected ? c.text : c.raised,
+      shape: const StadiumBorder(),
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: selected ? c.background : c.text,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Year picker as a calendar-style popover: a grid of [years]; one tap
+/// picks and closes.
 Future<int?> showYearGridPicker({
   required BuildContext context,
   required List<int> years,
@@ -1246,36 +1312,32 @@ Future<int?> showYearGridPicker({
   return _showPopover<int>(
     context: context,
     title: 'Year',
-    width: 360,
-    builder: (context, _) {
-      var picked = selected;
-      return StatefulBuilder(
-        builder: (context, setState) => _PickerCard(
-          header: const _PickerHeader(
-            title: 'Year',
-            onPrevious: null,
-            onNext: null,
-          ),
-          body: Wrap(
-            alignment: WrapAlignment.center,
-            children: [
-              for (final y in sorted)
-                SizedBox(
-                  width: 96,
-                  child: _PickerCell(
-                    label: '$y',
-                    height: 52,
-                    selected: y == picked,
-                    current: y == now,
-                    onTap: () => setState(() => picked = y),
-                  ),
-                ),
-            ],
-          ),
-          onOk: () => Navigator.of(context).pop(picked),
-        ),
-      );
-    },
+    width: 320,
+    builder: (context, _) => _PickerCard(
+      footer: false,
+      header: const _PickerHeader(
+        title: 'Year',
+        onPrevious: null,
+        onNext: null,
+        showArrows: false,
+      ),
+      body: Wrap(
+        alignment: WrapAlignment.center,
+        children: [
+          for (final y in sorted)
+            SizedBox(
+              width: 92,
+              child: _PickerCell(
+                label: '$y',
+                height: 46,
+                selected: y == selected,
+                current: y == now,
+                onTap: () => Navigator.of(context).pop(y),
+              ),
+            ),
+        ],
+      ),
+    ),
   );
 }
 
