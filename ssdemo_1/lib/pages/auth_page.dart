@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../app/app_theme.dart';
 import '../services/auth_service.dart';
+import '../widgets/common/ui.dart';
 
 class AuthPage extends StatefulWidget {
   const AuthPage({super.key});
@@ -155,9 +156,11 @@ class _AuthPageState extends State<AuthPage> {
                     minHeight: constraints.maxHeight - 48,
                     maxWidth: 420,
                   ),
-                  child: IntrinsicHeight(
+                  // Centre instead of IntrinsicHeight: SegmentedTabs uses a
+                  // LayoutBuilder, which has no intrinsic height.
+                  child: Center(
                     child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Text(
@@ -174,22 +177,14 @@ class _AuthPageState extends State<AuthPage> {
                           style: theme.textTheme.titleMedium,
                         ),
                         const SizedBox(height: 24),
-                        SegmentedButton<bool>(
-                          segments: const [
-                            ButtonSegment<bool>(
-                              value: false,
-                              label: Text('Sign In'),
-                            ),
-                            ButtonSegment<bool>(
-                              value: true,
-                              label: Text('Sign Up'),
-                            ),
-                          ],
-                          selected: {_isSignUp},
-                          onSelectionChanged: (selection) {
-                            if (selection.isEmpty) return;
+                        SegmentedTabs<bool>(
+                          margin: EdgeInsets.zero,
+                          value: _isSignUp,
+                          segments: const {false: 'Sign In', true: 'Sign Up'},
+                          onChanged: (isSignUp) {
+                            if (isSignUp == _isSignUp) return;
                             setState(() {
-                              _isSignUp = selection.first;
+                              _isSignUp = isSignUp;
                               _error = '';
                               _message = '';
                               _passwordController.clear();
@@ -204,10 +199,7 @@ class _AuthPageState extends State<AuthPage> {
                           autofillHints: const [AutofillHints.username],
                           textInputAction: TextInputAction.next,
                           onSubmitted: (_) => _passwordFocusNode.requestFocus(),
-                          decoration: const InputDecoration(
-                            labelText: 'Email',
-                            border: OutlineInputBorder(),
-                          ),
+                          decoration: const InputDecoration(labelText: 'Email'),
                         ),
                         const SizedBox(height: 12),
                         TextField(
@@ -227,7 +219,6 @@ class _AuthPageState extends State<AuthPage> {
                           },
                           decoration: InputDecoration(
                             labelText: 'Password',
-                            border: const OutlineInputBorder(),
                             suffixIcon: IconButton(
                               icon: Icon(
                                 _passwordVisible
@@ -260,7 +251,6 @@ class _AuthPageState extends State<AuthPage> {
                             onSubmitted: (_) => _submit(),
                             decoration: const InputDecoration(
                               labelText: 'Confirm password',
-                              border: OutlineInputBorder(),
                             ),
                           ),
                         ],
@@ -282,11 +272,14 @@ class _AuthPageState extends State<AuthPage> {
                         FilledButton(
                           onPressed: _submitting ? null : _submit,
                           child: _submitting
-                              ? const SizedBox(
+                              ? SizedBox(
                                   width: 18,
                                   height: 18,
+                                  // The theme's spinner colour is the button
+                                  // fill, so it would vanish on the button.
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
+                                    color: context.colors.onButton,
                                   ),
                                 )
                               : Text(_isSignUp ? 'Create Account' : 'Sign In'),
