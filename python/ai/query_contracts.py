@@ -1,7 +1,6 @@
 """Canonical query/plan/response contracts for AI chat routing."""
 
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
@@ -39,14 +38,3 @@ class ExecutionPlan:
     required_datasets: tuple[str, ...] = ()
     required_fields: tuple[str, ...] = ()
     notes: tuple[str, ...] = ()
-
-
-@dataclass
-class ResponseEnvelope:
-    """Structured response metadata for debugging and contract stability."""
-
-    answer_source: str = "llm"
-    resolved_query: dict[str, Any] = field(default_factory=dict)
-    facts_used: list[str] = field(default_factory=list)
-    period_resolved: str = ""
-    missing_fields: list[str] = field(default_factory=list)
