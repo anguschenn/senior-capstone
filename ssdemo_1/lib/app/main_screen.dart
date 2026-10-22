@@ -141,7 +141,12 @@ class _MainScreenState extends State<MainScreen> {
     BuildContext context,
     AppTransaction tx,
   ) async {
-    if (actionsFor(tx).isEmpty) return;
+    // Money sent to a person has no actions, but paybacks linked to it
+    // earlier can still be unlinked.
+    if (actionsFor(tx).isEmpty &&
+        paybacksOf(tx, _ctrl.liveTransactions).isEmpty) {
+      return;
+    }
     final choice = await showTransactionActionsSheet(
       context: context,
       tx: tx,

@@ -60,6 +60,35 @@ void main() {
     expect(ids, ['p4', 'p1', 'p3']);
   });
 
+  test('money sent to a person is not offered as a purchase', () {
+    final sent = _tx(
+      'p6',
+      'Zelle payment to Austin Chin',
+      71,
+      DateTime(2026, 10, 2),
+      pfcPrimary: 'TRANSFER_OUT',
+    );
+    final ids = linkablePurchases(zelle, [...all, sent]).map((t) => t.id);
+    expect(ids, isNot(contains('p6')));
+    expect(ids, contains('p1'));
+  });
+
+  test('money sent to a person offers no split or payback', () {
+    final sent = _tx(
+      'p6',
+      'Zelle payment to Austin Chin',
+      71,
+      DateTime(2026, 10, 2),
+      pfcPrimary: 'TRANSFER_OUT',
+    );
+    expect(sent.kind, TxKind.spend);
+    expect(actionsFor(sent), isEmpty);
+    expect(actionsFor(dinner), [
+      TransactionAction.split,
+      TransactionAction.addPayback,
+    ]);
+  });
+
   test('a purchase already paid back in full is not offered again', () {
     AppTransaction.paidBackById = {'p1': 60};
     expect(linkablePurchases(zelle, all).map((t) => t.id), isNot(['p1']));

@@ -13,6 +13,7 @@ const kPaybackLookback = Duration(days: 120);
 /// first, then purchases in the week before it that are at least its size,
 /// then the rest, newest first. A purchase is offered only while it has
 /// room left for all of [inflow] (what friends pay back never exceeds it).
+/// Money sent to a person (Zelle, Venmo) is not a purchase to pay back.
 List<AppTransaction> linkablePurchases(
   AppTransaction inflow,
   List<AppTransaction> transactions,
@@ -20,6 +21,9 @@ List<AppTransaction> linkablePurchases(
   final earliest = inflow.date.subtract(kPaybackLookback);
   final candidates = transactions.where((tx) {
     if (tx.kind != TxKind.spend || tx.id == inflow.id) return false;
+    if (AppTransaction.isPeerToPeer('${tx.name} ${tx.description}')) {
+      return false;
+    }
     if (tx.date.isAfter(inflow.date) || tx.date.isBefore(earliest)) {
       return false;
     }
@@ -507,7 +511,8 @@ enum TransactionAction {
 /// The actions offered for [tx]: split a purchase or add a payback to it;
 /// link, unlink or mark as "not a payback" for money from a person.
 List<TransactionAction> actionsFor(AppTransaction tx) {
-  if (tx.kind == TxKind.spend) {
+  if (tx.kind == TxKind.spend &&
+      !AppTransaction.isPeerToPeer('${tx.name} ${tx.description}')) {
     return const [TransactionAction.split, TransactionAction.addPayback];
   }
   if (tx.kind == TxKind.payback) {
