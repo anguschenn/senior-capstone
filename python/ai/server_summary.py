@@ -329,6 +329,9 @@ def build_summary(
     earliest = latest = None
     expense_tx_count_all = 0
     transfer_like_count = 0
+    # Purchases per month and year, for "what was my biggest expense this year".
+    purchases_by_month: dict[str, list] = {}
+    purchases_by_year: dict[int, list] = {}
 
     for tx in transactions:
         category = tx.bucket or tx.category
@@ -416,6 +419,10 @@ def build_summary(
                     annual_expenses_only.append(tx)
             # Whatever still counts as spending (a move between own accounts counts 0) belongs
             # to its category, so categories add up to the total, as on the Budget page.
+            if expense > 0:
+                purchase = (expense, tx, category)
+                purchases_by_month.setdefault(month_key, []).append(purchase)
+                purchases_by_year.setdefault(tx.date.year, []).append(purchase)
             if expense:
                 category_totals_all[category] = category_totals_all.get(category, 0.0) + expense
                 per_month = month_category_totals.setdefault(month_key, {})
@@ -483,6 +490,19 @@ def build_summary(
             2,
         )
 
+    def largest(purchases):
+        """The three biggest purchases: amount, then newest, then name."""
+        ranked = sorted(purchases, key=lambda p: (-p[0], -p[1].date.toordinal(), p[1].name))
+        return [
+            {
+                "name": tx.name,
+                "amount": round(amount, 2),
+                "date": tx.date.isoformat(),
+                "category": category,
+            }
+            for amount, tx, category in ranked[:3]
+        ]
+
     month_keys = sorted(month_totals)[-36:]
     month_index = {}
     for month in month_keys:
@@ -497,6 +517,7 @@ def build_summary(
             "expense_tx_count": bucket["expense_tx_count"],
             "top_category": {"name": cats[0][0], "amount": cats[0][1]} if cats else None,
             "categories": dict(cats[:12]),
+            "largest": largest(purchases_by_month.get(month, [])),
         }
 
     day_keys = sorted(day_totals)
@@ -509,7 +530,10 @@ def build_summary(
         month: [{"date": d, **day_totals[d]} for d in day_keys if d.startswith(f"{month}-")]
         for month in list(reversed(month_keys))[:6]
     }
-    year_index = {str(y): dict(year_totals[y]) for y in sorted(year_totals)}
+    year_index = {
+        str(y): {**year_totals[y], "largest": largest(purchases_by_year.get(y, []))}
+        for y in sorted(year_totals)
+    }
 
     def by_expenses(rows):
         return sorted(rows, key=lambda r: r["expenses"], reverse=True)

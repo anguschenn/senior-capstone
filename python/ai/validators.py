@@ -210,6 +210,8 @@ def sanitize_spending_summary(summary):
                 "expenses": max(0.0, to_float(item.get("expenses", 0))),
                 "tx_count": max(0, int(to_float(item.get("tx_count", 0)))),
             }
+            if "largest" in item:
+                cleaned_year_index[year_text]["largest"] = _clean_largest(item["largest"])
         if cleaned_year_index:
             cleaned["year_index"] = cleaned_year_index
 
@@ -249,6 +251,8 @@ def sanitize_spending_summary(summary):
                     if name_text:
                         categories[name_text] = max(0.0, to_float(amount, 0.0))
                 cleaned_month_index[month_text]["categories"] = categories
+            if "largest" in item:
+                cleaned_month_index[month_text]["largest"] = _clean_largest(item["largest"])
         if cleaned_month_index:
             cleaned["month_index"] = cleaned_month_index
 
@@ -527,3 +531,23 @@ class SimpleRateLimiter:
             return False
         bucket.append(now)
         return True
+
+
+def _clean_largest(items):
+    """A month's or year's biggest purchases."""
+    cleaned = []
+    for item in (items if isinstance(items, list) else [])[:3]:
+        if not isinstance(item, dict):
+            continue
+        name = clamp_str(item.get("name", ""), 120)
+        amount = to_float(item.get("amount", 0))
+        if name and amount > 0:
+            cleaned.append(
+                {
+                    "name": name,
+                    "amount": amount,
+                    "date": clamp_str(item.get("date", ""), 16),
+                    "category": clamp_str(item.get("category", ""), 64),
+                }
+            )
+    return cleaned

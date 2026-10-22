@@ -429,7 +429,27 @@
           "2026": {
             "income": 7850.0,
             "expenses": 2307.7300000000005,
-            "tx_count": 22
+            "tx_count": 22,
+            "largest": [
+              {
+                "name": "Rent",
+                "amount": 1500.0,
+                "date": "2026-09-01",
+                "category": "Bills & Utilities"
+              },
+              {
+                "name": "Whole Foods",
+                "amount": 210.4,
+                "date": "2026-09-12",
+                "category": "Food"
+              },
+              {
+                "name": "Amazon",
+                "amount": 120.0,
+                "date": "2026-10-03",
+                "category": "Shopping"
+              }
+            ]
           }
         },
         "month_index": {
@@ -441,7 +461,8 @@
             "tx_count": 1,
             "expense_tx_count": 0,
             "top_category": null,
-            "categories": {}
+            "categories": {},
+            "largest": []
           },
           "2026-05": {
             "income": 0.0,
@@ -456,7 +477,15 @@
             },
             "categories": {
               "Shopping": 75.0
-            }
+            },
+            "largest": [
+              {
+                "name": "Target",
+                "amount": 75.0,
+                "date": "2026-05-02",
+                "category": "Shopping"
+              }
+            ]
           },
           "2026-06": {
             "income": 0.0,
@@ -471,7 +500,15 @@
             },
             "categories": {
               "Food": 33.0
-            }
+            },
+            "largest": [
+              {
+                "name": "Panera",
+                "amount": 33.0,
+                "date": "2026-06-10",
+                "category": "Food"
+              }
+            ]
           },
           "2026-07": {
             "income": 0.0,
@@ -487,7 +524,21 @@
             "categories": {
               "Transport": 88.8,
               "Other": 25.0
-            }
+            },
+            "largest": [
+              {
+                "name": "Delta",
+                "amount": 88.8,
+                "date": "2026-07-19",
+                "category": "Transport"
+              },
+              {
+                "name": "Mystery charge",
+                "amount": 25.0,
+                "date": "2026-07-03",
+                "category": "Other"
+              }
+            ]
           },
           "2026-08": {
             "income": 1950.0,
@@ -502,7 +553,15 @@
             },
             "categories": {
               "Transport": 42.0
-            }
+            },
+            "largest": [
+              {
+                "name": "Shell",
+                "amount": 42.0,
+                "date": "2026-08-22",
+                "category": "Transport"
+              }
+            ]
           },
           "2026-09": {
             "income": 2000.0,
@@ -520,7 +579,27 @@
               "Food": 210.4,
               "Fees & Transfers": 144.3,
               "Subscriptions": 15.49
-            }
+            },
+            "largest": [
+              {
+                "name": "Rent",
+                "amount": 1500.0,
+                "date": "2026-09-01",
+                "category": "Bills & Utilities"
+              },
+              {
+                "name": "Whole Foods",
+                "amount": 210.4,
+                "date": "2026-09-12",
+                "category": "Food"
+              },
+              {
+                "name": "Zelle payment to Sam",
+                "amount": 80.0,
+                "date": "2026-09-20",
+                "category": "Fees & Transfers"
+              }
+            ]
           },
           "2026-10": {
             "income": 2000.0,
@@ -539,7 +618,27 @@
               "Subscriptions": 19.99,
               "Transport": 12.0,
               "Entertainment": 6.25
-            }
+            },
+            "largest": [
+              {
+                "name": "Amazon",
+                "amount": 120.0,
+                "date": "2026-10-03",
+                "category": "Shopping"
+              },
+              {
+                "name": "Chipotle",
+                "amount": 45.5,
+                "date": "2026-10-08",
+                "category": "Food"
+              },
+              {
+                "name": "Spotify",
+                "amount": 19.99,
+                "date": "2026-10-02",
+                "category": "Subscriptions"
+              }
+            ]
           }
         },
         "day_index_recent": {
@@ -1367,7 +1466,27 @@
           "2026": {
             "income": 0.0,
             "expenses": 638.43,
-            "tx_count": 13
+            "tx_count": 13,
+            "largest": [
+              {
+                "name": "Whole Foods",
+                "amount": 210.4,
+                "date": "2026-09-12",
+                "category": "Food"
+              },
+              {
+                "name": "Amazon",
+                "amount": 120.0,
+                "date": "2026-10-03",
+                "category": "Shopping"
+              },
+              {
+                "name": "Delta",
+                "amount": 88.8,
+                "date": "2026-07-19",
+                "category": "Transport"
+              }
+            ]
           }
         },
         "month_index": {
@@ -1384,7 +1503,15 @@
             },
             "categories": {
               "Shopping": 75.0
-            }
+            },
+            "largest": [
+              {
+                "name": "Target",
+                "amount": 75.0,
+                "date": "2026-05-02",
+                "category": "Shopping"
+              }
+            ]
           },
           "2026-06": {
             "income": 0.0,
@@ -1399,7 +1526,15 @@
             },
             "categories": {
               "Food": 33.0
-            }
+            },
+            "largest": [
+              {
+                "name": "Panera",
+                "amount": 33.0,
+                "date": "2026-06-10",
+                "category": "Food"
+              }
+            ]
           },
           "2026-07": {
             "income": 0.0,
@@ -1414,7 +1549,15 @@
             },
             "categories": {
               "Transport": 88.8
-            }
+            },
+            "largest": [
+              {
+                "name": "Delta",
+                "amount": 88.8,
+                "date": "2026-07-19",
+                "category": "Transport"
+              }
+            ]
           },
           "2026-08": {
             "income": 0.0,
@@ -1429,7 +1572,15 @@
             },
             "categories": {
               "Transport": 42.0
-            }
+            },
+            "largest": [
+              {
+                "name": "Shell",
+                "amount": 42.0,
+                "date": "2026-08-22",
+                "category": "Transport"
+              }
+            ]
           },
           "2026-09": {
             "income": 0.0,
@@ -1445,7 +1596,21 @@
             "categories": {
               "Food": 210.4,
               "Subscriptions": 15.49
-            }
+            },
+            "largest": [
+              {
+                "name": "Whole Foods",
+                "amount": 210.4,
+                "date": "2026-09-12",
+                "category": "Food"
+              },
+              {
+                "name": "Netflix",
+                "amount": 15.49,
+                "date": "2026-09-18",
+                "category": "Subscriptions"
+              }
+            ]
           },
           "2026-10": {
             "income": 0.0,
@@ -1464,7 +1629,27 @@
               "Subscriptions": 19.99,
               "Transport": 12.0,
               "Entertainment": 6.25
-            }
+            },
+            "largest": [
+              {
+                "name": "Amazon",
+                "amount": 120.0,
+                "date": "2026-10-03",
+                "category": "Shopping"
+              },
+              {
+                "name": "Chipotle",
+                "amount": 45.5,
+                "date": "2026-10-08",
+                "category": "Food"
+              },
+              {
+                "name": "Spotify",
+                "amount": 19.99,
+                "date": "2026-10-02",
+                "category": "Subscriptions"
+              }
+            ]
           }
         },
         "day_index_recent": {
@@ -2116,7 +2301,27 @@
           "2026": {
             "income": 7850.0,
             "expenses": 2307.7300000000005,
-            "tx_count": 22
+            "tx_count": 22,
+            "largest": [
+              {
+                "name": "Rent",
+                "amount": 1500.0,
+                "date": "2026-09-01",
+                "category": "Bills & Utilities"
+              },
+              {
+                "name": "Whole Foods",
+                "amount": 210.4,
+                "date": "2026-09-12",
+                "category": "Food"
+              },
+              {
+                "name": "Amazon",
+                "amount": 120.0,
+                "date": "2026-10-03",
+                "category": "Shopping"
+              }
+            ]
           }
         },
         "month_index": {
@@ -2128,7 +2333,8 @@
             "tx_count": 1,
             "expense_tx_count": 0,
             "top_category": null,
-            "categories": {}
+            "categories": {},
+            "largest": []
           },
           "2026-05": {
             "income": 0.0,
@@ -2143,7 +2349,15 @@
             },
             "categories": {
               "Shopping": 75.0
-            }
+            },
+            "largest": [
+              {
+                "name": "Target",
+                "amount": 75.0,
+                "date": "2026-05-02",
+                "category": "Shopping"
+              }
+            ]
           },
           "2026-06": {
             "income": 0.0,
@@ -2158,7 +2372,15 @@
             },
             "categories": {
               "Food": 33.0
-            }
+            },
+            "largest": [
+              {
+                "name": "Panera",
+                "amount": 33.0,
+                "date": "2026-06-10",
+                "category": "Food"
+              }
+            ]
           },
           "2026-07": {
             "income": 0.0,
@@ -2174,7 +2396,21 @@
             "categories": {
               "Transport": 88.8,
               "Other": 25.0
-            }
+            },
+            "largest": [
+              {
+                "name": "Delta",
+                "amount": 88.8,
+                "date": "2026-07-19",
+                "category": "Transport"
+              },
+              {
+                "name": "Mystery charge",
+                "amount": 25.0,
+                "date": "2026-07-03",
+                "category": "Other"
+              }
+            ]
           },
           "2026-08": {
             "income": 1950.0,
@@ -2189,7 +2425,15 @@
             },
             "categories": {
               "Transport": 42.0
-            }
+            },
+            "largest": [
+              {
+                "name": "Shell",
+                "amount": 42.0,
+                "date": "2026-08-22",
+                "category": "Transport"
+              }
+            ]
           },
           "2026-09": {
             "income": 2000.0,
@@ -2207,7 +2451,27 @@
               "Food": 210.4,
               "Fees & Transfers": 144.3,
               "Subscriptions": 15.49
-            }
+            },
+            "largest": [
+              {
+                "name": "Rent",
+                "amount": 1500.0,
+                "date": "2026-09-01",
+                "category": "Bills & Utilities"
+              },
+              {
+                "name": "Whole Foods",
+                "amount": 210.4,
+                "date": "2026-09-12",
+                "category": "Food"
+              },
+              {
+                "name": "Zelle payment to Sam",
+                "amount": 80.0,
+                "date": "2026-09-20",
+                "category": "Fees & Transfers"
+              }
+            ]
           },
           "2026-10": {
             "income": 2000.0,
@@ -2226,7 +2490,27 @@
               "Subscriptions": 19.99,
               "Transport": 12.0,
               "Entertainment": 6.25
-            }
+            },
+            "largest": [
+              {
+                "name": "Amazon",
+                "amount": 120.0,
+                "date": "2026-10-03",
+                "category": "Shopping"
+              },
+              {
+                "name": "Chipotle",
+                "amount": 45.5,
+                "date": "2026-10-08",
+                "category": "Food"
+              },
+              {
+                "name": "Spotify",
+                "amount": 19.99,
+                "date": "2026-10-02",
+                "category": "Subscriptions"
+              }
+            ]
           }
         },
         "day_index_recent": {

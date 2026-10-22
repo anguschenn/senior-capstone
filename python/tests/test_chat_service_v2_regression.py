@@ -1530,6 +1530,30 @@ class TestChatServiceV2Regression(unittest.TestCase):
         older_app = self._ask_with("Am I over budget?", self._round2_summary())["reply"]
         self.assertIn("doesn't get your budget limits", older_app)
 
+    def test_biggest_expense_reads_the_periods_largest_purchases(self):
+        summary = self._budget_summary()
+        rows = [
+            {"name": "Rent", "amount": 1500.0, "date": "2026-03-01", "category": "Housing"},
+            {"name": "Laptop", "amount": 900.0, "date": "2026-02-10", "category": "Shopping"},
+            {"name": "Flight", "amount": 400.0, "date": "2026-04-02", "category": "Travel"},
+        ]
+        summary["year_index"] = {"2026": {"income": 0, "expenses": 2800, "largest": rows}}
+        summary["month_index"]["2026-05"]["largest"] = [
+            {"name": "Groceries", "amount": 80.0, "date": "2026-05-03", "category": "Food"}
+        ]
+        for prompt in (
+            "What was my biggest expense this year?",
+            "largest expense in 2026",
+        ):
+            with self.subTest(prompt=prompt):
+                reply = self._ask_with(prompt, summary)["reply"]
+                self.assertIn("biggest expense in 2026 was Rent at $1,500.00", reply)
+                self.assertIn("Laptop", reply)
+        month = self._ask_with("What was my biggest expense this month?", summary)["reply"]
+        self.assertIn("biggest expense in 2026-05 was Groceries at $80.00", month)
+        shopping = self._ask_with("biggest shopping purchase this year", summary)["reply"]
+        self.assertIn("biggest Shopping expense in 2026 was Laptop", shopping)
+
     def test_budget_left_is_the_budget_tabs_left_to_spend(self):
         summary = self._budget_summary()
         # $800 of limits minus all of May's spending, unbudgeted categories too

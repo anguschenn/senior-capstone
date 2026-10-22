@@ -3423,6 +3423,19 @@ def _exec_data_pointer(query_spec, summary, scope_label):
         )
     if mode == "biggest_purchase":
         category = (query_spec.category or "").strip()
+        period = query_spec.period_key or _selected_month(summary)
+        index = summary.get("year_index" if len(period or "") == 4 else "month_index")
+        entry = index.get(period) if isinstance(index, dict) and period else None
+        largest = entry.get("largest") if isinstance(entry, dict) else None
+        if isinstance(largest, list):
+            picks = [
+                item
+                for item in largest
+                if isinstance(item, dict)
+                and (not category or str(item.get("category", "")).lower() == category.lower())
+            ]
+            if picks or not category:
+                return _biggest_purchases(picks, period, category, query_spec)
         recent = summary.get("recent_transactions")
         rows = [
             item
@@ -3574,6 +3587,37 @@ def _budget_vs_usual(items, asked, month, summary, answer):
             "Adjust a limit in the Budget tab if it's far from what you usually spend.",
         ),
         "insights": [f"Usual = average spending per category over {span}."],
+    }
+
+
+def _biggest_purchases(picks, period, category, query_spec):
+    """The biggest purchases of a month or year, from the summary's per-period top three."""
+    what = f"{category} expense" if category else "expense"
+    if not picks:
+        return _pointer(
+            f"I don't see any spending in {period}.",
+            "Pick another month or year in the app.",
+        )
+
+    def line(item):
+        return (
+            f"{item.get('name', '')} at ${float(item.get('amount', 0) or 0):,.2f} on "
+            f"{item.get('date', '')} ({item.get('category', '')})"
+        )
+
+    if query_spec.compare_to == "several" and len(picks) > 1:
+        reply = f"Your biggest {what}s in {period}: " + "; ".join(line(p) for p in picks) + "."
+    else:
+        reply = f"Your biggest {what} in {period} was {line(picks[0])}."
+        if len(picks) > 1:
+            reply += " Next: " + "; ".join(line(p) for p in picks[1:]) + "."
+    return {
+        "reply": reply,
+        "insights": ["Read from every transaction in that period, not only the latest ones."],
+        "actions": ["Open Activity and sort by amount to see more."],
+        "missing_fields": [],
+        "facts_used": ["year_index.largest" if len(period) == 4 else "month_index.largest"],
+        "period_resolved": period,
     }
 
 

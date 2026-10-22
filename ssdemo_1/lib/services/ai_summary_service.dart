@@ -187,6 +187,9 @@ class AiSummaryService {
 
     final monthTotals = <String, Map<String, dynamic>>{};
     final monthCategoryTotals = <String, Map<String, double>>{};
+    // Purchases per month and year, for "what was my biggest expense this year".
+    final purchasesByMonth = <String, List<(double, AppTransaction, String)>>{};
+    final purchasesByYear = <int, List<(double, AppTransaction, String)>>{};
     final dayTotals = <String, Map<String, dynamic>>{};
     final yearTotals = <int, Map<String, dynamic>>{};
 
@@ -407,6 +410,11 @@ class AiSummaryService {
           annualExpensesOnly.add(tx);
         }
 
+        if (expense > 0) {
+          final purchase = (expense, tx, effectiveCategory);
+          purchasesByMonth.putIfAbsent(monthKey, () => []).add(purchase);
+          purchasesByYear.putIfAbsent(tx.date.year, () => []).add(purchase);
+        }
         if (expense != 0) {
           categoryTotalsAll[effectiveCategory] =
               (categoryTotalsAll[effectiveCategory] ?? 0) + expense;
@@ -506,6 +514,29 @@ class AiSummaryService {
         ? monthKeysSorted.sublist(monthKeysSorted.length - 36)
         : monthKeysSorted;
 
+    // The three biggest purchases: amount, then newest, then name.
+    List<Map<String, dynamic>> largest(
+      List<(double, AppTransaction, String)>? purchases,
+    ) {
+      final ranked = [...?purchases]
+        ..sort((a, b) {
+          final byAmount = b.$1.compareTo(a.$1);
+          if (byAmount != 0) return byAmount;
+          final byDate = _dateKey(b.$2.date).compareTo(_dateKey(a.$2.date));
+          if (byDate != 0) return byDate;
+          return a.$2.name.compareTo(b.$2.name);
+        });
+      return [
+        for (final (amount, tx, category) in ranked.take(3))
+          {
+            'name': tx.name,
+            'amount': (amount * 100).roundToDouble() / 100,
+            'date': _dateKey(tx.date),
+            'category': category,
+          },
+      ];
+    }
+
     final monthIndex = <String, Map<String, dynamic>>{};
     for (final month in recentMonthKeys) {
       final bucket = monthTotals[month] ?? _emptyMonthBucket();
@@ -529,6 +560,7 @@ class AiSummaryService {
         'categories': {
           for (final entry in ranked.take(12)) entry.key: entry.value,
         },
+        'largest': largest(purchasesByMonth[month]),
       };
     }
 
@@ -568,6 +600,7 @@ class AiSummaryService {
         'income': b['income'],
         'expenses': b['expenses'],
         'tx_count': b['tx_count'],
+        'largest': largest(purchasesByYear[y]),
       };
     }
 

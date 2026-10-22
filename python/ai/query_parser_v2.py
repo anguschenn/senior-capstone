@@ -1014,10 +1014,14 @@ def _outside_summary_spec(text, summary, scope):
     asking the user for a metric they already gave."""
     biggest = _BIGGEST_PURCHASE_RE.search(text)
     if biggest:
+        named_year = re.search(r"\b(20\d{2})\b", text)
         return QuerySpec(
             task_type="data_pointer",
             period_key=str(_selected_year(summary))
             if re.search(r"\b(this year|so far this year|year to date)\b", text)
+            # "largest expense in 2026": the whole year
+            else named_year.group(1)
+            if named_year and not _transaction_list_month(text, summary)
             else _period_for(text, summary),
             scope=scope,
             reason_mode="biggest_purchase",
