@@ -47,7 +47,7 @@ def _load_recent_transactions(user_id: str, limit: int = RECENT_TRANSACTIONS_LIM
 
 @plaid_bp.route("/api/info", methods=["GET"])
 def info():
-    has_configured_identity = True
+    has_configured_identity = bool(PLAID_CLIENT_ID and PLAID_SECRET)
     payload = {
         "products": PLAID_PRODUCTS,
         "plaid_env": PLAID_ENV,
