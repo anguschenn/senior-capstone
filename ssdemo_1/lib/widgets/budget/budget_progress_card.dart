@@ -431,28 +431,30 @@ class _InkAskChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chip = Material(
-      color: Colors.white.withValues(alpha: 0.45),
-      borderRadius: BorderRadius.circular(99),
-      child: InkWell(
+    final chip = Pressable(
+      child: Material(
+        color: Colors.white.withValues(alpha: 0.45),
         borderRadius: BorderRadius.circular(99),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const AskMark(size: 14, color: AppPalette.ink),
-              const SizedBox(width: 5),
-              Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                  color: AppPalette.ink,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(99),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const AskMark(size: 14, color: AppPalette.ink),
+                const SizedBox(width: 5),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: AppPalette.ink,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

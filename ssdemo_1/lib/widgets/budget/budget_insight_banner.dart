@@ -53,66 +53,73 @@ class _BudgetInsightBannerState extends State<BudgetInsightBanner> {
     final hasCategories =
         overCategories.isNotEmpty || atRiskCategories.isNotEmpty;
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: cardDecoration(context),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            alert ? Icons.error_outline : Icons.warning_amber_rounded,
-            color: alert ? c.bad : c.warn,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: !hasCategories
-                ? Text(
-                    widget.message,
-                    style: const TextStyle(fontWeight: FontWeight.w500),
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (overCategories.isNotEmpty)
-                        _line('Over budget:', overCategories, c.bad),
-                      if (overCategories.isNotEmpty &&
-                          atRiskCategories.isNotEmpty)
-                        const SizedBox(height: 6),
-                      if (atRiskCategories.isNotEmpty)
-                        _line(
-                          'On track to overspend:',
-                          atRiskCategories,
-                          c.warn,
-                        ),
-                      if (details.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        _detailsToggle(),
-                        // Drops down the same numbers the pop-up alerts show.
-                        AnimatedSize(
-                          duration: const Duration(milliseconds: 220),
-                          curve: Curves.easeOut,
-                          alignment: Alignment.topLeft,
-                          child: !_expanded
-                              ? const SizedBox(width: double.infinity)
-                              // Side by side, wrapping onto a new row when
-                              // the screen is too narrow.
-                              : Padding(
-                                  padding: const EdgeInsets.only(top: 8),
-                                  child: Wrap(
-                                    spacing: 32,
-                                    runSpacing: 10,
-                                    children: [
-                                      for (final item in details) _detail(item),
-                                    ],
+    // A Material card, so the Show details highlight is drawn on the card
+    // rather than hidden under its fill.
+    return Material(
+      color: c.card,
+      shape: cardShape(context),
+      clipBehavior: Clip.antiAlias,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              alert ? Icons.error_outline : Icons.warning_amber_rounded,
+              color: alert ? c.bad : c.warn,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: !hasCategories
+                  ? Text(
+                      widget.message,
+                      style: const TextStyle(fontWeight: FontWeight.w500),
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (overCategories.isNotEmpty)
+                          _line('Over budget:', overCategories, c.bad),
+                        if (overCategories.isNotEmpty &&
+                            atRiskCategories.isNotEmpty)
+                          const SizedBox(height: 6),
+                        if (atRiskCategories.isNotEmpty)
+                          _line(
+                            'On track to overspend:',
+                            atRiskCategories,
+                            c.warn,
+                          ),
+                        if (details.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          _detailsToggle(),
+                          // Drops down the same numbers the pop-up alerts show.
+                          AnimatedSize(
+                            duration: const Duration(milliseconds: 220),
+                            curve: Curves.easeOut,
+                            alignment: Alignment.topLeft,
+                            child: !_expanded
+                                ? const SizedBox(width: double.infinity)
+                                // Side by side, wrapping onto a new row when
+                                // the screen is too narrow.
+                                : Padding(
+                                    padding: const EdgeInsets.only(top: 8),
+                                    child: Wrap(
+                                      spacing: 32,
+                                      runSpacing: 10,
+                                      children: [
+                                        for (final item in details)
+                                          _detail(item),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                        ),
+                          ),
+                        ],
                       ],
-                    ],
-                  ),
-          ),
-        ],
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -149,22 +156,27 @@ class _BudgetInsightBannerState extends State<BudgetInsightBanner> {
   /// One category's numbers, matching what its pop-up alert says.
   Widget _detail(BudgetCategoryProgress item) {
     final color = item.isOverBudget ? context.colors.bad : context.colors.warn;
-    return GestureDetector(
-      onTap: onCategoryTap == null ? null : () => onCategoryTap!(item.title),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            item.title,
-            style: TextStyle(fontWeight: FontWeight.w700, color: color),
-          ),
-          Text(
-            budgetAlertUsageText(item),
-            style: TextStyle(fontSize: 12, color: color),
-          ),
-          if (budgetAlertPaceText(item) case final pace?)
-            Text(pace, style: TextStyle(fontSize: 12, color: color)),
-        ],
+    return Pressable(
+      enabled: onCategoryTap != null,
+      hoverScale: 1.02,
+      pressScale: 0.98,
+      child: GestureDetector(
+        onTap: onCategoryTap == null ? null : () => onCategoryTap!(item.title),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              item.title,
+              style: TextStyle(fontWeight: FontWeight.w700, color: color),
+            ),
+            Text(
+              budgetAlertUsageText(item),
+              style: TextStyle(fontSize: 12, color: color),
+            ),
+            if (budgetAlertPaceText(item) case final pace?)
+              Text(pace, style: TextStyle(fontSize: 12, color: color)),
+          ],
+        ),
       ),
     );
   }
@@ -183,17 +195,20 @@ class _BudgetInsightBannerState extends State<BudgetInsightBanner> {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              GestureDetector(
-                onTap: onCategoryTap == null
-                    ? null
-                    : () => onCategoryTap!(categories[i]),
-                child: Text(
-                  categories[i],
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: linkColor,
-                    decoration: TextDecoration.underline,
-                    decorationColor: linkColor,
+              Pressable(
+                enabled: onCategoryTap != null,
+                child: GestureDetector(
+                  onTap: onCategoryTap == null
+                      ? null
+                      : () => onCategoryTap!(categories[i]),
+                  child: Text(
+                    categories[i],
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: linkColor,
+                      decoration: TextDecoration.underline,
+                      decorationColor: linkColor,
+                    ),
                   ),
                 ),
               ),

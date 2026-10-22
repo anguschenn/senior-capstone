@@ -290,60 +290,103 @@ Future<void> showTransactionCategoryPicker({
                     final isSelected = selectedCategory == category;
                     final tone = colorForDetailedCategory(category);
                     final c = sheetContext.colors;
-                    return InkWell(
-                      borderRadius: BorderRadius.circular(999),
-                      onTap: () {
-                        onSelected(category);
-                        Navigator.of(sheetContext).pop();
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 11,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isSelected ? tone : c.raised,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (!isSelected) ...[
-                              Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  color: tone,
-                                  shape: BoxShape.circle,
+                    return Pressable(
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(999),
+                        onTap: () {
+                          onSelected(category);
+                          Navigator.of(sheetContext).pop();
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 11,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSelected ? tone : c.raised,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (!isSelected) ...[
+                                Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: tone,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                              ],
+                              Text(
+                                category,
+                                style: TextStyle(
+                                  color: isSelected ? AppPalette.ink : c.text,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12.5,
                                 ),
                               ),
-                              const SizedBox(width: 6),
                             ],
-                            Text(
-                              category,
-                              style: TextStyle(
-                                color: isSelected ? AppPalette.ink : c.text,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 12.5,
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                     );
                   }),
                   if (aiBackendUri != null && apiKey != null)
-                    InkWell(
+                    Pressable(
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(999),
+                        onTap: () async {
+                          Navigator.of(sheetContext).pop();
+                          await _askAiForCategory(
+                            context: context,
+                            tx: tx,
+                            aiBackendUri: aiBackendUri,
+                            apiKey: apiKey,
+                            accessToken: accessToken,
+                            onSelected: onSelected,
+                          );
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: sheetContext.colors.button,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              AskMark(
+                                size: 15,
+                                color: sheetContext.colors.onButton,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Ask AI',
+                                style: TextStyle(
+                                  color: sheetContext.colors.onButton,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  Pressable(
+                    child: InkWell(
                       borderRadius: BorderRadius.circular(999),
-                      onTap: () async {
+                      onTap: () {
                         Navigator.of(sheetContext).pop();
-                        await _askAiForCategory(
+                        _showCustomCategoryDialog(
                           context: context,
-                          tx: tx,
-                          aiBackendUri: aiBackendUri,
-                          apiKey: apiKey,
-                          accessToken: accessToken,
-                          onSelected: onSelected,
+                          onCustomCategoryEntered: onSelected,
                         );
                       },
                       child: Container(
@@ -352,60 +395,23 @@ Future<void> showTransactionCategoryPicker({
                           vertical: 5,
                         ),
                         decoration: BoxDecoration(
-                          color: sheetContext.colors.button,
+                          border: Border.all(color: sheetContext.colors.line),
                           borderRadius: BorderRadius.circular(999),
                         ),
-                        child: Row(
+                        child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            AskMark(
-                              size: 15,
-                              color: sheetContext.colors.onButton,
-                            ),
-                            const SizedBox(width: 4),
+                            Icon(Icons.add, size: 14),
+                            SizedBox(width: 4),
                             Text(
-                              'Ask AI',
+                              'Custom',
                               style: TextStyle(
-                                color: sheetContext.colors.onButton,
                                 fontWeight: FontWeight.w600,
                                 fontSize: 12.5,
                               ),
                             ),
                           ],
                         ),
-                      ),
-                    ),
-                  InkWell(
-                    borderRadius: BorderRadius.circular(999),
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      _showCustomCategoryDialog(
-                        context: context,
-                        onCustomCategoryEntered: onSelected,
-                      );
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 5,
-                      ),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: sheetContext.colors.line),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.add, size: 14),
-                          SizedBox(width: 4),
-                          Text(
-                            'Custom',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12.5,
-                            ),
-                          ),
-                        ],
                       ),
                     ),
                   ),

@@ -231,15 +231,26 @@ class _TransactionsPageState extends State<TransactionsPage> {
         rows.add(const SizedBox(height: 8));
       }
       rows.add(
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: cardDecoration(context),
+        // A Material card, clipped to its corners, so a row's tap highlight
+        // fills the card's width; rows pad themselves.
+        Material(
+          color: c.card,
+          shape: cardShape(context),
+          clipBehavior: Clip.antiAlias,
           child: Column(
             children: [
               for (final (i, tx) in txs.indexed) ...[
-                if (i > 0) Divider(height: 0.5, thickness: 0.5, color: c.line),
+                if (i > 0)
+                  Divider(
+                    height: 0.5,
+                    thickness: 0.5,
+                    indent: 14,
+                    endIndent: 14,
+                    color: c.line,
+                  ),
                 TransactionRow(
                   tx: tx,
+                  horizontalInset: 14,
                   accountOptions: widget.accountOptions,
                   reviewedCategoryByTxId: widget.reviewedCategoryByTxId,
                   onTransactionCategorySelected:
@@ -269,53 +280,58 @@ class _TransactionsPageState extends State<TransactionsPage> {
     }) {
       return Padding(
         padding: const EdgeInsets.only(right: 8),
-        child: Material(
-          key: key,
-          color: selected ? (dot ?? c.button) : c.raised,
-          borderRadius: BorderRadius.circular(99),
-          child: InkWell(
+        child: Pressable(
+          child: Material(
+            key: key,
+            color: selected ? (dot ?? c.button) : c.raised,
             borderRadius: BorderRadius.circular(99),
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (dot != null && !selected) ...[
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: dot,
-                        shape: BoxShape.circle,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(99),
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 7,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (dot != null && !selected) ...[
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: dot,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                    ],
+                    Flexible(
+                      child: Text(
+                        label,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: selected
+                              ? (dot != null ? AppPalette.ink : c.onButton)
+                              : c.text,
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 6),
-                  ],
-                  Flexible(
-                    child: Text(
-                      label,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
+                    if (trailingIcon != null) ...[
+                      const SizedBox(width: 4),
+                      Icon(
+                        trailingIcon,
+                        size: 16,
                         color: selected
                             ? (dot != null ? AppPalette.ink : c.onButton)
                             : c.text,
                       ),
-                    ),
-                  ),
-                  if (trailingIcon != null) ...[
-                    const SizedBox(width: 4),
-                    Icon(
-                      trailingIcon,
-                      size: 16,
-                      color: selected
-                          ? (dot != null ? AppPalette.ink : c.onButton)
-                          : c.text,
-                    ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),
@@ -330,33 +346,37 @@ class _TransactionsPageState extends State<TransactionsPage> {
           LargeTitle(
             'Activity',
             trailing: [
-              Material(
-                key: const ValueKey('tx-sort-key'),
-                color: c.raised,
-                borderRadius: BorderRadius.circular(99),
-                child: InkWell(
+              Pressable(
+                child: Material(
+                  key: const ValueKey('tx-sort-key'),
+                  color: c.raised,
                   borderRadius: BorderRadius.circular(99),
-                  onTap: () async {
-                    final picked = await showOptionSheet<ActivitySortKey>(
-                      context: context,
-                      title: 'Sort',
-                      values: ActivitySortKey.values,
-                      labelOf: (k) =>
-                          k == ActivitySortKey.date ? 'Date' : 'Amount',
-                      selected: sortKey,
-                    );
-                    if (picked != null) setState(() => sortKey = picked);
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    child: Text(
-                      sortKey == ActivitySortKey.date ? 'By date' : 'By amount',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(99),
+                    onTap: () async {
+                      final picked = await showOptionSheet<ActivitySortKey>(
+                        context: context,
+                        title: 'Sort',
+                        values: ActivitySortKey.values,
+                        labelOf: (k) =>
+                            k == ActivitySortKey.date ? 'Date' : 'Amount',
+                        selected: sortKey,
+                      );
+                      if (picked != null) setState(() => sortKey = picked);
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      child: Text(
+                        sortKey == ActivitySortKey.date
+                            ? 'By date'
+                            : 'By amount',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ),

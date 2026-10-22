@@ -34,44 +34,55 @@ class LabeledSelectorField<T> extends StatelessWidget {
           orElse: () => SelectorOption(value: value, label: '$value'),
         )
         .label;
-    return Material(
-      color: c.raised,
-      borderRadius: BorderRadius.circular(10),
-      child: InkWell(
+    return Pressable(
+      hoverScale: 1.02,
+      pressScale: 0.98,
+      child: Material(
+        color: c.raised,
         borderRadius: BorderRadius.circular(10),
-        onTap: () async {
-          final picked = await showOptionSheet<T>(
-            context: context,
-            title: label,
-            values: [for (final o in options) o.value],
-            labelOf: (v) => options.firstWhere((o) => o.value == v).label,
-            selected: value,
-          );
-          if (picked != null) onChanged(picked);
-        },
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 6, 8, 7),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(label, style: TextStyle(fontSize: 11, color: c.muted)),
-                    Text(
-                      selectedLabel,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () async {
+            final picked = await showOptionSheet<T>(
+              context: context,
+              title: label,
+              values: [for (final o in options) o.value],
+              labelOf: (v) => options.firstWhere((o) => o.value == v).label,
+              selected: value,
+            );
+            if (picked != null) onChanged(picked);
+          },
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 6, 8, 7),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        label,
+                        style: TextStyle(fontSize: 11, color: c.muted),
                       ),
-                    ),
-                  ],
+                      Text(
+                        selectedLabel,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: c.muted),
-            ],
+                Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: 18,
+                  color: c.muted,
+                ),
+              ],
+            ),
           ),
         ),
       ),

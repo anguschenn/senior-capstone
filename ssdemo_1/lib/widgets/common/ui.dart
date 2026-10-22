@@ -66,6 +66,66 @@ class TapTarget extends StatelessWidget {
   }
 }
 
+/// Hover and press feedback for tappable things that aren't Material
+/// buttons (those scale through app_theme's pressableFill): grows a little
+/// under the pointer and shrinks a little while pressed. It only listens, so
+/// it never competes with the child's own tap or drag handling.
+class Pressable extends StatefulWidget {
+  const Pressable({
+    super.key,
+    required this.child,
+    this.enabled = true,
+    this.hoverScale = 1.04,
+    this.pressScale = 0.95,
+  });
+
+  final Widget child;
+
+  /// Off for a control that can't be tapped right now: no feedback.
+  final bool enabled;
+
+  /// Large surfaces (wallet cards) take values close to 1.
+  final double hoverScale;
+  final double pressScale;
+
+  @override
+  State<Pressable> createState() => _PressableState();
+}
+
+class _PressableState extends State<Pressable> {
+  bool _hovered = false;
+  bool _pressed = false;
+
+  void _set({bool? hovered, bool? pressed}) => setState(() {
+    _hovered = hovered ?? _hovered;
+    _pressed = pressed ?? _pressed;
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.enabled) return widget.child;
+    final scale = _pressed
+        ? widget.pressScale
+        : (_hovered ? widget.hoverScale : 1.0);
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => _set(hovered: true),
+      onExit: (_) => _set(hovered: false, pressed: false),
+      child: Listener(
+        onPointerDown: (_) => _set(pressed: true),
+        onPointerUp: (_) => _set(pressed: false),
+        onPointerCancel: (_) => _set(pressed: false),
+        child: AnimatedScale(
+          scale: scale,
+          duration: motionDuration(context, 150),
+          curve: Curves.easeOutCubic,
+          child: widget.child,
+        ),
+      ),
+    );
+  }
+}
+
 /// A round icon button used in the large-title row (+, gear, sort…).
 class CircleIconButton extends StatelessWidget {
   const CircleIconButton({
@@ -84,19 +144,22 @@ class CircleIconButton extends StatelessWidget {
     final c = context.colors;
     final button = TapTarget(
       onTap: onPressed,
-      child: Material(
-        color: c.raised,
-        shape: const CircleBorder(),
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: onPressed,
-          child: SizedBox(
-            width: 34,
-            height: 34,
-            child: Icon(
-              icon,
-              size: 19,
-              color: onPressed == null ? c.muted : c.text,
+      child: Pressable(
+        enabled: onPressed != null,
+        child: Material(
+          color: c.raised,
+          shape: const CircleBorder(),
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onPressed,
+            child: SizedBox(
+              width: 34,
+              height: 34,
+              child: Icon(
+                icon,
+                size: 19,
+                color: onPressed == null ? c.muted : c.text,
+              ),
             ),
           ),
         ),
@@ -444,52 +507,59 @@ class SegmentedTabs<T> extends StatelessWidget {
                   children: [
                     for (final entry in segments.entries)
                       Expanded(
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: () => onChanged(entry.key),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            child: Row(
-                              children: [
-                                if (steps[entry.key] case final step?)
-                                  _StepArrow(
-                                    key: ValueKey('step-previous-${entry.key}'),
-                                    icon: Icons.chevron_left_rounded,
-                                    tooltip: 'Previous',
-                                    onTap: entry.key == value
-                                        ? step.previous
-                                        : null,
-                                  )
-                                else
-                                  const SizedBox(width: 30),
-                                Expanded(
-                                  child: AnimatedDefaultTextStyle(
-                                    duration: const Duration(milliseconds: 200),
-                                    style: DefaultTextStyle.of(context).style
-                                        .copyWith(
-                                          fontSize: 13,
-                                          fontWeight: entry.key == value
-                                              ? FontWeight.w600
-                                              : FontWeight.w500,
-                                        ),
-                                    child: Text(
-                                      entry.value,
-                                      textAlign: TextAlign.center,
+                        child: Pressable(
+                          hoverScale: 1.03,
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () => onChanged(entry.key),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              child: Row(
+                                children: [
+                                  if (steps[entry.key] case final step?)
+                                    _StepArrow(
+                                      key: ValueKey(
+                                        'step-previous-${entry.key}',
+                                      ),
+                                      icon: Icons.chevron_left_rounded,
+                                      tooltip: 'Previous',
+                                      onTap: entry.key == value
+                                          ? step.previous
+                                          : null,
+                                    )
+                                  else
+                                    const SizedBox(width: 30),
+                                  Expanded(
+                                    child: AnimatedDefaultTextStyle(
+                                      duration: const Duration(
+                                        milliseconds: 200,
+                                      ),
+                                      style: DefaultTextStyle.of(context).style
+                                          .copyWith(
+                                            fontSize: 13,
+                                            fontWeight: entry.key == value
+                                                ? FontWeight.w600
+                                                : FontWeight.w500,
+                                          ),
+                                      child: Text(
+                                        entry.value,
+                                        textAlign: TextAlign.center,
+                                      ),
                                     ),
                                   ),
-                                ),
-                                if (steps[entry.key] case final step?)
-                                  _StepArrow(
-                                    key: ValueKey('step-next-${entry.key}'),
-                                    icon: Icons.chevron_right_rounded,
-                                    tooltip: 'Next',
-                                    onTap: entry.key == value
-                                        ? step.next
-                                        : null,
-                                  )
-                                else
-                                  const SizedBox(width: 30),
-                              ],
+                                  if (steps[entry.key] case final step?)
+                                    _StepArrow(
+                                      key: ValueKey('step-next-${entry.key}'),
+                                      icon: Icons.chevron_right_rounded,
+                                      tooltip: 'Next',
+                                      onTap: entry.key == value
+                                          ? step.next
+                                          : null,
+                                    )
+                                  else
+                                    const SizedBox(width: 30),
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -635,10 +705,14 @@ class _StepArrow extends StatelessWidget {
     if (onTap == null) return arrow;
     return Tooltip(
       message: tooltip,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: arrow,
+      child: Pressable(
+        hoverScale: 1.15,
+        pressScale: 0.88,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: arrow,
+        ),
       ),
     );
   }
@@ -720,28 +794,30 @@ class AskChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final chip = Material(
-      color: c.raised,
-      borderRadius: BorderRadius.circular(99),
-      child: InkWell(
+    final chip = Pressable(
+      child: Material(
+        color: c.raised,
         borderRadius: BorderRadius.circular(99),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AskMark(size: 14, color: c.text),
-              const SizedBox(width: 5),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                  color: c.text,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(99),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AskMark(size: 14, color: c.text),
+                const SizedBox(width: 5),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: c.text,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -986,25 +1062,28 @@ class _PickerCard extends StatelessWidget {
     final c = context.colors;
     Widget button(String label, VoidCallback? onTap, {required bool primary}) =>
         Expanded(
-          child: Material(
-            color: primary ? c.button : c.raised,
-            shape: const StadiumBorder(),
-            child: InkWell(
-              customBorder: const StadiumBorder(),
-              onTap: onTap,
-              child: SizedBox(
-                height: 46,
-                child: Center(
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: primary
-                          ? (onTap == null
-                                ? c.onButton.withValues(alpha: 0.5)
-                                : c.onButton)
-                          : c.text,
+          child: Pressable(
+            enabled: onTap != null,
+            child: Material(
+              color: primary ? c.button : c.raised,
+              shape: const StadiumBorder(),
+              child: InkWell(
+                customBorder: const StadiumBorder(),
+                onTap: onTap,
+                child: SizedBox(
+                  height: 46,
+                  child: Center(
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: primary
+                            ? (onTap == null
+                                  ? c.onButton.withValues(alpha: 0.5)
+                                  : c.onButton)
+                            : c.text,
+                      ),
                     ),
                   ),
                 ),
@@ -1117,32 +1196,37 @@ class _PickerCell extends StatelessWidget {
     final fill = selected
         ? c.text
         : (current || inRange ? c.raised : Colors.transparent);
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: SizedBox(
-        height: height,
-        child: Center(
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            constraints: BoxConstraints(
-              minWidth: height,
-              minHeight: height - 4,
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            decoration: ShapeDecoration(
-              color: fill,
-              shape: const StadiumBorder(),
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                color: selected
-                    ? c.background
-                    : (onTap == null ? c.muted.withValues(alpha: 0.4) : c.text),
+    return Pressable(
+      enabled: onTap != null,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: SizedBox(
+          height: height,
+          child: Center(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              constraints: BoxConstraints(
+                minWidth: height,
+                minHeight: height - 4,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: ShapeDecoration(
+                color: fill,
+                shape: const StadiumBorder(),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  color: selected
+                      ? c.background
+                      : (onTap == null
+                            ? c.muted.withValues(alpha: 0.4)
+                            : c.text),
+                ),
               ),
             ),
           ),
@@ -1277,20 +1361,22 @@ class _CapsuleChoice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return Material(
-      color: selected ? c.text : c.raised,
-      shape: const StadiumBorder(),
-      child: InkWell(
-        customBorder: const StadiumBorder(),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: selected ? c.background : c.text,
+    return Pressable(
+      child: Material(
+        color: selected ? c.text : c.raised,
+        shape: const StadiumBorder(),
+        child: InkWell(
+          customBorder: const StadiumBorder(),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: selected ? c.background : c.text,
+              ),
             ),
           ),
         ),

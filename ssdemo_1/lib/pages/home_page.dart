@@ -245,10 +245,11 @@ class HomePage extends StatelessWidget {
             onAction: onSeeAllActivity,
           ),
           Section(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+            // Rows pad themselves, so their tap highlight spans the card.
+            padding: const EdgeInsets.symmetric(vertical: 4),
             child: recentTransactions.isEmpty
                 ? Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    padding: const EdgeInsets.all(14),
                     child: Text(
                       'No transactions in the last 7 days.',
                       style: TextStyle(color: c.muted),
@@ -259,9 +260,16 @@ class HomePage extends StatelessWidget {
                       for (final (i, tx)
                           in recentTransactions.take(6).indexed) ...[
                         if (i > 0)
-                          Divider(height: 0.5, thickness: 0.5, color: c.line),
+                          Divider(
+                            height: 0.5,
+                            thickness: 0.5,
+                            indent: 14,
+                            endIndent: 14,
+                            color: c.line,
+                          ),
                         TransactionRow(
                           tx: tx,
+                          horizontalInset: 14,
                           accountOptions: accountOptions,
                           reviewedCategoryByTxId: reviewedCategoryByTxId,
                           onTransactionCategorySelected:
@@ -351,16 +359,19 @@ class _Shortcut extends StatelessWidget {
     return Semantics(
       button: true,
       label: label,
-      child: InkWell(
-        onTap: onPressed,
-        customBorder: const CircleBorder(),
-        child: SizedBox(
-          width: 32,
-          height: 32,
-          child: Icon(
-            icon,
-            size: 19,
-            color: c.muted.withValues(alpha: onPressed == null ? 0.4 : 0.85),
+      child: Pressable(
+        enabled: onPressed != null,
+        child: InkWell(
+          onTap: onPressed,
+          customBorder: const CircleBorder(),
+          child: SizedBox(
+            width: 32,
+            height: 32,
+            child: Icon(
+              icon,
+              size: 19,
+              color: c.muted.withValues(alpha: onPressed == null ? 0.4 : 0.85),
+            ),
           ),
         ),
       ),
@@ -605,18 +616,23 @@ class WalletCardStack extends StatelessWidget {
         left: 0,
         right: 0,
         top: top,
-        child: GestureDetector(
-          key: ValueKey('wallet-card-$id'),
-          behavior: HitTestBehavior.opaque,
-          onTap: !enabled || front ? null : () => onAccountChanged(id),
-          onHorizontalDragEnd: !enabled || !front
-              ? null
-              : (d) {
-                  final v = d.primaryVelocity ?? 0;
-                  if (v.abs() < 150) return;
-                  move(v < 0 ? 1 : -1);
-                },
-          child: body,
+        child: Pressable(
+          enabled: enabled && !front,
+          hoverScale: 1.01,
+          pressScale: 0.98,
+          child: GestureDetector(
+            key: ValueKey('wallet-card-$id'),
+            behavior: HitTestBehavior.opaque,
+            onTap: !enabled || front ? null : () => onAccountChanged(id),
+            onHorizontalDragEnd: !enabled || !front
+                ? null
+                : (d) {
+                    final v = d.primaryVelocity ?? 0;
+                    if (v.abs() < 150) return;
+                    move(v < 0 ? 1 : -1);
+                  },
+            child: body,
+          ),
         ),
       );
     }
@@ -639,43 +655,48 @@ class WalletCardStack extends StatelessWidget {
                       left: 0,
                       right: 0,
                       top: behind.length * _peek,
-                      child: GestureDetector(
-                        key: const ValueKey('wallet-more-accounts'),
-                        behavior: HitTestBehavior.opaque,
-                        onTap: !enabled
-                            ? null
-                            : () async {
-                                final picked = await showOptionSheet<String>(
-                                  context: context,
-                                  title: 'Accounts',
-                                  values: ids,
-                                  labelOf: (id) => id == kAllAccountsId
-                                      ? 'All Accounts'
-                                      : (optionFor(id)?.label ?? id),
-                                  selected: selected,
-                                );
-                                if (picked != null) onAccountChanged(picked);
-                              },
-                        child: Container(
-                          height: _cardHeight,
-                          padding: const EdgeInsets.fromLTRB(18, 13, 18, 16),
-                          alignment: Alignment.topLeft,
-                          decoration: BoxDecoration(
-                            color: c.raised,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: c.cardShadow,
-                                blurRadius: 16,
-                                offset: const Offset(0, -6),
+                      child: Pressable(
+                        enabled: enabled,
+                        hoverScale: 1.01,
+                        pressScale: 0.98,
+                        child: GestureDetector(
+                          key: const ValueKey('wallet-more-accounts'),
+                          behavior: HitTestBehavior.opaque,
+                          onTap: !enabled
+                              ? null
+                              : () async {
+                                  final picked = await showOptionSheet<String>(
+                                    context: context,
+                                    title: 'Accounts',
+                                    values: ids,
+                                    labelOf: (id) => id == kAllAccountsId
+                                        ? 'All Accounts'
+                                        : (optionFor(id)?.label ?? id),
+                                    selected: selected,
+                                  );
+                                  if (picked != null) onAccountChanged(picked);
+                                },
+                          child: Container(
+                            height: _cardHeight,
+                            padding: const EdgeInsets.fromLTRB(18, 13, 18, 16),
+                            alignment: Alignment.topLeft,
+                            decoration: BoxDecoration(
+                              color: c.raised,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: c.cardShadow,
+                                  blurRadius: 16,
+                                  offset: const Offset(0, -6),
+                                ),
+                              ],
+                            ),
+                            child: Text(
+                              'More accounts (${others.length - behind.length})',
+                              style: const TextStyle(
+                                fontSize: 15.5,
+                                fontWeight: FontWeight.w700,
                               ),
-                            ],
-                          ),
-                          child: Text(
-                            'More accounts (${others.length - behind.length})',
-                            style: const TextStyle(
-                              fontSize: 15.5,
-                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ),
@@ -864,6 +885,7 @@ class TransactionRow extends StatelessWidget {
     this.showDate = true,
     this.alwaysPickable = false,
     this.onTap,
+    this.horizontalInset = 0,
   });
 
   final AppTransaction tx;
@@ -882,6 +904,10 @@ class TransactionRow extends StatelessWidget {
   /// Opens what the user can do with this transaction (split a purchase,
   /// link a friend's payment to one).
   final VoidCallback? onTap;
+
+  /// Side padding inside the row, so its tap highlight reaches the edges of
+  /// the card it sits in.
+  final double horizontalInset;
 
   /// "\$40 to get back" on a split purchase, "Pays back Olive Garden" on a
   /// linked payment; empty otherwise.
@@ -908,7 +934,7 @@ class TransactionRow extends StatelessWidget {
     final tone = colorForDetailedCategory(category);
     final note = sharedNote(tx);
     final row = Padding(
-      padding: const EdgeInsets.symmetric(vertical: 9),
+      padding: EdgeInsets.symmetric(vertical: 9, horizontal: horizontalInset),
       child: Row(
         children: [
           CategoryDot(

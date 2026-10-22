@@ -439,23 +439,25 @@ class _TabBar extends StatelessWidget {
       final selected = i == index;
       final color = selected ? c.text : c.muted;
       return Expanded(
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => onSelect(i),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, color: color, size: 23),
-              const SizedBox(height: 2),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 10.5,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  color: color,
+        child: Pressable(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => onSelect(i),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: color, size: 23),
+                const SizedBox(height: 2),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: color,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       );
@@ -526,19 +528,21 @@ class _TabBar extends StatelessWidget {
                             item(1),
                             Expanded(
                               child: Center(
-                                child: Material(
-                                  key: const ValueKey('tab-ask'),
-                                  color: c.button,
-                                  shape: const CircleBorder(),
-                                  child: InkWell(
-                                    customBorder: const CircleBorder(),
-                                    onTap: onAsk,
-                                    child: SizedBox.square(
-                                      dimension: 46,
-                                      child: Center(
-                                        child: AskMark(
-                                          size: 22,
-                                          color: c.onButton,
+                                child: Pressable(
+                                  child: Material(
+                                    key: const ValueKey('tab-ask'),
+                                    color: c.button,
+                                    shape: const CircleBorder(),
+                                    child: InkWell(
+                                      customBorder: const CircleBorder(),
+                                      onTap: onAsk,
+                                      child: SizedBox.square(
+                                        dimension: 46,
+                                        child: Center(
+                                          child: AskMark(
+                                            size: 22,
+                                            color: c.onButton,
+                                          ),
                                         ),
                                       ),
                                     ),

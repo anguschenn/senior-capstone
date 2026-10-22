@@ -38,32 +38,34 @@ class BudgetAlertPill extends StatelessWidget {
         : over == 0
         ? '${items.length} heading over'
         : '${items.length} budget alerts';
-    return Material(
-      key: const ValueKey('budget-alert-pill'),
-      color: c.bad.withValues(alpha: 0.16),
-      shape: const StadiumBorder(),
-      child: InkWell(
-        customBorder: const StadiumBorder(),
-        onTap: () => showBudgetAlertList(context, items, onTap),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 32),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(10, 0, 6, 0),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.error_outline_rounded, size: 16, color: c.bad),
-                const SizedBox(width: 5),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: c.bad,
+    return Pressable(
+      child: Material(
+        key: const ValueKey('budget-alert-pill'),
+        color: c.bad.withValues(alpha: 0.16),
+        shape: const StadiumBorder(),
+        child: InkWell(
+          customBorder: const StadiumBorder(),
+          onTap: () => showBudgetAlertList(context, items, onTap),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 32),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 6, 0),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.error_outline_rounded, size: 16, color: c.bad),
+                  const SizedBox(width: 5),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: c.bad,
+                    ),
                   ),
-                ),
-                Icon(Icons.chevron_right_rounded, size: 18, color: c.bad),
-              ],
+                  Icon(Icons.chevron_right_rounded, size: 18, color: c.bad),
+                ],
+              ),
             ),
           ),
         ),

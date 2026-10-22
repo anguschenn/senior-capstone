@@ -434,43 +434,45 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
                 child: Row(
                   children: [
                     Flexible(
-                      child: Material(
-                        color: c.raised,
-                        borderRadius: BorderRadius.circular(99),
-                        child: InkWell(
-                          key: const ValueKey('ai-scope'),
+                      child: Pressable(
+                        child: Material(
+                          color: c.raised,
                           borderRadius: BorderRadius.circular(99),
-                          onTap: _sending ? null : _pickScope,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.account_balance_wallet_outlined,
-                                  size: 15,
-                                  color: c.text,
-                                ),
-                                const SizedBox(width: 6),
-                                Flexible(
-                                  child: Text(
-                                    _accountLabel(_resolvedAccountId),
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
+                          child: InkWell(
+                            key: const ValueKey('ai-scope'),
+                            borderRadius: BorderRadius.circular(99),
+                            onTap: _sending ? null : _pickScope,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.account_balance_wallet_outlined,
+                                    size: 15,
+                                    color: c.text,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Flexible(
+                                    child: Text(
+                                      _accountLabel(_resolvedAccountId),
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
                                     ),
                                   ),
-                                ),
-                                Icon(
-                                  Icons.keyboard_arrow_down_rounded,
-                                  size: 17,
-                                  color: c.muted,
-                                ),
-                              ],
+                                  Icon(
+                                    Icons.keyboard_arrow_down_rounded,
+                                    size: 17,
+                                    color: c.muted,
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),

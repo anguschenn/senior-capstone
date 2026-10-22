@@ -310,66 +310,72 @@ class AppearancePage extends StatelessWidget {
               final selected = effectiveDark == dark;
               final p = dark ? AppColors.dark : AppColors.light;
               return Expanded(
-                child: GestureDetector(
-                  key: ValueKey(dark ? 'appearance-dark' : 'appearance-light'),
-                  onTap: () =>
-                      controller.set(dark ? ThemeMode.dark : ThemeMode.light),
-                  child: Column(
-                    children: [
-                      Container(
-                        height: 150,
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: p.background,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: selected ? c.text : c.line,
-                            width: selected ? 2 : 1,
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Container(
-                              height: 44,
-                              decoration: BoxDecoration(
-                                color: AppPalette.walletAll,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
+                child: Pressable(
+                  hoverScale: 1.02,
+                  pressScale: 0.97,
+                  child: GestureDetector(
+                    key: ValueKey(
+                      dark ? 'appearance-dark' : 'appearance-light',
+                    ),
+                    onTap: () =>
+                        controller.set(dark ? ThemeMode.dark : ThemeMode.light),
+                    child: Column(
+                      children: [
+                        Container(
+                          height: 150,
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: p.background,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: selected ? c.text : c.line,
+                              width: selected ? 2 : 1,
                             ),
-                            const SizedBox(height: 8),
-                            for (final w in [1.0, 0.7])
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 6),
-                                child: FractionallySizedBox(
-                                  alignment: Alignment.centerLeft,
-                                  widthFactor: w,
-                                  child: Container(
-                                    height: 22,
-                                    decoration: BoxDecoration(
-                                      color: p.card,
-                                      borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Container(
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  color: AppPalette.walletAll,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              for (final w in [1.0, 0.7])
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 6),
+                                  child: FractionallySizedBox(
+                                    alignment: Alignment.centerLeft,
+                                    widthFactor: w,
+                                    child: Container(
+                                      height: 22,
+                                      decoration: BoxDecoration(
+                                        color: p.card,
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        dark ? 'Dark' : 'Light',
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 4),
-                      Icon(
-                        selected
-                            ? Icons.radio_button_checked
-                            : Icons.radio_button_unchecked,
-                        color: selected ? c.text : c.muted,
-                        size: 22,
-                      ),
-                    ],
+                        const SizedBox(height: 8),
+                        Text(
+                          dark ? 'Dark' : 'Light',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 4),
+                        Icon(
+                          selected
+                              ? Icons.radio_button_checked
+                              : Icons.radio_button_unchecked,
+                          color: selected ? c.text : c.muted,
+                          size: 22,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               );
