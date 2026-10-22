@@ -241,14 +241,12 @@ class _SplitPurchaseSheetState extends State<_SplitPurchaseSheet> {
                 'counts in full until they pay you back; link their payments '
                 'to it when they arrive.',
           ),
-          SegmentedButton<bool>(
-            segments: const [
-              ButtonSegment(value: true, label: Text('Split evenly')),
-              ButtonSegment(value: false, label: Text('They owe')),
-            ],
-            selected: {_byPeople},
-            onSelectionChanged: (v) => setState(() {
-              _byPeople = v.first;
+          SegmentedTabs<bool>(
+            margin: EdgeInsets.zero,
+            value: _byPeople,
+            segments: const {true: 'Split evenly', false: 'They owe'},
+            onChanged: (v) => setState(() {
+              _byPeople = v;
               _controller.text = _byPeople ? '2' : '';
             }),
           ),

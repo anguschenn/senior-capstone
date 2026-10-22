@@ -119,6 +119,22 @@ void main() {
       find.text(r'Your share $20.00 · $60.00 to get back'),
       findsOneWidget,
     );
+    // Both choices keep the same width (the capsule control, no tick).
+    final evenWidth = tester.getSize(find.text('Split evenly')).width;
+    await tester.tap(find.text('They owe'));
+    await tester.pumpAndSettle();
+    expect(tester.getSize(find.text('Split evenly')).width, evenWidth);
+    await tester.enterText(find.byKey(const ValueKey('split-input')), '50');
+    await tester.pump();
+    expect(
+      find.text(r'Your share $30.00 · $50.00 to get back'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('They owe'));
+    await tester.tap(find.text('Split evenly'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('split-input')), '4');
+    await tester.pump();
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
     expect(saved, 60);
