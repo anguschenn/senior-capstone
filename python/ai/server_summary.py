@@ -815,6 +815,10 @@ def summary_for(user_id: str, context: dict, tx_rows=None) -> dict:
         # Alerts are per user (all accounts), so only the all-accounts view gets them.
         summary["alert_history"] = fetch_alert_history(user_id, context["month"])
     with _cache_lock:
+        # Drop expired entries as we go: keys include the day, so without this the
+        # cache only ever grows.
+        for stale in [k for k, (expires, _) in _cache.items() if expires <= now_ts]:
+            del _cache[stale]
         _cache[key] = (now_ts + _CACHE_TTL_SECONDS, summary)
     return summary
 
