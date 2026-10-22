@@ -480,20 +480,6 @@ class ChatService:
             reply = jsonish_candidate
         return reply, insights[:3], actions[:3]
 
-    def _estimate_confidence(
-        self, context_source, used_summary, tx_count_30d, summary_effectively_empty
-    ):
-        """Derive a bounded confidence score for UI display."""
-        if context_source == "rule_fallback":
-            return 0.35
-        if context_source == "server_snapshot":
-            return 0.65
-        if used_summary and tx_count_30d > 10 and not summary_effectively_empty:
-            return 0.75
-        if used_summary:
-            return 0.55
-        return 0.4
-
     def _last_assistant_reply(self, history):
         """Get the latest assistant message from sanitized history."""
         if not isinstance(history, list):
@@ -1912,29 +1898,6 @@ class ChatService:
             f"${left_amount:.0f} vs ${right_amount:.0f}, change ${diff:.0f} ({pct:.1f}%)."
         )
         return anchor, []
-
-    def _asks_spending_increase_last_month(self, message):
-        text = clamp_str(message or "", 4000).lower()
-        if not text:
-            return False
-        has_spending = ("spending" in text) or ("expenses" in text) or ("spend" in text)
-        has_increase = any(
-            token in text for token in ("increase", "increased", "up", "grew", "rise", "rose")
-        )
-        if not (has_spending and has_increase and ("last month" in text)):
-            return False
-        # Include common why/explain prompts and sentence-order variants.
-        return any(
-            token in text
-            for token in (
-                "why",
-                "what caused",
-                "reason",
-                "how come",
-                "what drove",
-                "what changed",
-            )
-        )
 
     def _extract_spending_change_query_spec(self, message, summary):
         """Normalize natural-language 'why did spending change' asks into one canonical query."""
