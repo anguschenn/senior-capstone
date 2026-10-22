@@ -30,6 +30,7 @@ class BudgetPage extends StatefulWidget {
     required this.onUpdateBudgetLimit,
     required this.aiBudgetSuggestApiUri,
     required this.apiKey,
+    this.accessToken,
     required this.spendingSummary,
     required this.selectedMonth,
     required this.monthOptions,
@@ -49,6 +50,9 @@ class BudgetPage extends StatefulWidget {
   onUpdateBudgetLimit;
   final Uri aiBudgetSuggestApiUri;
   final String apiKey;
+
+  /// Signed-in user's token: the budget suggestion endpoint requires it.
+  final String? accessToken;
   final Map<String, dynamic> spendingSummary;
   final DateTime selectedMonth;
   final List<DateTime> monthOptions;
@@ -241,6 +245,7 @@ class _BudgetPageState extends State<BudgetPage> {
       final suggestion = await _client.fetchBudgetSuggestions(
         uri: widget.aiBudgetSuggestApiUri,
         apiKey: widget.apiKey,
+        accessToken: widget.accessToken,
         spendingSummary: widget.spendingSummary,
         budgetProgress: budgetProgressPayload,
         viewMode: viewMode.name,

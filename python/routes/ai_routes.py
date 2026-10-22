@@ -78,7 +78,11 @@ def ai_chat():
 
 @ai_bp.route("/api/ai/budget_suggest", methods=["POST"])
 def ai_budget_suggest():
-    if is_rate_limited_for_ai():
+    try:
+        user_id = require_supabase_user_id()
+    except UserAuthError as error:
+        return jsonify({"error": str(error)}), 401
+    if is_rate_limited_for_ai(user_id):
         return jsonify({"error": "Rate limit exceeded"}), 429
     body = request.get_json(silent=True) or {}
     predict_payload = {

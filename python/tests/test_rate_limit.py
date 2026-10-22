@@ -53,14 +53,25 @@ class PerUserBucketTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
 
 
+def _add_ip_limited_route(client):
+    """Every AI route now signs the user in first, so the per-IP fallback is exercised
+    through a test-only route on this throwaway app."""
+
+    def ip_limited():
+        return ("", 429) if auth.is_rate_limited_for_ai() else ("", 200)
+
+    client.application.add_url_rule("/api/test/ip_limited", view_func=ip_limited)
+
+
 class PerIpBucketTests(unittest.TestCase):
-    """/api/ai/budget_suggest has no user auth yet, so it is keyed by client IP."""
+    """Without a signed-in user the AI limit is keyed by client IP."""
 
     def _suggest(self, client, forwarded_for=None):
         extra = {"X-Forwarded-For": forwarded_for} if forwarded_for else {}
-        return client.post(
-            "/api/ai/budget_suggest",
-            json={},
+        if "/api/test/ip_limited" not in {r.rule for r in client.application.url_map.iter_rules()}:
+            _add_ip_limited_route(client)
+        return client.get(
+            "/api/test/ip_limited",
             headers=headers(**extra),
             environ_base=PROXY_ADDR,
         ).status_code
@@ -86,6 +97,15 @@ class PerIpBucketTests(unittest.TestCase):
         with app_client() as client, _limit(1):
             self.assertEqual(self._suggest(client), 200)
             self.assertIn("ai:ip:10.0.0.1", auth._rate_buckets)
+
+
+class BudgetSuggestAuthTests(unittest.TestCase):
+    def test_budget_suggest_needs_a_signed_in_user(self):
+        with app_client() as client:
+            response = client.post("/api/ai/budget_suggest", json={}, headers=headers())
+            self.assertEqual(response.status_code, 401)
+            response = client.post("/api/ai/budget_suggest", json={}, headers=headers(VALID_TOKEN))
+            self.assertEqual(response.status_code, 200)
 
 
 class ProxyFixConfigTests(unittest.TestCase):

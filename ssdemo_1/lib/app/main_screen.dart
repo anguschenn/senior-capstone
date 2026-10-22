@@ -267,6 +267,7 @@ class _MainScreenState extends State<MainScreen> {
         onUpdateBudgetLimit: c.updateBudgetLimit,
         aiBudgetSuggestApiUri: ApiConfig.instance.aiBudgetSuggestUri,
         apiKey: EnvConfig.instance.backendApiKey,
+        accessToken: AuthService.instance.currentAccessToken,
         spendingSummary: snapshot.spendingSummary,
         selectedMonth: c.selectedMonth,
         monthOptions: monthOptions,
