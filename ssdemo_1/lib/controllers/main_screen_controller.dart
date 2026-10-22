@@ -9,6 +9,7 @@ import '../services/budget_service.dart';
 import '../services/category_service.dart';
 import '../services/hidden_accounts_store.dart';
 import '../services/plaid_service.dart';
+import '../services/transaction_decision_service.dart';
 import '../services/subscription_service.dart';
 import '../services/sync_service.dart';
 import '../utils/app_helpers.dart';
@@ -71,6 +72,10 @@ class MainScreenController extends ChangeNotifier {
   Set<String> manualReviewedTxIds = const {};
   Set<String> confirmedReviewTxIds = const {};
   Set<String> lowConfidenceReviewTxIds = const {};
+
+  /// The user's per-transaction choices (transaction_decisions): one-off
+  /// categories, paybacks linked to purchases, split purchases.
+  Map<String, TxDecision> decisions = const {};
   final Map<String, double> _manualMonthlyLimitByCategoryKey = {};
   String selectedAccountId = kAllAccountsId;
   DateTime selectedMonth = DateTime(
@@ -454,13 +459,20 @@ class MainScreenController extends ChangeNotifier {
       final category =
           reviewedCategoryByTxId[txId] ??
           CategoryService.instance.budgetBucketFor(tx, reviewedCategoryByTxId);
-      final ruleKey = CategoryService.instance.ruleKeyForTransaction(tx);
       final ruleUserId = AuthService.instance.currentUserId;
-      final ok = await CategoryService.instance.rememberRuleDecision(
-        userId: ruleUserId,
-        ruleKey: ruleKey,
-        category: category,
-      );
+      // Money from a person is decided one payment at a time: the same
+      // friend may pay back a meal now and a ride next time, so no rule.
+      final ok = tx.isPeerToPeerInflow
+          ? await TransactionDecisionService.instance.save(
+              userId: ruleUserId,
+              txId: txId,
+              decision: TxDecision(category: category),
+            )
+          : await CategoryService.instance.rememberRuleDecision(
+              userId: ruleUserId,
+              ruleKey: CategoryService.instance.ruleKeyForTransaction(tx),
+              category: category,
+            );
       if (ok) {
         try {
           // An older refresh still in flight predates the rule just saved.
@@ -483,6 +495,81 @@ class MainScreenController extends ChangeNotifier {
     }
     syncing = false;
     _notifyListenersSafe();
+  }
+
+  // --- Money shared with friends ---
+
+  /// Links money from a friend to the purchase it pays back: it then lowers
+  /// that purchase, in the purchase's month and category.
+  Future<bool> linkPayback(AppTransaction inflow, AppTransaction purchase) =>
+      _saveDecision(
+        inflow.id,
+        TxDecision(paidBackPurchaseId: purchase.id),
+        status: 'Payback linked.',
+      );
+
+  /// Undoes [linkPayback]; the money goes back to Review.
+  Future<bool> unlinkPayback(AppTransaction inflow) =>
+      _saveDecision(inflow.id, const TxDecision(), status: 'Payback unlinked.');
+
+  /// Money from a friend that isn't a payback: counts in [category] in the
+  /// month it arrived.
+  Future<bool> setInflowCategory(AppTransaction inflow, String category) =>
+      _saveDecision(
+        inflow.id,
+        TxDecision(category: category),
+        status: 'Category saved.',
+      );
+
+  /// Marks a purchase as split: others will pay back [amount]. It still
+  /// counts in full until they do. Zero removes the split.
+  Future<bool> setSharedAmount(AppTransaction purchase, double amount) {
+    final current = decisions[purchase.id] ?? const TxDecision();
+    return _saveDecision(
+      purchase.id,
+      TxDecision(
+        category: current.category,
+        paidBackPurchaseId: current.paidBackPurchaseId,
+        sharedAmount: amount > 0 ? (amount * 100).roundToDouble() / 100 : 0,
+      ),
+      status: amount > 0 ? 'Split saved.' : 'Split removed.',
+    );
+  }
+
+  Future<bool> _saveDecision(
+    String txId,
+    TxDecision decision, {
+    required String status,
+  }) async {
+    if (syncing) return false;
+    syncing = true;
+    syncStatus = 'Saving...';
+    _notifyListenersSafe();
+    final ok = await TransactionDecisionService.instance.save(
+      userId: AuthService.instance.currentUserId,
+      txId: txId,
+      decision: decision,
+    );
+    if (ok) {
+      confirmedReviewTxIds = Set<String>.from(confirmedReviewTxIds)..add(txId);
+      try {
+        _refreshGen++;
+        final result = await _sync.refreshFromSupabase(
+          reviewedCategoryByTxId,
+          selectedMonth,
+        );
+        _applySyncResult(result);
+        syncStatus = status;
+        unawaited(_refreshInsights());
+      } catch (e) {
+        syncStatus = '$status Refresh failed: $e';
+      }
+    } else {
+      syncStatus = 'Could not save. Try again.';
+    }
+    syncing = false;
+    _notifyListenersSafe();
+    return ok;
   }
 
   Future<void> updateBudgetLimit(String budgetId, double monthlyLimit) async {
@@ -557,12 +644,16 @@ class MainScreenController extends ChangeNotifier {
   /// A hidden account is left out like one that was never linked, so paying
   /// a hidden card from checking is spending (its purchases no longer count).
   void _reclassify() {
-    AppTransaction.kindById = classifyTransactions(liveTransactions, {
-      ..._ruleCategoryByTxId,
-      for (final txId in manualReviewedTxIds)
-        if (reviewedCategoryByTxId[txId] != null)
-          txId: reviewedCategoryByTxId[txId]!,
-    }).kinds;
+    useClassification(
+      classifyTransactions(liveTransactions, {
+        ..._ruleCategoryByTxId,
+        for (final txId in manualReviewedTxIds)
+          if (reviewedCategoryByTxId[txId] != null)
+            txId: reviewedCategoryByTxId[txId]!,
+      }, paidBackPurchaseById: paidBackPurchaseIds(decisions)),
+      liveTransactions,
+      decisions,
+    );
   }
 
   // --- Hidden accounts ---
@@ -697,6 +788,7 @@ class MainScreenController extends ChangeNotifier {
     // even after a remembered rule now classifies them confidently.
     lowConfidenceReviewTxIds = {...result.autoLowConfidenceReviewTxIds};
     _ruleCategoryByTxId = result.ruleCategoryByTxId;
+    decisions = result.decisions;
     _applyHiddenAccounts();
     _reclassify();
     _applyManualLimitOverrides();

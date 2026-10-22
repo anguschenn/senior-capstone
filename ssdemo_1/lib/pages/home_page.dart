@@ -61,6 +61,8 @@ class HomePage extends StatelessWidget {
     required this.onAccountChanged,
     required this.onTransactionCategorySelected,
     required this.onReviewConfirm,
+    this.onLinkPayback,
+    this.onTransactionTap,
     this.budgetProgress = const [],
     this.bankSyncBusy = false,
     this.onOpenFlow,
@@ -99,6 +101,13 @@ class HomePage extends StatelessWidget {
   final void Function(AppTransaction tx, String category)
   onTransactionCategorySelected;
   final Future<void> Function(String txId) onReviewConfirm;
+
+  /// Lets the user link money from a friend to the purchase it pays back;
+  /// true when it was linked.
+  final Future<bool> Function(BuildContext context, AppTransaction tx)?
+  onLinkPayback;
+  final void Function(BuildContext context, AppTransaction tx)?
+  onTransactionTap;
   final VoidCallback? onOpenFlow;
   final VoidCallback? onOpenSettings;
   final VoidCallback? onSeeAllActivity;
@@ -135,6 +144,7 @@ class HomePage extends StatelessWidget {
         reviewedCategoryByTxId: reviewedCategoryByTxId,
         onTransactionCategorySelected: onTransactionCategorySelected,
         onReviewConfirm: onReviewConfirm,
+        onLinkPayback: onLinkPayback,
         aiCategorySuggestUri: aiCategorySuggestUri,
         apiKey: apiKey,
         accessToken: accessToken,
@@ -259,6 +269,9 @@ class HomePage extends StatelessWidget {
                           aiCategorySuggestUri: aiCategorySuggestUri,
                           apiKey: apiKey,
                           accessToken: accessToken,
+                          onTap: onTransactionTap == null
+                              ? null
+                              : () => onTransactionTap!(context, tx),
                         ),
                       ],
                     ],
@@ -850,6 +863,7 @@ class TransactionRow extends StatelessWidget {
     this.accessToken,
     this.showDate = true,
     this.alwaysPickable = false,
+    this.onTap,
   });
 
   final AppTransaction tx;
@@ -865,12 +879,35 @@ class TransactionRow extends StatelessWidget {
   /// Lets income be re-categorised too (the review sheet allows it).
   final bool alwaysPickable;
 
+  /// Opens what the user can do with this transaction (split a purchase,
+  /// link a friend's payment to one).
+  final VoidCallback? onTap;
+
+  /// "\$40 to get back" on a split purchase, "Pays back Olive Garden" on a
+  /// linked payment; empty otherwise.
+  static String sharedNote(AppTransaction tx) {
+    if (tx.kind == TxKind.payback) {
+      final purchase = AppTransaction.purchaseByPaybackId[tx.id];
+      return purchase == null
+          ? 'Paid back'
+          : 'Pays back ${purchase.name} · ${shortDate(purchase.date)}';
+    }
+    if (tx.sharedAmount > 0) {
+      return tx.toGetBack > 0
+          ? '${dollars(tx.toGetBack)} to get back'
+          : 'Paid back in full';
+    }
+    if (tx.paidBack > 0) return '${dollars(tx.paidBack)} paid back';
+    return '';
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     final category = effectiveCategoryFor(tx, reviewedCategoryByTxId);
     final tone = colorForDetailedCategory(category);
-    return Padding(
+    final note = sharedNote(tx);
+    final row = Padding(
       padding: const EdgeInsets.symmetric(vertical: 9),
       child: Row(
         children: [
@@ -926,6 +963,14 @@ class TransactionRow extends StatelessWidget {
                     ),
                   ],
                 ),
+                if (note.isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    note,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: c.muted, fontSize: 12),
+                  ),
+                ],
               ],
             ),
           ),
@@ -938,7 +983,7 @@ class TransactionRow extends StatelessWidget {
             style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w600,
-              color: tx.kind == TxKind.internal
+              color: tx.kind == TxKind.internal || tx.kind == TxKind.payback
                   ? c.muted
                   : (tx.isIncome ? c.good : c.text),
             ),
@@ -946,6 +991,8 @@ class TransactionRow extends StatelessWidget {
         ],
       ),
     );
+    if (onTap == null) return row;
+    return InkWell(onTap: onTap, child: row);
   }
 }
 
@@ -958,6 +1005,7 @@ class ReviewTransactionsSheet extends StatefulWidget {
     required this.reviewedCategoryByTxId,
     required this.onTransactionCategorySelected,
     required this.onReviewConfirm,
+    this.onLinkPayback,
     this.aiCategorySuggestUri,
     this.apiKey,
     this.accessToken,
@@ -969,6 +1017,8 @@ class ReviewTransactionsSheet extends StatefulWidget {
   final void Function(AppTransaction tx, String category)
   onTransactionCategorySelected;
   final Future<void> Function(String txId) onReviewConfirm;
+  final Future<bool> Function(BuildContext context, AppTransaction tx)?
+  onLinkPayback;
   final Uri? aiCategorySuggestUri;
   final String? apiKey;
   final String? accessToken;
@@ -1016,7 +1066,9 @@ class _ReviewTransactionsSheetState extends State<ReviewTransactionsSheet> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Tap the category to change it, then confirm.',
+            'Tap the category to change it, then confirm. Money from a '
+            'friend: link it to the purchase it pays back, or pick its '
+            'category.',
             style: TextStyle(color: c.muted, fontSize: 13),
           ),
           const SizedBox(height: 12),
@@ -1048,16 +1100,42 @@ class _ReviewTransactionsSheetState extends State<ReviewTransactionsSheet> {
                     apiKey: widget.apiKey,
                     accessToken: widget.accessToken,
                   ),
-                  FilledButton(
-                    onPressed: () async {
-                      setState(() => _confirmed.add(tx.id));
-                      await widget.onReviewConfirm(tx.id);
-                    },
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size(80, 32),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                    child: const Text('Confirm'),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      if (tx.isPeerToPeerInflow && widget.onLinkPayback != null)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: OutlinedButton(
+                            key: ValueKey('review-link-${tx.id}'),
+                            onPressed: () async {
+                              final linked = await widget.onLinkPayback!(
+                                context,
+                                tx,
+                              );
+                              if (linked && mounted) {
+                                setState(() => _confirmed.add(tx.id));
+                              }
+                            },
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size(80, 32),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                            child: const Text('Link to a purchase'),
+                          ),
+                        ),
+                      FilledButton(
+                        onPressed: () async {
+                          setState(() => _confirmed.add(tx.id));
+                          await widget.onReviewConfirm(tx.id);
+                        },
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size(80, 32),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        child: const Text('Confirm'),
+                      ),
+                    ],
                   ),
                 ],
               ),

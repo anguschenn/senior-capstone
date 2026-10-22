@@ -18,7 +18,56 @@ enum TxKind {
   /// payments): shown in the list but never counted.
   internal,
 
+  /// Money from a friend that the user linked to a purchase: counts as
+  /// nothing itself, it lowers that purchase instead (in the purchase's
+  /// month and category).
+  payback,
+
   none,
+}
+
+/// What the user decided about one transaction (transaction_decisions).
+/// Money from a person is never decided by a name-based rule: the same
+/// friend may pay back a meal one week and a ride the next.
+class TxDecision {
+  const TxDecision({
+    this.category = '',
+    this.paidBackPurchaseId = '',
+    this.sharedAmount = 0,
+  });
+
+  /// This transaction's own category pick.
+  final String category;
+
+  /// Money in: the purchase it pays back.
+  final String paidBackPurchaseId;
+
+  /// A purchase split with others: what they will pay back. It still counts
+  /// in full until they do; it only shows what's left to get back.
+  final double sharedAmount;
+
+  bool get isEmpty =>
+      category.isEmpty && paidBackPurchaseId.isEmpty && sharedAmount <= 0;
+
+  factory TxDecision.fromRow(Map<String, dynamic> row) {
+    final shared = row['shared_amount'];
+    return TxDecision(
+      category: ((row['category'] as String?) ?? '').trim(),
+      paidBackPurchaseId: ((row['paid_back_purchase_id'] as String?) ?? '')
+          .trim(),
+      sharedAmount: shared is num
+          ? shared.toDouble()
+          : double.tryParse('${shared ?? ''}') ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toRow() => {
+    'category': category.isEmpty ? null : category,
+    'paid_back_purchase_id': paidBackPurchaseId.isEmpty
+        ? null
+        : paidBackPurchaseId,
+    'shared_amount': sharedAmount > 0 ? sharedAmount : null,
+  };
 }
 
 // Normalized transaction model used by the UI after reading raw Supabase rows.
@@ -87,13 +136,33 @@ class AppTransaction {
 
   TxKind get kind => kindById[id] ?? ownKind();
 
+  /// What friends paid back on each purchase (money in the user linked to
+  /// it), set by [classifyTransactions] with [kindById].
+  static Map<String, double> paidBackById = const {};
+
+  /// What friends paid back on this purchase.
+  double get paidBack => paidBackById[id] ?? 0;
+
+  /// Purchases split with others: what they will pay back (the user's
+  /// decisions). Display only: spending goes down when they actually pay.
+  static Map<String, double> sharedAmountById = const {};
+
+  /// Money in linked to a purchase -> that purchase, for labelling the row.
+  static Map<String, AppTransaction> purchaseByPaybackId = const {};
+
+  double get sharedAmount => sharedAmountById[id] ?? 0;
+
+  /// Still to get back on a split purchase.
+  double get toGetBack => math.max(sharedAmount - paidBack, 0);
+
   /// Spending contributed by this transaction: negative for a refund, so it
   /// nets against its category. Money moved between two linked accounts (a
   /// card payment, a savings transfer) counts as nothing: the purchases
   /// already count when they happen. Money sent to an account the app doesn't
-  /// have is spending, like cash.
+  /// have is spending, like cash. A purchase friends paid back counts only
+  /// what's left; the payback itself counts as nothing.
   double get expenseAmount => switch (kind) {
-    TxKind.spend => displayAmount,
+    TxKind.spend => math.max(displayAmount - paidBack, 0),
     TxKind.refund => -displayAmount,
     _ => 0,
   };
@@ -166,8 +235,15 @@ class AppTransaction {
   double get cardPaymentAmount => isCardPaymentCredit ? displayAmount : 0;
 
   /// Label for money coming in that has no category of its own.
-  String get inflowLabel =>
-      kind == TxKind.internal ? kInternalTransfer : 'Income';
+  String get inflowLabel => switch (kind) {
+    TxKind.internal => kInternalTransfer,
+    TxKind.payback => 'Paid back',
+    _ => 'Income',
+  };
+
+  /// Money in from a person (Zelle, Venmo, ...): never decided by a
+  /// name-based rule, and always offered for review until the user decides.
+  bool get isPeerToPeerInflow => isInflow && isPeerToPeer('$name $description');
 
   factory AppTransaction.fromMap(Map<String, dynamic> row) {
     final merchant = (row['merchant_name'] as String?)?.trim();
@@ -498,19 +574,58 @@ class AccountOption {
   final List<String> linkedAccountIds;
 }
 
+typedef Classified = ({
+  Map<String, TxKind> kinds,
+  Map<String, String> purchaseIdByRefundId,
+  Map<String, String> purchaseIdByPaybackId,
+  Map<String, double> paidBackById,
+});
+
+/// Makes [classified] what every [AppTransaction] reads: kinds, what friends
+/// paid back, split purchases and the purchase each payback belongs to.
+void useClassification(
+  Classified classified,
+  List<AppTransaction> transactions,
+  Map<String, TxDecision> decisions,
+) {
+  final byId = {for (final tx in transactions) tx.id: tx};
+  AppTransaction.kindById = classified.kinds;
+  AppTransaction.paidBackById = classified.paidBackById;
+  AppTransaction.sharedAmountById = {
+    for (final e in decisions.entries)
+      if (e.value.sharedAmount > 0) e.key: e.value.sharedAmount,
+  };
+  AppTransaction.purchaseByPaybackId = {
+    for (final e in classified.purchaseIdByPaybackId.entries)
+      if (byId[e.value] != null) e.key: byId[e.value]!,
+  };
+}
+
+/// Money in -> the purchase it pays back, from the user's decisions.
+Map<String, String> paidBackPurchaseIds(Map<String, TxDecision> decisions) => {
+  for (final e in decisions.entries)
+    if (e.value.paidBackPurchaseId.isNotEmpty)
+      e.key: e.value.paidBackPurchaseId,
+};
+
 /// Kinds for a whole list of transactions, plus the purchase each refund
 /// belongs to. [userCategoryById] holds categories the user picked or has a
 /// remembered rule for. A refund is money back from a merchant with an
 /// earlier purchase of at least that amount on the same account.
-({Map<String, TxKind> kinds, Map<String, String> purchaseIdByRefundId})
-classifyTransactions(
+/// [paidBackPurchaseById] links money in to the purchase it pays back (the
+/// user's pick): it becomes a payback and lowers that purchase, oldest
+/// payback first, never below nothing ([paidBackById]).
+Classified classifyTransactions(
   List<AppTransaction> transactions,
-  Map<String, String> userCategoryById,
-) {
+  Map<String, String> userCategoryById, {
+  Map<String, String> paidBackPurchaseById = const {},
+}) {
   final kinds = <String, TxKind>{};
   final purchaseIdByRefundId = <String, String>{};
   final purchasesByMerchant = <String, List<AppTransaction>>{};
+  final byId = <String, AppTransaction>{};
   for (final tx in transactions) {
+    byId.putIfAbsent(tx.id, () => tx);
     final userCategory = userCategoryById[tx.id] ?? '';
     var kind = tx.ownKind(userCategory: userCategory);
     if (kind == TxKind.spend) {
@@ -536,7 +651,53 @@ classifyTransactions(
     kinds[tx.id] = TxKind.refund;
     purchaseIdByRefundId[tx.id] = purchase.id;
   }
-  return (kinds: kinds, purchaseIdByRefundId: purchaseIdByRefundId);
+
+  // Oldest payback first, each lowering its purchase until nothing is left.
+  final purchaseIdByPaybackId = <String, String>{};
+  final paidBackById = <String, double>{};
+  final linked =
+      transactions
+          .where(
+            (tx) =>
+                tx.amount < 0 && (paidBackPurchaseById[tx.id] ?? '').isNotEmpty,
+          )
+          .toList()
+        ..sort((a, b) {
+          final byDate = a.date.compareTo(b.date);
+          return byDate != 0 ? byDate : a.id.compareTo(b.id);
+        });
+  final seenPaybacks = <String>{};
+  for (final tx in linked) {
+    if (!seenPaybacks.add(tx.id)) continue;
+    final purchaseId = paidBackPurchaseById[tx.id]!;
+    final purchase = byId[purchaseId];
+    if (purchase == null) {
+      // The purchase is outside the loaded rows (older, or on a hidden
+      // account): the money still went back to it, so it counts as nothing.
+      kinds[tx.id] = TxKind.payback;
+      purchaseIdByRefundId.remove(tx.id);
+      continue;
+    }
+    if (kinds[purchaseId] != TxKind.spend) continue;
+    final paid = paidBackById[purchaseId] ?? 0;
+    final take = math.min(
+      tx.displayAmount,
+      math.max(purchase.displayAmount - paid, 0),
+    );
+    paidBackById[purchaseId] = paid + take;
+    kinds[tx.id] = TxKind.payback;
+    purchaseIdByRefundId.remove(tx.id);
+    purchaseIdByPaybackId[tx.id] = purchaseId;
+  }
+  return (
+    kinds: kinds,
+    purchaseIdByRefundId: purchaseIdByRefundId,
+    purchaseIdByPaybackId: purchaseIdByPaybackId,
+    paidBackById: {
+      for (final e in paidBackById.entries)
+        e.key: (e.value * 100).roundToDouble() / 100,
+    },
+  );
 }
 
 /// Money leaving one linked account and the same amount arriving in another

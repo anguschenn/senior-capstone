@@ -21,6 +21,7 @@ class RawSyncData {
     required this.subscriptionRows,
     required this.txRows,
     required this.rememberedRules,
+    this.decisions = const {},
   });
 
   final String userId;
@@ -41,6 +42,10 @@ class RawSyncData {
   /// rule_key -> {category, confidence}
   final Map<String, Map<String, String>> rememberedRules;
 
+  /// plaid_transaction_id -> transaction_decisions row (category,
+  /// paid_back_purchase_id, shared_amount).
+  final Map<String, Map<String, dynamic>> decisions;
+
   /// Same data without budgets, for when the saved month is no longer the one
   /// being viewed (budget limits are stored per month).
   RawSyncData withoutBudgets() => RawSyncData(
@@ -53,6 +58,7 @@ class RawSyncData {
     subscriptionRows: subscriptionRows,
     txRows: txRows,
     rememberedRules: rememberedRules,
+    decisions: decisions,
   );
 
   Map<String, dynamic> toJson() => {
@@ -69,6 +75,7 @@ class RawSyncData {
     'subscriptionRows': subscriptionRows,
     'txRows': txRows,
     'rememberedRules': rememberedRules,
+    'decisions': decisions,
   };
 
   /// Returns null for anything that isn't a well-formed, current-version entry.
@@ -104,6 +111,13 @@ class RawSyncData {
               'confidence': e.value['confidence'] as String,
             },
         },
+        // Copies saved before decisions existed have none.
+        decisions: decoded['decisions'] == null
+            ? const {}
+            : {
+                for (final e in (decoded['decisions'] as Map).entries)
+                  e.key as String: Map<String, dynamic>.from(e.value as Map),
+              },
       );
     } catch (_) {
       return null;

@@ -48,6 +48,28 @@ class BudgetBucketContractTests(unittest.TestCase):
                 ]
                 self.assertEqual(actual, spec["expected"])
 
+    def test_paybacks_and_shared_purchases(self):
+        from budget_progress import classify_rows
+
+        spec = FIXTURE["progress_paybacks"]
+        decided = classify_rows(spec["transactions"], spec["rules"], decisions=spec["decisions"])
+        self.assertEqual({k: v.kind for k, v in decided.items()}, spec["expected_kinds"])
+        self.assertEqual(
+            {k: v.paid_back for k, v in decided.items() if v.paid_back}, spec["expected_paid_back"]
+        )
+        progress = build_budget_progress(
+            spec["budgets"],
+            spec["categories"],
+            spec["transactions"],
+            spec["rules"],
+            spec["month"],
+            decisions=spec["decisions"],
+        )
+        actual = [
+            {k: item[k] for k in ("category_id", "category", "spent", "limit")} for item in progress
+        ]
+        self.assertEqual(actual, spec["expected"])
+
     def test_progress_feeds_burn_rate_check(self):
         """Output shape is what PredictService's burn-rate check sanitizes and reads."""
         from ai.validators import sanitize_budget_progress
@@ -137,6 +159,65 @@ class PairingEdgeTests(unittest.TestCase):
             self.assertEqual(kinds["out-1"], "internal")
             self.assertEqual(kinds["out-2"], "internal")
             self.assertEqual(kinds["out-3"], "spend")
+
+    def test_a_late_payback_still_lowers_its_purchase(self):
+        """A friend pays back a September dinner in November: September's budget fetch
+        reaches the payment through the user's link."""
+        from fake_supabase import FakeSupabase
+
+        import budget_progress
+
+        def row(tx_id, day, name, amount, primary):
+            return {
+                "user_id": "u1",
+                "plaid_transaction_id": tx_id,
+                "plaid_account_id": "acc-1",
+                "amount": amount,
+                "date": day,
+                "name": name,
+                "merchant_name": None,
+                "category": None,
+                "pfc_primary": primary,
+                "pfc_detailed": "",
+            }
+
+        db = FakeSupabase(
+            {
+                "transactions": [
+                    row("dinner", "2026-09-28", "Olive Garden", 80, "FOOD_AND_DRINK"),
+                    row("amy", "2026-11-20", "Zelle payment from Amy", -40, "TRANSFER_IN"),
+                ],
+                "transaction_decisions": [
+                    {
+                        "user_id": "u1",
+                        "plaid_transaction_id": "amy",
+                        "paid_back_purchase_id": "dinner",
+                    }
+                ],
+                "budgets": [
+                    {
+                        "user_id": "u1",
+                        "id": "b1",
+                        "category_id": "c-food",
+                        "monthly_limit": 300,
+                        "month_year": "2026-09",
+                    }
+                ],
+                "categories": [{"id": "c-food", "name": "Food", "user_id": None}],
+                "category_match_rules": [],
+                "accounts": [],
+            }
+        )
+        with unittest.mock.patch.object(budget_progress, "supabase", db):
+            progress = budget_progress.compute_budget_progress("u1", "2026-09")
+        self.assertEqual(progress[0]["spent"], 40.0)
+
+    def test_decisions_are_empty_before_the_migration(self):
+        import budget_progress
+
+        with unittest.mock.patch.object(budget_progress, "supabase") as db:
+            db.table.side_effect = RuntimeError("relation does not exist")
+            self.assertEqual(budget_progress.fetch_decisions("u1"), {})
 
     def test_month_end_fetch_reaches_into_the_next_month(self):
         import budget_progress

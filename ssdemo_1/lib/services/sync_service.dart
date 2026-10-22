@@ -13,6 +13,7 @@ import 'auth_service.dart';
 import 'budget_service.dart';
 import 'category_service.dart';
 import 'sync_cache.dart';
+import 'transaction_decision_service.dart';
 
 /// Parses the JSON body of GET /api/budget_progress (already json-decoded)
 /// into the same model the Dart-computed path produces. A pure function, no
@@ -72,6 +73,7 @@ class SyncResult {
     required this.autoLowConfidenceReviewTxIds,
     this.budgetLimitsByMonth = const {},
     this.ruleCategoryByTxId = const {},
+    this.decisions = const {},
   });
 
   final List<AppTransaction> transactions;
@@ -86,8 +88,13 @@ class SyncResult {
   final Map<String, String> autoReviewedCategoryByTxId;
   final Set<String> autoLowConfidenceReviewTxIds;
 
-  /// Categories from the user's remembered rules (category_match_rules).
+  /// Categories from the user's remembered rules (category_match_rules) and
+  /// their one-off picks (transaction_decisions). Money from a person only
+  /// takes its own pick.
   final Map<String, String> ruleCategoryByTxId;
+
+  /// The user's per-transaction choices, by transaction id.
+  final Map<String, TxDecision> decisions;
 
   /// The focused year's limits per month ("2026-09" → category id → limit).
   final Map<String, Map<String, double>> budgetLimitsByMonth;
@@ -329,6 +336,9 @@ class SyncService {
     }).toList();
     final rememberedRules = await CategoryService.instance
         .fetchRememberedRuleDecisions(userId);
+    final decisions = await TransactionDecisionService.instance.fetchRows(
+      userId,
+    );
 
     return RawSyncData(
       userId: userId,
@@ -351,6 +361,7 @@ class SyncService {
             'confidence': e.value.confidence,
           },
       },
+      decisions: decisions,
     );
   }
 
@@ -387,18 +398,32 @@ class SyncService {
     final autoReviewedCategoryByTxId = <String, String>{};
     final autoLowConfidenceReviewTxIds = <String>{};
 
-    // Categories the user decided (remembered rules), then what counts as
-    // spending, income, a refund or a transfer between their own accounts.
+    // Categories the user decided (one-off picks, then remembered rules,
+    // which money from a person never uses), then what counts as spending,
+    // income, a refund, a payback or a transfer between their own accounts.
+    final decisions = {
+      for (final e in raw.decisions.entries) e.key: TxDecision.fromRow(e.value),
+    };
     final ruleCategoryByTxId = <String, String>{};
     for (int i = 0; i < txRows.length && i < parsed.length; i++) {
+      final picked = decisions[parsed[i].id]?.category ?? '';
+      if (picked.isNotEmpty) {
+        ruleCategoryByTxId[parsed[i].id] = picked;
+        continue;
+      }
+      if (parsed[i].isPeerToPeerInflow) continue;
       final key = CategoryService.instance.ruleKeyForRawTransaction(txRows[i]);
       final remembered = key.isEmpty ? null : rememberedRules[key];
       if (remembered != null && remembered.category.isNotEmpty) {
         ruleCategoryByTxId[parsed[i].id] = remembered.category;
       }
     }
-    final classified = classifyTransactions(deduped, ruleCategoryByTxId);
-    AppTransaction.kindById = classified.kinds;
+    final classified = classifyTransactions(
+      deduped,
+      ruleCategoryByTxId,
+      paidBackPurchaseById: paidBackPurchaseIds(decisions),
+    );
+    useClassification(classified, deduped, decisions);
 
     for (int i = 0; i < txRows.length && i < parsed.length; i++) {
       final tx = parsed[i];
@@ -430,27 +455,33 @@ class SyncService {
       // on its own (pages show it as Internal Transfer while it is one), so
       // hiding the other account turns a card payment into Fees & Transfers,
       // not Other.
-      autoReviewedCategoryByTxId[tx.id] =
-          tx.kind == TxKind.income ||
-              (tx.kind == TxKind.internal && !tx.isExpense)
+      autoReviewedCategoryByTxId[tx.id] = tx.kind == TxKind.payback
+          ? tx.inflowLabel
+          : tx.kind == TxKind.income ||
+                (tx.kind == TxKind.internal && !tx.isExpense)
           ? 'Income'
           : decision.category;
-      if (tx.kind == TxKind.internal) continue;
-      // Money from a person may be a payback for something you bought
-      // (then it belongs in that category), so it's always offered for review.
-      if (decision.confidence == 'low' ||
-          (tx.kind == TxKind.income &&
-              AppTransaction.isPeerToPeer('${tx.name} ${tx.description}'))) {
+      if (tx.kind == TxKind.internal || tx.kind == TxKind.payback) continue;
+      // Money from a person may pay back something you bought (then it
+      // belongs to that purchase), so it's offered for review every time
+      // until the user decides.
+      if (decision.confidence == 'low' || tx.isPeerToPeerInflow) {
         autoLowConfidenceReviewTxIds.add(tx.id);
       }
     }
-    // A refund lands in the category of the purchase it pays back.
+    // A refund lands in the category of the purchase it pays back, and so
+    // does a friend's payback the user linked to a purchase.
     for (final entry in classified.purchaseIdByRefundId.entries) {
       if (ruleCategoryByTxId.containsKey(entry.key)) continue;
       final purchaseCategory = autoReviewedCategoryByTxId[entry.value];
       if (purchaseCategory == null) continue;
       autoReviewedCategoryByTxId[entry.key] = purchaseCategory;
       autoLowConfidenceReviewTxIds.remove(entry.key);
+    }
+    for (final entry in classified.purchaseIdByPaybackId.entries) {
+      final purchaseCategory = autoReviewedCategoryByTxId[entry.value];
+      if (purchaseCategory == null) continue;
+      autoReviewedCategoryByTxId[entry.key] = purchaseCategory;
     }
     effectiveReviewedCategoryByTxId.addAll(autoReviewedCategoryByTxId);
 
@@ -583,6 +614,7 @@ class SyncService {
       autoReviewedCategoryByTxId: autoReviewedCategoryByTxId,
       autoLowConfidenceReviewTxIds: autoLowConfidenceReviewTxIds,
       ruleCategoryByTxId: ruleCategoryByTxId,
+      decisions: decisions,
     );
   }
 }

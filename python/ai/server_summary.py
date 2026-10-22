@@ -31,7 +31,7 @@ from budget_progress import (
     classify_rows,
     is_credit_card_payment_row,
     row_kind,
-    rule_key_for_row,
+    user_category_for_row,
 )
 
 SUMMARY_VERSION = 3
@@ -86,9 +86,16 @@ class Tx:
         "raw_pfc_detailed",
         "bucket",
         "kind",
+        "paid_back",
     )
 
-    def __init__(self, row: dict, account_meta: dict, rules: dict[str, str]):
+    def __init__(
+        self,
+        row: dict,
+        account_meta: dict,
+        rules: dict[str, str],
+        decisions: dict[str, dict] | None = None,
+    ):
         merchant = (_text(row.get("merchant_name")) or "").strip() or None
         fallback = (_text(row.get("name")) or "").strip() if _text(row.get("name")) else None
         description = fallback
@@ -128,9 +135,12 @@ class Tx:
             f"{self.name.lower()}|{self.amount:.2f}|{self.date.isoformat()}"
         )
         self.id = provider_id or self.dedupe_key
-        self.bucket = budget_bucket_for_row(row, rules)
-        # build_transactions replaces this with the whole-list decision (refund matching).
-        self.kind = row_kind(row, rules.get(rule_key_for_row(row), ""), self.account_type)
+        user_category = user_category_for_row(row, rules, decisions)
+        self.bucket = budget_bucket_for_row(row, rules, decisions)
+        # build_transactions replaces these with the whole-list decision (refund matching,
+        # paybacks linked to a purchase).
+        self.kind = row_kind(row, user_category, self.account_type)
+        self.paid_back = 0.0
 
     # ── AppTransaction getters ──
     @property
@@ -153,9 +163,10 @@ class Tx:
 
     @property
     def expense_amount(self) -> float:
-        """Spending; negative for a refund. Own-account transfers count as nothing."""
+        """Spending; negative for a refund. Own-account transfers count as nothing, and a
+        purchase friends paid back counts only what's left."""
         if self.kind == "spend":
-            return self.display_amount
+            return max(self.display_amount - self.paid_back, 0.0)
         if self.kind == "refund":
             return -self.display_amount
         return 0.0
@@ -198,7 +209,11 @@ class Tx:
 
 
 def build_transactions(
-    tx_rows: list[dict], account_meta: dict, rules: dict[str, str], account_ids=None
+    tx_rows: list[dict],
+    account_meta: dict,
+    rules: dict[str, str],
+    account_ids=None,
+    decisions: dict[str, dict] | None = None,
 ) -> list[Tx]:
     """Parsed, de-duplicated, optionally limited to `account_ids` (the app's
     visibleTransactions)."""
@@ -207,7 +222,7 @@ def build_transactions(
     out = []
     unique_rows = []
     for row in tx_rows:
-        tx = Tx(row, account_meta, rules)
+        tx = Tx(row, account_meta, rules, decisions)
         if tx.dedupe_key in seen:
             continue
         unique_rows.append(row)
@@ -220,10 +235,10 @@ def build_transactions(
         account_id: str((meta or {}).get("account_type") or "").strip()
         for account_id, meta in account_meta.items()
     }
-    decided = classify_rows(unique_rows, rules, account_types)
+    decided = classify_rows(unique_rows, rules, account_types, decisions)
     for tx in out:
         if tx.id in decided:
-            tx.kind, tx.bucket = decided[tx.id]
+            tx.kind, tx.bucket, tx.paid_back = decided[tx.id]
     return out
 
 
@@ -743,7 +758,10 @@ def parse_context(raw) -> dict | None:
     }
 
 
-def _load(user_id: str, tx_rows=None) -> tuple[list[dict], dict, dict[str, str], dict[str, str]]:
+def _load(
+    user_id: str, tx_rows=None
+) -> tuple[list[dict], dict, dict[str, str], dict[str, str], dict[str, dict]]:
+    from budget_progress import fetch_decisions
     from supabase_repo import supabase
     from user_model import fetch_all_transactions, fetch_category_names, fetch_rules
 
@@ -759,6 +777,7 @@ def _load(user_id: str, tx_rows=None) -> tuple[list[dict], dict, dict[str, str],
         account_meta,
         fetch_rules(user_id),
         fetch_category_names(user_id),
+        fetch_decisions(user_id),
     )
 
 
@@ -777,12 +796,12 @@ def summary_for(user_id: str, context: dict, tx_rows=None) -> dict:
         if hit and hit[0] > now_ts:
             return hit[1]
 
-    rows, account_meta, rules, names = _load(user_id, tx_rows)
+    rows, account_meta, rules, names, decisions = _load(user_id, tx_rows)
     if hidden:
         hidden_set = set(hidden)
         rows = [r for r in rows if str(r.get("plaid_account_id") or "").strip() not in hidden_set]
     account_ids = context["account_ids"]
-    txs = build_transactions(rows, account_meta, rules, account_ids or None)
+    txs = build_transactions(rows, account_meta, rules, account_ids or None, decisions)
     progress = []
     if not context["all_year"]:
         # Budgets cover every linked account, whichever one is selected (as in the app).
@@ -792,12 +811,13 @@ def summary_for(user_id: str, context: dict, tx_rows=None) -> dict:
             rows,
             rules,
             context["month"],
+            decisions=decisions,
         )
     types = {tx.account_type.lower().strip() for tx in txs if tx.account_type.strip()}
     summary = build_summary(
         txs,
         progress,
-        budget_transactions=build_transactions(rows, account_meta, rules, None)
+        budget_transactions=build_transactions(rows, account_meta, rules, None, decisions)
         if account_ids and progress
         else None,
         # Noon: the app's windows run from "now" minus N days, and any time after midnight

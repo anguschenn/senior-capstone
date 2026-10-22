@@ -18,6 +18,7 @@ import '../services/auth_service.dart';
 import '../services/financial_snapshot_service.dart';
 import '../utils/app_helpers.dart';
 import '../widgets/ai_assistant/ai_assistant_panel.dart';
+import '../widgets/common/shared_money_sheets.dart';
 import '../widgets/common/ui.dart';
 
 /// Opens the AI panel, optionally with a question filled in and a note on
@@ -122,6 +123,49 @@ class _MainScreenState extends State<MainScreen> {
             AnimatedBuilder(animation: _ctrl, builder: (_, _) => build()),
       ),
     );
+  }
+
+  /// Lets the user pick the purchase a friend's payment pays back.
+  Future<bool> _linkPayback(BuildContext context, AppTransaction inflow) async {
+    final purchase = await showLinkPurchaseSheet(
+      context: context,
+      inflow: inflow,
+      transactions: _ctrl.liveTransactions,
+    );
+    if (purchase == null) return false;
+    return _ctrl.linkPayback(inflow, purchase);
+  }
+
+  /// Split a purchase with others, or decide what a friend's payment is.
+  Future<void> _openTransactionActions(
+    BuildContext context,
+    AppTransaction tx,
+  ) async {
+    if (actionsFor(tx).isEmpty) return;
+    final action = await showTransactionActionsSheet(context: context, tx: tx);
+    if (action == null || !context.mounted) return;
+    switch (action) {
+      case TransactionAction.split:
+        final amount = await showSplitPurchaseSheet(
+          context: context,
+          purchase: tx,
+        );
+        if (amount != null) await _ctrl.setSharedAmount(tx, amount);
+      case TransactionAction.linkPayback:
+        await _linkPayback(context, tx);
+      case TransactionAction.unlinkPayback:
+        await _ctrl.unlinkPayback(tx);
+      case TransactionAction.notPayback:
+        await showTransactionCategoryPicker(
+          context: context,
+          tx: tx,
+          selectedCategory: effectiveCategoryFor(
+            tx,
+            _ctrl.reviewedCategoryByTxId,
+          ),
+          onSelected: (category) => _ctrl.setInflowCategory(tx, category),
+        );
+    }
   }
 
   void _openFlow() {
@@ -238,6 +282,8 @@ class _MainScreenState extends State<MainScreen> {
         onMonthChanged: c.selectMonth,
         onTransactionCategorySelected: c.onTransactionCategorySelected,
         onReviewConfirm: c.confirmReviewedCategory,
+        onLinkPayback: _linkPayback,
+        onTransactionTap: _openTransactionActions,
         onOpenFlow: _openFlow,
         onOpenSettings: _openSettings,
         onSeeAllActivity: () => c.selectTab(1),
@@ -254,6 +300,7 @@ class _MainScreenState extends State<MainScreen> {
         onMonthChanged: c.selectMonth,
         reviewedCategoryByTxId: c.reviewedCategoryByTxId,
         onTransactionCategorySelected: c.onTransactionCategorySelected,
+        onTransactionTap: _openTransactionActions,
         aiCategorySuggestUri: ApiConfig.instance.aiCategorySuggestUri,
         apiKey: EnvConfig.instance.backendApiKey,
         accessToken: AuthService.instance.currentAccessToken,

@@ -41,16 +41,43 @@ List<Map<String, dynamic>> _rows() {
   }).toList();
 }
 
-/// Mirrors SyncService.buildResult: remembered rule first, otherwise
-/// classifyByPfcSignals, keyed by transaction id.
-Map<String, String> _reviewedCategories(List<Map<String, dynamic>> rows) {
+/// The user's per-transaction choices in the fixture.
+final Map<String, TxDecision> _decisions = {
+  for (final e
+      in ((_fixture['decisions'] as Map<String, dynamic>?) ?? const {}).entries)
+    e.key: TxDecision.fromRow((e.value as Map).cast<String, dynamic>()),
+};
+
+/// Mirrors SyncService.buildResult: the transaction's own pick, then a
+/// remembered rule (never for money from a person), keyed by transaction id.
+Map<String, String> _ruleCategories(List<Map<String, dynamic>> rows) {
   final rules = (_fixture['rules'] as Map<String, dynamic>)
       .cast<String, String>();
-  final service = CategoryService.instance;
   final out = <String, String>{};
   for (final row in rows) {
     final tx = AppTransaction.fromMap(row);
-    final remembered = rules[service.ruleKeyForRawTransaction(row)];
+    final picked = _decisions[tx.id]?.category ?? '';
+    if (picked.isNotEmpty) {
+      out[tx.id] = picked;
+      continue;
+    }
+    if (tx.isPeerToPeerInflow) continue;
+    final remembered =
+        rules[CategoryService.instance.ruleKeyForRawTransaction(row)];
+    if (remembered != null) out[tx.id] = remembered;
+  }
+  return out;
+}
+
+/// Mirrors SyncService.buildResult: the user's category first, otherwise
+/// classifyByPfcSignals, keyed by transaction id.
+Map<String, String> _reviewedCategories(List<Map<String, dynamic>> rows) {
+  final service = CategoryService.instance;
+  final userCategories = _ruleCategories(rows);
+  final out = <String, String>{};
+  for (final row in rows) {
+    final tx = AppTransaction.fromMap(row);
+    final remembered = userCategories[tx.id];
     out[tx.id] = (remembered != null && remembered.isNotEmpty)
         ? remembered
         : service
@@ -113,19 +140,21 @@ void main() {
       if (seen.add(tx.dedupeKey)) tx,
   ];
   final now = DateTime.parse(_fixture['now'] as String);
-  // SyncService.buildResult: what counts, with the remembered rules; a refund
-  // takes the category of the purchase it pays back.
-  final rules = (_fixture['rules'] as Map<String, dynamic>)
-      .cast<String, String>();
-  final ruleCategories = <String, String>{
-    for (final row in rows)
-      AppTransaction.fromMap(row).id:
-          ?rules[CategoryService.instance.ruleKeyForRawTransaction(row)],
-  };
-  final classified = classifyTransactions(allTransactions, ruleCategories);
-  AppTransaction.kindById = classified.kinds;
+  // SyncService.buildResult: what counts, with the user's categories; a
+  // refund, and a friend's payback linked to a purchase, take the category
+  // of the purchase they pay back.
+  final ruleCategories = _ruleCategories(rows);
+  final classified = classifyTransactions(
+    allTransactions,
+    ruleCategories,
+    paidBackPurchaseById: paidBackPurchaseIds(_decisions),
+  );
+  useClassification(classified, allTransactions, _decisions);
   for (final entry in classified.purchaseIdByRefundId.entries) {
     if (ruleCategories.containsKey(entry.key)) continue;
+    reviewed[entry.key] = reviewed[entry.value] ?? reviewed[entry.key]!;
+  }
+  for (final entry in classified.purchaseIdByPaybackId.entries) {
     reviewed[entry.key] = reviewed[entry.value] ?? reviewed[entry.key]!;
   }
   for (final tx in allTransactions) {

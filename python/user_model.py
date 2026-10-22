@@ -19,8 +19,10 @@ import datetime as dt
 import math
 
 from budget_progress import (
+    Decided,
     build_budget_progress,
     classify_rows,
+    fetch_decisions,
     fetch_hidden_account_ids,
     normalize_category_key,
     row_id,
@@ -75,11 +77,11 @@ def build_category_month_stats(
     tx_rows: list[dict],
     rules: dict[str, str],
     *,
-    kinds: dict[str, tuple[str, str]] | None = None,
+    kinds: dict[str, Decided] | None = None,
 ) -> list[dict]:
     """Spend and count per (month, bucket). Buckets are the raw budget_bucket_for_row names,
     before the Budget page folds unbudgeted ones into "Other". kinds is
-    classify_rows(tx_rows, rules) when the caller already has it."""
+    classify_rows(tx_rows, rules, decisions=...) when the caller already has it."""
     totals: dict[tuple[str, str], list] = {}
     if kinds is None:
         kinds = classify_rows(tx_rows, rules)
@@ -87,8 +89,8 @@ def build_category_month_stats(
         month = str(row.get("date") or "")[:7]
         if len(month) != 7:
             continue
-        kind, bucket = kinds[row_id(row)]
-        amount = signed_spend(kind, float(row["amount"]))
+        kind, bucket, paid_back = kinds[row_id(row)]
+        amount = signed_spend(kind, float(row["amount"]), paid_back)
         if amount == 0:
             continue
         bucket = bucket[:64] or "Other"
@@ -456,7 +458,7 @@ def finalize_month_alerts(
     rules: dict[str, str],
     names: dict[str, str],
     *,
-    kinds: dict[str, tuple[str, str]] | None = None,
+    kinds: dict[str, Decided] | None = None,
 ) -> int | None:
     """Write a finished month's month-end result as alert history. None when the month has
     no budget rows (never opened in the app)."""
@@ -520,13 +522,14 @@ def refresh_user_model(user_id: str, today: dt.date | None = None, history_month
         tx_rows = fetch_all_transactions(user_id)
         rules = fetch_rules(user_id)
         names = fetch_category_names(user_id)
+        decisions = fetch_decisions(user_id)
     except Exception as error:
         print(f"user model skipped for user {user_id}: {type(error).__name__}")
         return result
     result["tx_rows"] = tx_rows
     # Classify once: stats, last month's history and this month's progress all read the
     # same rows with the same rules.
-    kinds = classify_rows(tx_rows, rules)
+    kinds = classify_rows(tx_rows, rules, decisions=decisions)
     stats = build_category_month_stats(tx_rows, rules, kinds=kinds)
 
     try:

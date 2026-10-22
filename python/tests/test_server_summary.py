@@ -28,7 +28,11 @@ VOLATILE = {"generated_at"}
 def _build(fixture, case):
     meta = {a["plaid_account_id"]: a for a in fixture["accounts"]}
     txs = server_summary.build_transactions(
-        fixture["transactions"], meta, fixture["rules"], case["account_ids"] or None
+        fixture["transactions"],
+        meta,
+        fixture["rules"],
+        case["account_ids"] or None,
+        fixture.get("decisions"),
     )
     summary = server_summary.build_summary(
         txs,
@@ -84,7 +88,12 @@ class SummaryContractTests(unittest.TestCase):
         # The remembered rule moves Starbucks out of Food.
         self.assertIn("Entertainment", month["categories"])
         # The duplicated Plaid id is counted once.
-        self.assertEqual(october["data_coverage"]["transaction_count_total"], 22)
+        self.assertEqual(october["data_coverage"]["transaction_count_total"], 24)
+        # Money from friends: Sam's Zelle is linked to the September Whole Foods trip and
+        # lowers September Food (not October); Alex's Venmo was picked as Food this month.
+        september = october["month_index"]["2026-09"]
+        self.assertEqual(september["categories"]["Food"], 210.4 - 50)
+        self.assertEqual(month["categories"]["Food"], 45.5 - 20)
 
 
 class ContextTests(unittest.TestCase):
@@ -118,7 +127,7 @@ class ContextTests(unittest.TestCase):
         def fake_load(user_id, tx_rows=None):
             loads.append(user_id)
             meta = {a["plaid_account_id"]: a for a in fixture["accounts"]}
-            return fixture["transactions"], meta, fixture["rules"], {}
+            return fixture["transactions"], meta, fixture["rules"], {}, {}
 
         context = server_summary.parse_context({"selected_month": "2026-10", "today": "2026-10-10"})
         with (
@@ -178,7 +187,9 @@ class HiddenAccountTests(unittest.TestCase):
         server_summary.invalidate("hidden-user")
         with (
             mock.patch.object(
-                server_summary, "_load", return_value=(self.ROWS, self.META, {}, {"c-food": "Food"})
+                server_summary,
+                "_load",
+                return_value=(self.ROWS, self.META, {}, {"c-food": "Food"}, {}),
             ),
             mock.patch(
                 "user_model.fetch_budget_rows",

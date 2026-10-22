@@ -806,5 +806,143 @@
         "limit": 0
       }
     ]
+  },
+  "progress_paybacks": {
+    "_comment": "Money from friends: a payback linked to a purchase lowers that purchase in its own month and category, never past its amount; a purchase marked shared still counts in full until paid back; money from a person ignores name-based rules and only takes its own pick.",
+    "month": "2026-09",
+    "categories": {
+      "c-food": "Food",
+      "c-transport": "Transport"
+    },
+    "budgets": [
+      {
+        "id": "b-food",
+        "category_id": "c-food",
+        "monthly_limit": 300
+      },
+      {
+        "id": "b-transport",
+        "category_id": "c-transport",
+        "monthly_limit": 100
+      }
+    ],
+    "rules": {
+      "zelle payment from carl|transfer in|transfer in deposit": "Food"
+    },
+    "transactions": [
+      {
+        "plaid_transaction_id": "pb-dinner",
+        "plaid_account_id": "acc-card",
+        "date": "2026-09-28",
+        "name": "Olive Garden",
+        "merchant_name": null,
+        "amount": 80,
+        "pfc_primary": "FOOD_AND_DRINK",
+        "pfc_detailed": "FOOD_AND_DRINK_RESTAURANT"
+      },
+      {
+        "plaid_transaction_id": "pb-ride",
+        "plaid_account_id": "acc-card",
+        "date": "2026-09-15",
+        "name": "Uber",
+        "merchant_name": null,
+        "amount": 30,
+        "pfc_primary": "TRANSPORTATION",
+        "pfc_detailed": "TRANSPORTATION_TAXIS_AND_RIDE_SHARES"
+      },
+      {
+        "plaid_transaction_id": "pb-amy-1",
+        "plaid_account_id": "acc-chk",
+        "date": "2026-10-02",
+        "name": "Zelle payment from Amy",
+        "merchant_name": null,
+        "amount": -40,
+        "pfc_primary": "TRANSFER_IN",
+        "pfc_detailed": "TRANSFER_IN_DEPOSIT"
+      },
+      {
+        "plaid_transaction_id": "pb-amy-2",
+        "plaid_account_id": "acc-chk",
+        "date": "2026-10-06",
+        "name": "Zelle payment from Amy",
+        "merchant_name": null,
+        "amount": -50,
+        "pfc_primary": "TRANSFER_IN",
+        "pfc_detailed": "TRANSFER_IN_DEPOSIT"
+      },
+      {
+        "plaid_transaction_id": "pb-bob",
+        "plaid_account_id": "acc-chk",
+        "date": "2026-09-20",
+        "name": "Venmo from Bob",
+        "merchant_name": null,
+        "amount": -25,
+        "pfc_primary": "TRANSFER_IN",
+        "pfc_detailed": "TRANSFER_IN_DEPOSIT"
+      },
+      {
+        "plaid_transaction_id": "pb-carl",
+        "plaid_account_id": "acc-chk",
+        "date": "2026-09-22",
+        "name": "Zelle payment from Carl",
+        "merchant_name": null,
+        "amount": -100,
+        "pfc_primary": "TRANSFER_IN",
+        "pfc_detailed": "TRANSFER_IN_DEPOSIT"
+      },
+      {
+        "plaid_transaction_id": "pb-dan",
+        "plaid_account_id": "acc-chk",
+        "date": "2026-09-25",
+        "name": "Zelle payment from Dan",
+        "merchant_name": null,
+        "amount": -15,
+        "pfc_primary": "TRANSFER_IN",
+        "pfc_detailed": "TRANSFER_IN_DEPOSIT"
+      }
+    ],
+    "decisions": {
+      "pb-dinner": {
+        "shared_amount": 60
+      },
+      "pb-amy-1": {
+        "paid_back_purchase_id": "pb-dinner"
+      },
+      "pb-amy-2": {
+        "paid_back_purchase_id": "pb-dinner"
+      },
+      "pb-bob": {
+        "category": "Transport"
+      },
+      "pb-dan": {
+        "paid_back_purchase_id": "pb-older-purchase"
+      }
+    },
+    "expected_kinds": {
+      "pb-dinner": "spend",
+      "pb-ride": "spend",
+      "pb-amy-1": "payback",
+      "pb-amy-2": "payback",
+      "pb-bob": "refund",
+      "pb-carl": "income",
+      "pb-dan": "payback"
+    },
+    "expected_paid_back": {
+      "pb-dinner": 80.0
+    },
+    "expected": [
+      {
+        "category_id": "c-food",
+        "category": "Food",
+        "spent": 0.0,
+        "limit": 300.0
+      },
+      {
+        "category_id": "c-transport",
+        "category": "Transport",
+        "spent": 5.0,
+        "limit": 100.0
+      }
+    ]
   }
 }

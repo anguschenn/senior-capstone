@@ -10,6 +10,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ssdemo_1/models/app_models.dart';
 import 'package:ssdemo_1/services/budget_service.dart';
 import 'package:ssdemo_1/services/category_service.dart';
+import 'package:ssdemo_1/services/sync_cache.dart';
+import 'package:ssdemo_1/services/sync_service.dart';
 
 final _fixture =
     jsonDecode(
@@ -118,5 +120,70 @@ void main() {
         }
       });
     }
+
+    test('money from friends: paybacks, splits, no name rules (sync)', () {
+      final spec = _fixture['progress_paybacks'] as Map<String, dynamic>;
+      final categories = (spec['categories'] as Map<String, dynamic>)
+          .cast<String, String>();
+      addTearDown(() {
+        AppTransaction.kindById = const {};
+        AppTransaction.paidBackById = const {};
+        AppTransaction.sharedAmountById = const {};
+        AppTransaction.purchaseByPaybackId = const {};
+      });
+      final result = SyncService.instance.buildResult(
+        RawSyncData(
+          userId: 'u1',
+          monthYear: spec['month'] as String,
+          savedAt: DateTime(2026, 10, 10),
+          accountsRows: const [],
+          categories: [
+            for (final e in categories.entries)
+              CategoryOption(id: e.key, name: e.value),
+          ],
+          budgetRows: [
+            for (final b
+                in (spec['budgets'] as List).cast<Map<String, dynamic>>())
+              {...b, 'month_year': spec['month']},
+          ],
+          subscriptionRows: const [],
+          txRows: (spec['transactions'] as List).cast<Map<String, dynamic>>(),
+          rememberedRules: {
+            for (final e in (spec['rules'] as Map<String, dynamic>).entries)
+              e.key: {'category': e.value as String, 'confidence': 'high'},
+          },
+          decisions: {
+            for (final e in (spec['decisions'] as Map<String, dynamic>).entries)
+              e.key: (e.value as Map).cast<String, dynamic>(),
+          },
+        ),
+        const {},
+        asOf: DateTime.parse('${spec['month']}-30'),
+      );
+
+      final kinds = {for (final tx in result.transactions) tx.id: tx.kind.name};
+      expect(kinds, spec['expected_kinds']);
+      expect(AppTransaction.paidBackById, spec['expected_paid_back']);
+      final expected = (spec['expected'] as List).cast<Map<String, dynamic>>();
+      for (final e in expected) {
+        final card = result.budgetProgress.firstWhere(
+          (p) => p.categoryId == e['category_id'],
+        );
+        expect(card.spent, closeTo((e['spent'] as num).toDouble(), 0.005));
+      }
+      // Each payment from a person waits for the user, with no rule applied;
+      // a linked payback and one with its own category don't.
+      expect(result.autoLowConfidenceReviewTxIds, contains('pb-carl'));
+      expect(
+        result.autoLowConfidenceReviewTxIds,
+        isNot(anyOf(contains('pb-amy-1'), contains('pb-bob'))),
+      );
+      // The split purchase still counts in full until paid back.
+      final dinner = result.transactions.firstWhere((t) => t.id == 'pb-dinner');
+      expect(dinner.sharedAmount, 60);
+      expect(dinner.toGetBack, 0);
+      expect(AppTransaction.purchaseByPaybackId['pb-amy-1']?.id, 'pb-dinner');
+      expect(result.autoReviewedCategoryByTxId['pb-amy-1'], 'Food');
+    });
   });
 }

@@ -7,8 +7,11 @@ open. This is a line-for-line port of the rules the Budget page uses, so the two
              card payments and transfers between own accounts don't count; a refund
              nets against the bucket of the purchase it pays back
   expense  = amount for spend, minus amount for a refund      (AppTransaction.expenseAmount)
-  bucket   = remembered rule for the transaction's rule key (category_match_rules)
+  bucket   = the transaction's own pick (transaction_decisions), else a remembered rule for
+             its rule key (category_match_rules; never for money from a person),
              else classify_by_pfc_signals(...)             (CategoryService.classifyByPfcSignals)
+  payback  = money from a friend the user linked to a purchase: counts as nothing itself and
+             lowers that purchase, in its month and category (Decided.paid_back)
   spent    = sum of amounts per bucket, matched to budget category names by normalized key
 
 tests/data/budget_bucket_contract.json holds cases that BOTH this module's tests and
@@ -22,6 +25,7 @@ confirmed. Those live only in app memory until confirmed into category_match_rul
 
 import datetime as dt
 import re
+from typing import NamedTuple
 
 from supabase_repo import supabase
 
@@ -318,19 +322,57 @@ def row_id(row: dict) -> str:
     return f"{name.lower()}|{amount:.2f}|{str(row.get('date') or '')[:10]}"
 
 
+class Decided(NamedTuple):
+    """How one transaction counts. paid_back is what friends paid back on this purchase
+    (inflows linked to it): it no longer counts as the user's spending."""
+
+    kind: str
+    bucket: str
+    paid_back: float = 0.0
+
+
+def is_p2p_inflow(row: dict) -> bool:
+    """Money from a person (Zelle, Venmo, ...). Never decided by a name-based rule: the same
+    friend may pay back a meal one week and a ride the next."""
+    try:
+        amount = float(row.get("amount") or 0)
+    except (TypeError, ValueError):
+        return False
+    name, description, _, _ = _row_fields(row)
+    return amount < 0 and is_peer_to_peer(f"{name} {description}")
+
+
+def user_category_for_row(
+    row: dict, remembered_rules: dict[str, str], decisions: dict[str, dict] | None = None
+) -> str:
+    """The category the user chose: this transaction's own pick (transaction_decisions),
+    else a remembered rule, except for money from a person, which only takes its own pick."""
+    decision = (decisions or {}).get(row_id(row)) or {}
+    picked = str(decision.get("category") or "").strip()
+    if picked:
+        return picked
+    if is_p2p_inflow(row):
+        return ""
+    return remembered_rules.get(rule_key_for_row(row), "")
+
+
 def classify_rows(
     tx_rows: list[dict],
     remembered_rules: dict[str, str],
     account_type_by_id: dict[str, str] | None = None,
-) -> dict[str, tuple[str, str]]:
-    """{row id: (kind, bucket)} (classifyTransactions). A refund from a merchant with an
-    earlier purchase of at least that amount on the same account, within 120 days, takes
-    that purchase's bucket."""
+    decisions: dict[str, dict] | None = None,
+) -> dict[str, Decided]:
+    """{row id: Decided} (classifyTransactions). A refund from a merchant with an earlier
+    purchase of at least that amount on the same account, within 120 days, takes that
+    purchase's bucket. Money the user linked to a purchase (decisions'
+    paid_back_purchase_id) is a payback: it counts as nothing itself and lowers that
+    purchase, in the purchase's month and category, up to the purchase's amount."""
 
     account_type_by_id = account_type_by_id or {}
+    decisions = decisions or {}
     parsed = []
     for row in tx_rows:
-        user_category = remembered_rules.get(rule_key_for_row(row), "")
+        user_category = user_category_for_row(row, remembered_rules, decisions)
         account_id = _coalesce(row.get("plaid_account_id")).strip()
         kind = row_kind(row, user_category, account_type_by_id.get(account_id, ""))
         try:
@@ -343,24 +385,32 @@ def classify_rows(
         except (TypeError, ValueError):
             signed = 0.0
         amount = abs(signed)
+        rid = row_id(row)
         parsed.append(
             {
                 "transfer_like": looks_like_transfer(name, description, primary, detailed),
                 "signed": signed,
-                "id": row_id(row),
+                "id": rid,
                 "kind": kind,
-                "bucket": budget_bucket_for_row(row, remembered_rules),
+                "bucket": user_category or _pfc_bucket_for_row(row),
                 "user_category": user_category,
                 "account": account_id,
                 "day": day,
                 "amount": amount,
                 "key": merchant_match_key(name),
                 "p2p": is_peer_to_peer(f"{name} {description}"),
+                "pays_back": str(
+                    (decisions.get(rid) or {}).get("paid_back_purchase_id") or ""
+                ).strip()
+                if signed < 0
+                else "",
             }
         )
     _pair_own_transfers(parsed)
     purchases: dict[str, list[dict]] = {}
+    by_id: dict[str, dict] = {}
     for item in parsed:
+        by_id.setdefault(item["id"], item)
         if item["kind"] == "spend":
             purchases.setdefault(item["key"], []).append(item)
     out = {}
@@ -378,8 +428,38 @@ def classify_rows(
                 kind, bucket = "refund", match["bucket"]
         if kind == "internal" and not item["user_category"]:
             bucket = INTERNAL_TRANSFER
-        out[item["id"]] = (kind, bucket)
+        out[item["id"]] = Decided(kind, bucket)
+    _apply_paybacks(parsed, by_id, out)
     return out
+
+
+def _apply_paybacks(parsed: list[dict], by_id: dict[str, dict], out: dict[str, Decided]) -> None:
+    """Oldest payback first, each lowering its purchase until nothing of it is left."""
+    paid: dict[str, float] = {}
+    linked = sorted(
+        (i for i in parsed if i["pays_back"]),
+        key=lambda i: (i["day"] or dt.date.min, i["id"]),
+    )
+    seen: set[str] = set()
+    for item in linked:
+        if item["id"] in seen:
+            continue  # a transaction stored twice pays back once
+        seen.add(item["id"])
+        purchase = by_id.get(item["pays_back"])
+        if purchase is None:
+            # The purchase is outside the loaded rows (older, or on a hidden account): the
+            # money still went back to that purchase, so it doesn't count here either.
+            out[item["id"]] = Decided("payback", out[item["id"]].bucket)
+            continue
+        decided = out[purchase["id"]]
+        if decided.kind != "spend":
+            continue
+        take = min(item["amount"], max(purchase["amount"] - paid.get(purchase["id"], 0.0), 0.0))
+        paid[purchase["id"]] = paid.get(purchase["id"], 0.0) + take
+        out[item["id"]] = Decided("payback", decided.bucket)
+    for purchase_id, amount in paid.items():
+        decided = out[purchase_id]
+        out[purchase_id] = Decided(decided.kind, decided.bucket, round(amount, 2))
 
 
 def looks_like_transfer(name: str, description: str, pfc_primary: str, pfc_detailed: str) -> bool:
@@ -456,19 +536,23 @@ def _matching_purchase(refund: dict, purchases: list[dict]) -> dict | None:
     return best
 
 
-def signed_spend(kind: str, amount: float) -> float:
-    """AppTransaction.expenseAmount: spending positive, a refund negative, else 0."""
+def signed_spend(kind: str, amount: float, paid_back: float = 0.0) -> float:
+    """AppTransaction.expenseAmount: spending positive (less what friends paid back), a
+    refund negative, else 0 (a payback counts through its purchase)."""
     if kind == "spend":
-        return abs(amount)
+        return max(abs(amount) - paid_back, 0.0)
     if kind == "refund":
         return -abs(amount)
     return 0.0
 
 
-def budget_bucket_for_row(row: dict, remembered_rules: dict[str, str]) -> str:
-    remembered = remembered_rules.get(rule_key_for_row(row), "")
-    if remembered:
-        return remembered
+def budget_bucket_for_row(
+    row: dict, remembered_rules: dict[str, str], decisions: dict[str, dict] | None = None
+) -> str:
+    return user_category_for_row(row, remembered_rules, decisions) or _pfc_bucket_for_row(row)
+
+
+def _pfc_bucket_for_row(row: dict) -> str:
     category, _ = classify_by_pfc_signals(
         pfc_primary=_coalesce(row.get("pfc_primary")).strip(),
         pfc_detailed=_coalesce(row.get("pfc_detailed"), row.get("category")).strip(),
@@ -488,13 +572,15 @@ def build_budget_progress(
     remembered_rules: dict[str, str],
     month: str,
     *,
-    kinds: dict[str, tuple[str, str]] | None = None,
+    kinds: dict[str, Decided] | None = None,
+    decisions: dict[str, dict] | None = None,
 ) -> list[dict]:
     """month is 'YYYY-MM'. Output items match what PredictService's burn-rate check reads.
-    kinds is classify_rows(tx_rows, remembered_rules) when the caller already has it."""
+    kinds is classify_rows(tx_rows, remembered_rules, decisions=decisions) when the caller
+    already has it."""
     spent_by_key: dict[str, float] = {}
     if kinds is None:
-        kinds = classify_rows(tx_rows, remembered_rules)
+        kinds = classify_rows(tx_rows, remembered_rules, decisions=decisions)
     counted: set[str] = set()
     for row in tx_rows:
         if not str(row.get("date") or "").startswith(month):
@@ -504,8 +590,8 @@ def build_budget_progress(
         if rid in counted:
             continue
         counted.add(rid)
-        kind, bucket = kinds[rid]
-        amount = signed_spend(kind, float(row["amount"]))
+        kind, bucket, paid_back = kinds[rid]
+        amount = signed_spend(kind, float(row["amount"]), paid_back)
         if amount == 0:
             continue
         key = normalize_category_key(bucket)
@@ -589,7 +675,66 @@ def without_hidden_accounts(rows: list[dict], hidden: set[str]) -> list[dict]:
     return [r for r in rows if str(r.get("plaid_account_id") or "").strip() not in hidden]
 
 
-def _fetch_month_transactions(user_id: str, month: str) -> list[dict]:
+def fetch_decisions(user_id: str, db=None) -> dict[str, dict]:
+    """{plaid_transaction_id: row} of the user's per-transaction choices
+    (transaction_decisions). Empty when the table isn't there yet
+    (db/migrations/017_transaction_decisions.sql not applied)."""
+    try:
+        rows = (
+            (db or supabase)
+            .table("transaction_decisions")
+            .select("plaid_transaction_id,category,paid_back_purchase_id,shared_amount")
+            .eq("user_id", user_id)
+            .execute()
+        ).data or []
+    except Exception:
+        return {}
+    out = {}
+    for r in rows:
+        tx_id = str(r.get("plaid_transaction_id") or "").strip()
+        if tx_id:
+            out[tx_id] = r
+    return out
+
+
+_TX_SELECT = (
+    "plaid_transaction_id,plaid_account_id,amount,date,name,merchant_name,category,"
+    "pfc_primary,pfc_detailed"
+)
+
+
+def with_linked_paybacks(
+    user_id: str, rows: list[dict], decisions: dict[str, dict], hidden: set[str], db=None
+) -> list[dict]:
+    """rows plus the paybacks linked to their purchases that fall outside them (a friend
+    paying back a September dinner in November), so the purchase is lowered."""
+    have = {row_id(r) for r in rows}
+    missing = [
+        tx_id
+        for tx_id, d in decisions.items()
+        if tx_id not in have and str(d.get("paid_back_purchase_id") or "").strip() in have
+    ]
+    if not missing:
+        return rows
+    extra: list[dict] = []
+    for start in range(0, len(missing), 100):
+        extra.extend(
+            (
+                (db or supabase)
+                .table("transactions")
+                .select(_TX_SELECT)
+                .eq("user_id", user_id)
+                .in_("plaid_transaction_id", missing[start : start + 100])
+                .execute()
+            ).data
+            or []
+        )
+    return rows + without_hidden_accounts(extra, hidden)
+
+
+def _fetch_month_transactions(
+    user_id: str, month: str, decisions: dict[str, dict] | None = None
+) -> list[dict]:
     """The month's transactions plus the few months before, for refund matching, and the
     first days after, so a move between own accounts at month end still pairs."""
     end = dt.date.fromisoformat(_next_month_start(month)) + dt.timedelta(days=PAIR_LOOKAHEAD_DAYS)
@@ -598,10 +743,7 @@ def _fetch_month_transactions(user_id: str, month: str) -> list[dict]:
     while True:
         page = (
             supabase.table("transactions")
-            .select(
-                "plaid_transaction_id,plaid_account_id,amount,date,name,merchant_name,category,"
-                "pfc_primary,pfc_detailed"
-            )
+            .select(_TX_SELECT)
             .eq("user_id", user_id)
             .gte("date", f"{_months_before(month, REFUND_LOOKBACK_MONTHS)}-01")
             .lt("date", end.isoformat())
@@ -611,7 +753,9 @@ def _fetch_month_transactions(user_id: str, month: str) -> list[dict]:
         ).data or []
         rows.extend(page)
         if len(page) < _PAGE_SIZE:
-            return without_hidden_accounts(rows, fetch_hidden_account_ids(user_id))
+            hidden = fetch_hidden_account_ids(user_id)
+            rows = without_hidden_accounts(rows, hidden)
+            return with_linked_paybacks(user_id, rows, decisions or {}, hidden)
         start += _PAGE_SIZE
 
 
@@ -638,13 +782,15 @@ def compute_budget_progress(user_id: str, month: str) -> list[dict]:
         .eq("user_id", user_id)
         .execute()
     ).data or []
+    decisions = fetch_decisions(user_id)
     return build_budget_progress(
         budget_rows=budget_rows,
         category_names_by_id={str(c["id"]): str(c.get("name") or "") for c in categories},
-        tx_rows=_fetch_month_transactions(user_id, month),
+        tx_rows=_fetch_month_transactions(user_id, month, decisions),
         remembered_rules={
             str(r.get("rule_key") or "").strip(): str(r.get("category") or "").strip()
             for r in rules
         },
         month=month,
+        decisions=decisions,
     )

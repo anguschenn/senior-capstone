@@ -317,6 +317,32 @@
       "category": null,
       "pfc_confidence": "high",
       "pending": false
+    },
+    {
+      "plaid_transaction_id": "tx-23",
+      "plaid_account_id": "acc-checking",
+      "amount": -50,
+      "date": "2026-10-04",
+      "name": "Zelle payment from Sam",
+      "merchant_name": "Zelle payment from Sam",
+      "pfc_primary": "TRANSFER_IN",
+      "pfc_detailed": "TRANSFER_IN_DEPOSIT",
+      "category": null,
+      "pfc_confidence": "high",
+      "pending": false
+    },
+    {
+      "plaid_transaction_id": "tx-24",
+      "plaid_account_id": "acc-checking",
+      "amount": -20,
+      "date": "2026-10-06",
+      "name": "Venmo from Alex",
+      "merchant_name": "Venmo from Alex",
+      "pfc_primary": "TRANSFER_IN",
+      "pfc_detailed": "TRANSFER_IN_DEPOSIT",
+      "category": null,
+      "pfc_confidence": "high",
+      "pending": false
     }
   ],
   "cases": [
@@ -350,27 +376,27 @@
         "scope_label": "Overall (All Accounts)",
         "account_type": "",
         "data_coverage": {
-          "transaction_count_total": 22,
+          "transaction_count_total": 24,
           "range_start": "2026-04-15",
           "range_end": "2026-10-10",
           "days_span": 179,
-          "active_days": 22,
-          "coverage_ratio_recent_30d": 0.4666666666666667
+          "active_days": 23,
+          "coverage_ratio_recent_30d": 0.5
         },
         "confidence": {
-          "score": 0.7068749999999999,
-          "overall": "medium",
+          "score": 0.7518749999999998,
+          "overall": "high",
           "reasons": [],
           "components": {
-            "tx_count_recent_30d": 0.7,
-            "coverage_recent_30d": 0.4666666666666667,
+            "tx_count_recent_30d": 0.8,
+            "coverage_recent_30d": 0.5,
             "history_span": 1.0,
             "noise_penalty_adjusted": 0.8125
           }
         },
         "warnings": [],
         "category_index": {
-          "Food": 288.9,
+          "Food": 218.9,
           "Entertainment": 6.25,
           "Shopping": 165.0,
           "Fees & Transfers": 144.3,
@@ -392,44 +418,44 @@
         "windows_anchor": {
           "last_7d": {
             "income": 0.0,
-            "expenses": 33.75,
-            "tx_count": 6
+            "expenses": 13.75,
+            "tx_count": 8
           },
           "last_30d": {
             "income": 4000.0,
-            "expenses": 543.93,
-            "tx_count": 14,
+            "expenses": 473.93,
+            "tx_count": 16,
             "expense_tx_count": 10
           },
           "last_90d": {
             "income": 5950.0,
-            "expenses": 2174.7300000000005,
-            "tx_count": 18
+            "expenses": 2104.73,
+            "tx_count": 20
           }
         },
         "windows_rolling": {
           "last_7d": {
             "income": 0.0,
-            "expenses": 33.75,
-            "tx_count": 6
+            "expenses": 13.75,
+            "tx_count": 8
           },
           "last_30d": {
             "income": 4000.0,
-            "expenses": 543.93,
-            "tx_count": 14,
+            "expenses": 473.93,
+            "tx_count": 16,
             "expense_tx_count": 10
           },
           "last_90d": {
             "income": 5950.0,
-            "expenses": 2174.7300000000005,
-            "tx_count": 18
+            "expenses": 2104.73,
+            "tx_count": 20
           }
         },
         "year_index": {
           "2026": {
             "income": 7850.0,
-            "expenses": 2307.7300000000005,
-            "tx_count": 22,
+            "expenses": 2237.7300000000005,
+            "tx_count": 24,
             "largest": [
               {
                 "name": "Rent",
@@ -439,7 +465,7 @@
               },
               {
                 "name": "Whole Foods",
-                "amount": 210.4,
+                "amount": 160.4,
                 "date": "2026-09-12",
                 "category": "Food"
               },
@@ -565,7 +591,7 @@
           },
           "2026-09": {
             "income": 2000.0,
-            "expenses": 1870.19,
+            "expenses": 1820.19,
             "card_payments_in": 0.0,
             "card_payments_out": 0.0,
             "tx_count": 6,
@@ -576,7 +602,7 @@
             },
             "categories": {
               "Bills & Utilities": 1500.0,
-              "Food": 210.4,
+              "Food": 160.4,
               "Fees & Transfers": 144.3,
               "Subscriptions": 15.49
             },
@@ -589,7 +615,7 @@
               },
               {
                 "name": "Whole Foods",
-                "amount": 210.4,
+                "amount": 160.4,
                 "date": "2026-09-12",
                 "category": "Food"
               },
@@ -603,10 +629,10 @@
           },
           "2026-10": {
             "income": 2000.0,
-            "expenses": 173.74,
+            "expenses": 153.74,
             "card_payments_in": 500.0,
             "card_payments_out": 500.0,
-            "tx_count": 9,
+            "tx_count": 11,
             "expense_tx_count": 6,
             "top_category": {
               "name": "Shopping",
@@ -614,7 +640,7 @@
             },
             "categories": {
               "Shopping": 90.0,
-              "Food": 45.5,
+              "Food": 25.5,
               "Subscriptions": 19.99,
               "Transport": 12.0,
               "Entertainment": 6.25
@@ -674,7 +700,7 @@
           },
           "2026-09-12": {
             "income": 0.0,
-            "expenses": 210.4,
+            "expenses": 160.4,
             "tx_count": 1
           },
           "2026-09-15": {
@@ -712,6 +738,11 @@
             "expenses": 120.0,
             "tx_count": 1
           },
+          "2026-10-04": {
+            "income": 0.0,
+            "expenses": 0.0,
+            "tx_count": 1
+          },
           "2026-10-05": {
             "income": 0.0,
             "expenses": -30.0,
@@ -719,8 +750,8 @@
           },
           "2026-10-06": {
             "income": 0.0,
-            "expenses": 0.0,
-            "tx_count": 1
+            "expenses": -20.0,
+            "tx_count": 2
           },
           "2026-10-07": {
             "income": 0.0,
@@ -764,6 +795,12 @@
               "tx_count": 1
             },
             {
+              "date": "2026-10-04",
+              "income": 0.0,
+              "expenses": 0.0,
+              "tx_count": 1
+            },
+            {
               "date": "2026-10-05",
               "income": 0.0,
               "expenses": -30.0,
@@ -772,8 +809,8 @@
             {
               "date": "2026-10-06",
               "income": 0.0,
-              "expenses": 0.0,
-              "tx_count": 1
+              "expenses": -20.0,
+              "tx_count": 2
             },
             {
               "date": "2026-10-07",
@@ -810,7 +847,7 @@
             {
               "date": "2026-09-12",
               "income": 0.0,
-              "expenses": 210.4,
+              "expenses": 160.4,
               "tx_count": 1
             },
             {
@@ -887,11 +924,11 @@
           "highest_spending_months": [
             {
               "month": "2026-09",
-              "expenses": 1870.19
+              "expenses": 1820.19
             },
             {
               "month": "2026-10",
-              "expenses": 173.74
+              "expenses": 153.74
             },
             {
               "month": "2026-07",
@@ -921,7 +958,7 @@
             },
             {
               "date": "2026-09-12",
-              "expenses": 210.4
+              "expenses": 160.4
             },
             {
               "date": "2026-10-03",
@@ -959,18 +996,18 @@
         },
         "totals": {
           "income_30d": 4000.0,
-          "expenses_30d": 543.93,
-          "net_30d": 3456.07,
-          "tx_count_30d": 14,
+          "expenses_30d": 473.93,
+          "net_30d": 3526.07,
+          "tx_count_30d": 16,
           "expense_tx_count_30d": 10,
           "income_month": 2000.0,
-          "expenses_month": 173.74,
-          "net_month": 1826.26
+          "expenses_month": 153.74,
+          "net_month": 1846.26
         },
         "top_expense_categories": [
           {
             "category": "Food",
-            "amount": 255.9
+            "amount": 185.9
           },
           {
             "category": "Fees & Transfers",
@@ -1027,12 +1064,12 @@
             "account_id": "acc-card"
           },
           {
-            "id": "tx-08",
+            "id": "tx-24",
             "date": "2026-10-06",
-            "name": "Payment to Chase card",
-            "amount": 500.0,
-            "category": "Internal Transfer",
-            "type": "LOAN_PAYMENTS",
+            "name": "Venmo from Alex",
+            "amount": -20.0,
+            "category": "Food",
+            "type": "TRANSFER_IN",
             "account_id": "acc-checking"
           }
         ],
@@ -1058,14 +1095,14 @@
               "limit": 100
             }
           ],
-          "spent_total": 173.74
+          "spent_total": 153.74
         },
         "annual_summary": {
           "year": 2026,
           "totals": {
             "income_year": 7850.0,
-            "expenses_year": 2307.7300000000005,
-            "net_year": 5542.2699999999995,
+            "expenses_year": 2237.7300000000005,
+            "net_year": 5612.2699999999995,
             "expense_tx_count_year": 16
           },
           "monthly_breakdown": [
@@ -1097,12 +1134,12 @@
             {
               "month": "2026-09",
               "income": 2000.0,
-              "expenses": 1870.19
+              "expenses": 1820.19
             },
             {
               "month": "2026-10",
               "income": 2000.0,
-              "expenses": 173.74
+              "expenses": 153.74
             }
           ],
           "top_expense_categories_year": [
@@ -1112,7 +1149,7 @@
             },
             {
               "category": "Food",
-              "amount": 288.9
+              "amount": 218.9
             },
             {
               "category": "Shopping",
@@ -1142,11 +1179,11 @@
           "monthly_expense_ranking": [
             {
               "month": "2026-09",
-              "expenses": 1870.19
+              "expenses": 1820.19
             },
             {
               "month": "2026-10",
-              "expenses": 173.74
+              "expenses": 153.74
             },
             {
               "month": "2026-07",
@@ -1197,13 +1234,13 @@
             },
             {
               "month": "2026-09",
-              "expenses": 1870.19,
-              "mom_change_pct": 43.528333333333336
+              "expenses": 1820.19,
+              "mom_change_pct": 42.337857142857146
             },
             {
               "month": "2026-10",
-              "expenses": 173.74,
-              "mom_change_pct": -0.9071003480929745
+              "expenses": 153.74,
+              "mom_change_pct": -0.91553629016751
             }
           ],
           "monthly_top_categories": [
@@ -1273,7 +1310,7 @@
             },
             {
               "date": "2026-09-12",
-              "amount": 210.4
+              "amount": 160.4
             },
             {
               "date": "2026-09-15",
@@ -1304,12 +1341,16 @@
               "amount": 120.0
             },
             {
+              "date": "2026-10-04",
+              "amount": 0.0
+            },
+            {
               "date": "2026-10-05",
               "amount": -30.0
             },
             {
               "date": "2026-10-06",
-              "amount": 0.0
+              "amount": -20.0
             },
             {
               "date": "2026-10-07",
@@ -1338,7 +1379,7 @@
             {
               "date": "2026-09-12",
               "name": "Whole Foods",
-              "amount": 210.4,
+              "amount": 160.4,
               "category": "Food"
             },
             {
@@ -1410,7 +1451,7 @@
         },
         "warnings": [],
         "category_index": {
-          "Food": 288.9,
+          "Food": 238.9,
           "Entertainment": 6.25,
           "Shopping": 165.0,
           "Subscriptions": 35.48,
@@ -1434,13 +1475,13 @@
           },
           "last_30d": {
             "income": 0.0,
-            "expenses": 225.89000000000001,
+            "expenses": 175.89000000000001,
             "tx_count": 2,
             "expense_tx_count": 2
           },
           "last_90d": {
             "income": 0.0,
-            "expenses": 356.69,
+            "expenses": 306.69,
             "tx_count": 4
           }
         },
@@ -1452,25 +1493,25 @@
           },
           "last_30d": {
             "income": 0.0,
-            "expenses": 399.63,
+            "expenses": 349.63,
             "tx_count": 9,
             "expense_tx_count": 7
           },
           "last_90d": {
             "income": 0.0,
-            "expenses": 530.43,
+            "expenses": 480.43,
             "tx_count": 11
           }
         },
         "year_index": {
           "2026": {
             "income": 0.0,
-            "expenses": 638.43,
+            "expenses": 588.43,
             "tx_count": 13,
             "largest": [
               {
                 "name": "Whole Foods",
-                "amount": 210.4,
+                "amount": 160.4,
                 "date": "2026-09-12",
                 "category": "Food"
               },
@@ -1584,23 +1625,23 @@
           },
           "2026-09": {
             "income": 0.0,
-            "expenses": 225.89000000000001,
+            "expenses": 175.89000000000001,
             "card_payments_in": 0.0,
             "card_payments_out": 0.0,
             "tx_count": 2,
             "expense_tx_count": 2,
             "top_category": {
               "name": "Food",
-              "amount": 210.4
+              "amount": 160.4
             },
             "categories": {
-              "Food": 210.4,
+              "Food": 160.4,
               "Subscriptions": 15.49
             },
             "largest": [
               {
                 "name": "Whole Foods",
-                "amount": 210.4,
+                "amount": 160.4,
                 "date": "2026-09-12",
                 "category": "Food"
               },
@@ -1670,7 +1711,7 @@
           },
           "2026-09-12": {
             "income": 0.0,
-            "expenses": 210.4,
+            "expenses": 160.4,
             "tx_count": 1
           },
           "2026-09-18": {
@@ -1763,7 +1804,7 @@
             {
               "date": "2026-09-12",
               "income": 0.0,
-              "expenses": 210.4,
+              "expenses": 160.4,
               "tx_count": 1
             },
             {
@@ -1810,7 +1851,7 @@
           "highest_spending_months": [
             {
               "month": "2026-09",
-              "expenses": 225.89000000000001
+              "expenses": 175.89000000000001
             },
             {
               "month": "2026-10",
@@ -1836,7 +1877,7 @@
           "highest_spending_days_recent": [
             {
               "date": "2026-09-12",
-              "expenses": 210.4
+              "expenses": 160.4
             },
             {
               "date": "2026-10-03",
@@ -1878,18 +1919,18 @@
         },
         "totals": {
           "income_30d": 0.0,
-          "expenses_30d": 225.89000000000001,
-          "net_30d": -225.89000000000001,
+          "expenses_30d": 175.89000000000001,
+          "net_30d": -175.89000000000001,
           "tx_count_30d": 2,
           "expense_tx_count_30d": 2,
           "income_month": 0.0,
-          "expenses_month": 225.89000000000001,
-          "net_month": -225.89000000000001
+          "expenses_month": 175.89000000000001,
+          "net_month": -175.89000000000001
         },
         "top_expense_categories": [
           {
             "category": "Food",
-            "amount": 210.4
+            "amount": 160.4
           },
           {
             "category": "Subscriptions",
@@ -1965,14 +2006,14 @@
               "limit": 50
             }
           ],
-          "spent_total": 225.89
+          "spent_total": 175.89
         },
         "annual_summary": {
           "year": 2026,
           "totals": {
             "income_year": 0.0,
-            "expenses_year": 638.43,
-            "net_year": -638.43,
+            "expenses_year": 588.43,
+            "net_year": -588.43,
             "expense_tx_count_year": 11
           },
           "monthly_breakdown": [
@@ -1999,7 +2040,7 @@
             {
               "month": "2026-09",
               "income": 0.0,
-              "expenses": 225.89000000000001
+              "expenses": 175.89000000000001
             },
             {
               "month": "2026-10",
@@ -2010,7 +2051,7 @@
           "top_expense_categories_year": [
             {
               "category": "Food",
-              "amount": 288.9
+              "amount": 238.9
             },
             {
               "category": "Shopping",
@@ -2032,7 +2073,7 @@
           "monthly_expense_ranking": [
             {
               "month": "2026-09",
-              "expenses": 225.89000000000001
+              "expenses": 175.89000000000001
             },
             {
               "month": "2026-10",
@@ -2078,13 +2119,13 @@
             },
             {
               "month": "2026-09",
-              "expenses": 225.89000000000001,
-              "mom_change_pct": 4.378333333333334
+              "expenses": 175.89000000000001,
+              "mom_change_pct": 3.187857142857143
             },
             {
               "month": "2026-10",
               "expenses": 173.74,
-              "mom_change_pct": -0.23086458010536104
+              "mom_change_pct": -0.012223548808914695
             }
           ],
           "monthly_top_categories": [
@@ -2111,7 +2152,7 @@
             {
               "month": "2026-09",
               "category": "Food",
-              "amount": 210.4
+              "amount": 160.4
             },
             {
               "month": "2026-10",
@@ -2138,7 +2179,7 @@
             },
             {
               "date": "2026-09-12",
-              "amount": 210.4
+              "amount": 160.4
             },
             {
               "date": "2026-09-18",
@@ -2177,7 +2218,7 @@
             {
               "date": "2026-09-12",
               "name": "Whole Foods",
-              "amount": 210.4,
+              "amount": 160.4,
               "category": "Food"
             },
             {
@@ -2222,27 +2263,27 @@
         "scope_label": "Overall (All Accounts)",
         "account_type": "",
         "data_coverage": {
-          "transaction_count_total": 22,
+          "transaction_count_total": 24,
           "range_start": "2026-04-15",
           "range_end": "2026-10-10",
           "days_span": 179,
-          "active_days": 22,
-          "coverage_ratio_recent_30d": 0.4666666666666667
+          "active_days": 23,
+          "coverage_ratio_recent_30d": 0.5
         },
         "confidence": {
-          "score": 0.7068749999999999,
-          "overall": "medium",
+          "score": 0.7518749999999998,
+          "overall": "high",
           "reasons": [],
           "components": {
-            "tx_count_recent_30d": 0.7,
-            "coverage_recent_30d": 0.4666666666666667,
+            "tx_count_recent_30d": 0.8,
+            "coverage_recent_30d": 0.5,
             "history_span": 1.0,
             "noise_penalty_adjusted": 0.8125
           }
         },
         "warnings": [],
         "category_index": {
-          "Food": 288.9,
+          "Food": 218.9,
           "Entertainment": 6.25,
           "Shopping": 165.0,
           "Fees & Transfers": 144.3,
@@ -2282,26 +2323,26 @@
         "windows_rolling": {
           "last_7d": {
             "income": 0.0,
-            "expenses": 33.75,
-            "tx_count": 6
+            "expenses": 13.75,
+            "tx_count": 8
           },
           "last_30d": {
             "income": 4000.0,
-            "expenses": 543.93,
-            "tx_count": 14,
+            "expenses": 473.93,
+            "tx_count": 16,
             "expense_tx_count": 10
           },
           "last_90d": {
             "income": 5950.0,
-            "expenses": 2174.7300000000005,
-            "tx_count": 18
+            "expenses": 2104.73,
+            "tx_count": 20
           }
         },
         "year_index": {
           "2026": {
             "income": 7850.0,
-            "expenses": 2307.7300000000005,
-            "tx_count": 22,
+            "expenses": 2237.7300000000005,
+            "tx_count": 24,
             "largest": [
               {
                 "name": "Rent",
@@ -2311,7 +2352,7 @@
               },
               {
                 "name": "Whole Foods",
-                "amount": 210.4,
+                "amount": 160.4,
                 "date": "2026-09-12",
                 "category": "Food"
               },
@@ -2437,7 +2478,7 @@
           },
           "2026-09": {
             "income": 2000.0,
-            "expenses": 1870.19,
+            "expenses": 1820.19,
             "card_payments_in": 0.0,
             "card_payments_out": 0.0,
             "tx_count": 6,
@@ -2448,7 +2489,7 @@
             },
             "categories": {
               "Bills & Utilities": 1500.0,
-              "Food": 210.4,
+              "Food": 160.4,
               "Fees & Transfers": 144.3,
               "Subscriptions": 15.49
             },
@@ -2461,7 +2502,7 @@
               },
               {
                 "name": "Whole Foods",
-                "amount": 210.4,
+                "amount": 160.4,
                 "date": "2026-09-12",
                 "category": "Food"
               },
@@ -2475,10 +2516,10 @@
           },
           "2026-10": {
             "income": 2000.0,
-            "expenses": 173.74,
+            "expenses": 153.74,
             "card_payments_in": 500.0,
             "card_payments_out": 500.0,
-            "tx_count": 9,
+            "tx_count": 11,
             "expense_tx_count": 6,
             "top_category": {
               "name": "Shopping",
@@ -2486,7 +2527,7 @@
             },
             "categories": {
               "Shopping": 90.0,
-              "Food": 45.5,
+              "Food": 25.5,
               "Subscriptions": 19.99,
               "Transport": 12.0,
               "Entertainment": 6.25
@@ -2556,7 +2597,7 @@
           },
           "2026-09-12": {
             "income": 0.0,
-            "expenses": 210.4,
+            "expenses": 160.4,
             "tx_count": 1
           },
           "2026-09-15": {
@@ -2594,6 +2635,11 @@
             "expenses": 120.0,
             "tx_count": 1
           },
+          "2026-10-04": {
+            "income": 0.0,
+            "expenses": 0.0,
+            "tx_count": 1
+          },
           "2026-10-05": {
             "income": 0.0,
             "expenses": -30.0,
@@ -2601,8 +2647,8 @@
           },
           "2026-10-06": {
             "income": 0.0,
-            "expenses": 0.0,
-            "tx_count": 1
+            "expenses": -20.0,
+            "tx_count": 2
           },
           "2026-10-07": {
             "income": 0.0,
@@ -2646,6 +2692,12 @@
               "tx_count": 1
             },
             {
+              "date": "2026-10-04",
+              "income": 0.0,
+              "expenses": 0.0,
+              "tx_count": 1
+            },
+            {
               "date": "2026-10-05",
               "income": 0.0,
               "expenses": -30.0,
@@ -2654,8 +2706,8 @@
             {
               "date": "2026-10-06",
               "income": 0.0,
-              "expenses": 0.0,
-              "tx_count": 1
+              "expenses": -20.0,
+              "tx_count": 2
             },
             {
               "date": "2026-10-07",
@@ -2692,7 +2744,7 @@
             {
               "date": "2026-09-12",
               "income": 0.0,
-              "expenses": 210.4,
+              "expenses": 160.4,
               "tx_count": 1
             },
             {
@@ -2769,11 +2821,11 @@
           "highest_spending_months": [
             {
               "month": "2026-09",
-              "expenses": 1870.19
+              "expenses": 1820.19
             },
             {
               "month": "2026-10",
-              "expenses": 173.74
+              "expenses": 153.74
             },
             {
               "month": "2026-07",
@@ -2803,7 +2855,7 @@
             },
             {
               "date": "2026-09-12",
-              "expenses": 210.4
+              "expenses": 160.4
             },
             {
               "date": "2026-10-03",
@@ -2846,8 +2898,8 @@
           "tx_count_30d": 0,
           "expense_tx_count_30d": 0,
           "income_month": 7850.0,
-          "expenses_month": 2307.73,
-          "net_month": 5542.27
+          "expenses_month": 2237.73,
+          "net_month": 5612.27
         },
         "top_expense_categories": [],
         "recent_transactions": [
@@ -2888,12 +2940,12 @@
             "account_id": "acc-card"
           },
           {
-            "id": "tx-08",
+            "id": "tx-24",
             "date": "2026-10-06",
-            "name": "Payment to Chase card",
-            "amount": 500.0,
-            "category": "Internal Transfer",
-            "type": "LOAN_PAYMENTS",
+            "name": "Venmo from Alex",
+            "amount": -20.0,
+            "category": "Food",
+            "type": "TRANSFER_IN",
             "account_id": "acc-checking"
           }
         ],
@@ -2906,8 +2958,8 @@
           "year": 2026,
           "totals": {
             "income_year": 7850.0,
-            "expenses_year": 2307.7300000000005,
-            "net_year": 5542.2699999999995,
+            "expenses_year": 2237.7300000000005,
+            "net_year": 5612.2699999999995,
             "expense_tx_count_year": 16
           },
           "monthly_breakdown": [
@@ -2939,12 +2991,12 @@
             {
               "month": "2026-09",
               "income": 2000.0,
-              "expenses": 1870.19
+              "expenses": 1820.19
             },
             {
               "month": "2026-10",
               "income": 2000.0,
-              "expenses": 173.74
+              "expenses": 153.74
             }
           ],
           "top_expense_categories_year": [
@@ -2954,7 +3006,7 @@
             },
             {
               "category": "Food",
-              "amount": 288.9
+              "amount": 218.9
             },
             {
               "category": "Shopping",
@@ -2984,11 +3036,11 @@
           "monthly_expense_ranking": [
             {
               "month": "2026-09",
-              "expenses": 1870.19
+              "expenses": 1820.19
             },
             {
               "month": "2026-10",
-              "expenses": 173.74
+              "expenses": 153.74
             },
             {
               "month": "2026-07",
@@ -3039,13 +3091,13 @@
             },
             {
               "month": "2026-09",
-              "expenses": 1870.19,
-              "mom_change_pct": 43.528333333333336
+              "expenses": 1820.19,
+              "mom_change_pct": 42.337857142857146
             },
             {
               "month": "2026-10",
-              "expenses": 173.74,
-              "mom_change_pct": -0.9071003480929745
+              "expenses": 153.74,
+              "mom_change_pct": -0.91553629016751
             }
           ],
           "monthly_top_categories": [
@@ -3115,7 +3167,7 @@
             },
             {
               "date": "2026-09-12",
-              "amount": 210.4
+              "amount": 160.4
             },
             {
               "date": "2026-09-15",
@@ -3146,12 +3198,16 @@
               "amount": 120.0
             },
             {
+              "date": "2026-10-04",
+              "amount": 0.0
+            },
+            {
               "date": "2026-10-05",
               "amount": -30.0
             },
             {
               "date": "2026-10-06",
-              "amount": 0.0
+              "amount": -20.0
             },
             {
               "date": "2026-10-07",
@@ -3180,7 +3236,7 @@
             {
               "date": "2026-09-12",
               "name": "Whole Foods",
-              "amount": 210.4,
+              "amount": 160.4,
               "category": "Food"
             },
             {
@@ -3205,5 +3261,16 @@
         }
       }
     }
-  ]
+  ],
+  "decisions": {
+    "tx-12": {
+      "shared_amount": 100
+    },
+    "tx-23": {
+      "paid_back_purchase_id": "tx-12"
+    },
+    "tx-24": {
+      "category": "Food"
+    }
+  }
 }

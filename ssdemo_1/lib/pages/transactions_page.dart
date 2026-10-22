@@ -16,6 +16,7 @@ class TransactionsPage extends StatefulWidget {
     required this.onMonthChanged,
     required this.reviewedCategoryByTxId,
     required this.onTransactionCategorySelected,
+    this.onTransactionTap,
     this.aiCategorySuggestUri,
     this.apiKey,
     this.accessToken,
@@ -29,6 +30,11 @@ class TransactionsPage extends StatefulWidget {
   final Map<String, String> reviewedCategoryByTxId;
   final void Function(AppTransaction tx, String category)
   onTransactionCategorySelected;
+
+  /// Opens what the user can do with a transaction (split a purchase, link
+  /// a friend's payment to one).
+  final void Function(BuildContext context, AppTransaction tx)?
+  onTransactionTap;
   final Uri? aiCategorySuggestUri;
   final String? apiKey;
   final String? accessToken;
@@ -242,6 +248,9 @@ class _TransactionsPageState extends State<TransactionsPage> {
                   apiKey: widget.apiKey,
                   accessToken: widget.accessToken,
                   showDate: sortKey != ActivitySortKey.date,
+                  onTap: widget.onTransactionTap == null
+                      ? null
+                      : () => widget.onTransactionTap!(context, tx),
                 ),
               ],
             ],
