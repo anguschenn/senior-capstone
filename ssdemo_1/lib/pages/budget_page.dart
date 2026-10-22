@@ -818,8 +818,9 @@ class _BudgetPageState extends State<BudgetPage> {
     final out = <String, List<AppTransaction>>{};
     for (final tx in widget.transactions) {
       if (tx.expenseAmount == 0) continue;
+      // Month view with "All Year" picked covers the year, as the cards do.
       if (viewMode == BudgetViewMode.month &&
-          (tx.date.year != focus.year || tx.date.month != focus.month)) {
+          !transactionInSelectedPeriod(tx, focus)) {
         continue;
       }
       if (viewMode == BudgetViewMode.year && tx.date.year != focus.year) {

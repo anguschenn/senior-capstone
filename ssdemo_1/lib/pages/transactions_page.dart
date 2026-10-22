@@ -119,8 +119,8 @@ class _TransactionsPageState extends State<TransactionsPage> {
 
     final periodTransactions = widget.transactions.where((tx) {
       if (viewMode == ActivityViewMode.month) {
-        return tx.date.year == selectedMonth.year &&
-            tx.date.month == selectedMonth.month;
+        // "All Year" picked from the month picker covers the whole year.
+        return transactionInSelectedPeriod(tx, selectedMonth);
       }
       if (viewMode == ActivityViewMode.year) {
         return tx.date.year == selectedMonth.year;
