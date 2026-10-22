@@ -39,6 +39,19 @@ from .time_scope_resolver import (
 )
 from .validators import clamp_str, sanitize_history, sanitize_spending_summary
 
+# Asks with one right answer from the user's data: these can be answered
+# deterministically once their period is known.
+FACTUAL_INTENTS = frozenset(
+    {
+        "amount_lookup",
+        "top_category_lookup",
+        "month_overview",
+        "compare_periods",
+        "recent_transactions",
+        "category_spending",
+    }
+)
+
 
 class _CategoryFigures(dict):
     """{category: figures} that also carries each category's whole amounts in .bases."""
@@ -1701,14 +1714,7 @@ class ChatService:
         return "llm"
 
     def _is_factual_intent(self, intent):
-        return intent in {
-            "amount_lookup",
-            "top_category_lookup",
-            "month_overview",
-            "compare_periods",
-            "recent_transactions",
-            "category_spending",
-        }
+        return intent in FACTUAL_INTENTS
 
     def _should_use_deterministic(self, intent, query_spec):
         """Strict deterministic gate: only obvious factual asks."""
@@ -1739,18 +1745,10 @@ class ChatService:
         mode = (
             model_mode if isinstance(model_mode, str) and model_mode in allowed else fallback_mode
         )
-        factual_intents = {
-            "amount_lookup",
-            "top_category_lookup",
-            "month_overview",
-            "compare_periods",
-            "recent_transactions",
-            "category_spending",
-        }
         query_complete = self._is_query_complete(query_spec, intent)
         if mode == "deterministic" and not query_complete:
             return "clarification"
-        if mode == "llm" and intent in factual_intents and query_complete:
+        if mode == "llm" and intent in FACTUAL_INTENTS and query_complete:
             return "hybrid"
         return mode
 
@@ -1782,15 +1780,7 @@ class ChatService:
         """Check whether query spec has enough period context for factual execution."""
         if not isinstance(query_spec, dict):
             return False
-        factual = {
-            "amount_lookup",
-            "top_category_lookup",
-            "month_overview",
-            "compare_periods",
-            "recent_transactions",
-            "category_spending",
-        }
-        if intent not in factual:
+        if intent not in FACTUAL_INTENTS:
             return True
         period_type = clamp_str(query_spec.get("period_type", ""), 24) or "unknown"
         period_key = clamp_str(query_spec.get("period_key", ""), 64)
@@ -2024,16 +2014,8 @@ class ChatService:
 
     def _should_clarify(self, intent_confidence, needs_clarification, query_spec, intent):
         """Calibrated clarification gate based on confidence and query completeness."""
-        factual_intents = {
-            "amount_lookup",
-            "top_category_lookup",
-            "month_overview",
-            "compare_periods",
-            "recent_transactions",
-            "category_spending",
-        }
         query_complete = self._is_query_complete(query_spec, intent)
-        if intent not in factual_intents:
+        if intent not in FACTUAL_INTENTS:
             return intent_confidence < self.MID_CONFIDENCE_THRESHOLD and needs_clarification
         if intent_confidence >= self.HIGH_CONFIDENCE_THRESHOLD:
             return not query_complete and needs_clarification
@@ -2533,17 +2515,9 @@ class ChatService:
                 intent_source = "rule"
                 intent_confidence = max(intent_confidence, 0.95)
                 needs_clarification = False
-        factual_intents = {
-            "amount_lookup",
-            "top_category_lookup",
-            "month_overview",
-            "compare_periods",
-            "recent_transactions",
-            "category_spending",
-        }
         should_promote_amount = (
             self._asks_amount(message)
-            and intent not in factual_intents
+            and intent not in FACTUAL_INTENTS
             and self._is_strict_income_amount_query(message)
         )
         if should_promote_amount:
