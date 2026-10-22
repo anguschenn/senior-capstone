@@ -234,11 +234,7 @@ class _AuthPageState extends State<AuthPage> {
                         const Text(
                           'SmartSpend',
                           textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 34,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.9,
-                          ),
+                          style: largeTitleStyle,
                         ),
                         const SizedBox(height: 6),
                         Text(

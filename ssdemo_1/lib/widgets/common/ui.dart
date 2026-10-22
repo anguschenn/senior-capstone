@@ -9,6 +9,13 @@ import '../../app/app_theme.dart';
 /// Shared building blocks for the Wallet look: large titles, rounded
 /// sections, a segmented control, the scope line and the ✦ "ask" chip.
 
+/// The big bold page title, as in [LargeTitle].
+const largeTitleStyle = TextStyle(
+  fontSize: 34,
+  fontWeight: FontWeight.w700,
+  letterSpacing: -0.9,
+);
+
 class LargeTitle extends StatelessWidget {
   const LargeTitle(this.title, {super.key, this.trailing = const []});
 
@@ -21,16 +28,7 @@ class LargeTitle extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 8, 16, 4),
       child: Row(
         children: [
-          Expanded(
-            child: Text(
-              title,
-              style: const TextStyle(
-                fontSize: 34,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.9,
-              ),
-            ),
-          ),
+          Expanded(child: Text(title, style: largeTitleStyle)),
           for (final w in trailing) ...[const SizedBox(width: 2), w],
         ],
       ),
