@@ -153,13 +153,18 @@ def _sync_transactions_unlocked(user_id: str, plaid_item_id: str, plaid_access_t
                     "pfc_detailed": pfc.get("detailed"),
                     "pfc_confidence": pfc.get("confidence_level"),
                     "pending": transaction.get("pending", False),
+                    "pending_transaction_id": transaction.get("pending_transaction_id"),
                     "location_city": loc.get("city"),
                     "location_region": loc.get("region"),
                     "location_lat": loc.get("lat"),
                     "location_lon": loc.get("lon"),
                 }
             )
-        supabase.table("transactions").upsert(rows, on_conflict="plaid_transaction_id").execute()
+        _upsert_transactions(rows)
+        for transaction in added:
+            pending_id = transaction.get("pending_transaction_id")
+            if pending_id and pending_id != transaction.get("transaction_id"):
+                _repoint_decisions(user_id, pending_id, transaction.get("transaction_id"))
 
     for transaction in modified:
         pfc = transaction.get("personal_finance_category") or {}
@@ -188,6 +193,48 @@ def _sync_transactions_unlocked(user_id: str, plaid_item_id: str, plaid_access_t
     ).eq("id", plaid_item_id).eq("user_id", user_id).execute()
 
     return {"added": len(added), "modified": len(modified), "removed": len(removed)}
+
+
+def _upsert_transactions(rows: list[dict]) -> None:
+    try:
+        supabase.table("transactions").upsert(rows, on_conflict="plaid_transaction_id").execute()
+    except Exception as error:
+        # Before migration 018 the column doesn't exist; store the rows without it.
+        if "pending_transaction_id" not in str(error):
+            raise
+        print("transactions.pending_transaction_id missing; apply migration 018")
+        for row in rows:
+            row.pop("pending_transaction_id", None)
+        supabase.table("transactions").upsert(rows, on_conflict="plaid_transaction_id").execute()
+
+
+def _repoint_decisions(user_id: str, pending_id: str, posted_id: str) -> None:
+    """A pending transaction posted under a new id: move the user's choices on it (a pick,
+    an AA mark) and the paybacks linked to it over to the posted id. Runs before the
+    pending row is removed. A choice already saved on the posted id wins."""
+    try:
+        own = (
+            supabase.table("transaction_decisions")
+            .select("*")
+            .eq("user_id", user_id)
+            .eq("plaid_transaction_id", pending_id)
+            .execute()
+        )
+        for row in own.data or []:
+            supabase.table("transaction_decisions").upsert(
+                {**row, "plaid_transaction_id": posted_id},
+                on_conflict="user_id,plaid_transaction_id",
+                ignore_duplicates=True,
+            ).execute()
+        if own.data:
+            supabase.table("transaction_decisions").delete().eq("user_id", user_id).eq(
+                "plaid_transaction_id", pending_id
+            ).execute()
+        supabase.table("transaction_decisions").update({"paid_back_purchase_id": posted_id}).eq(
+            "user_id", user_id
+        ).eq("paid_back_purchase_id", pending_id).execute()
+    except Exception as error:
+        print(f"Could not move decisions from a posted pending transaction: {type(error).__name__}")
 
 
 def _safe_api_exception_body(error: plaid.ApiException) -> dict:
