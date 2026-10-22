@@ -487,10 +487,14 @@ def build_budget_progress(
     tx_rows: list[dict],
     remembered_rules: dict[str, str],
     month: str,
+    *,
+    kinds: dict[str, tuple[str, str]] | None = None,
 ) -> list[dict]:
-    """month is 'YYYY-MM'. Output items match what PredictService's burn-rate check reads."""
+    """month is 'YYYY-MM'. Output items match what PredictService's burn-rate check reads.
+    kinds is classify_rows(tx_rows, remembered_rules) when the caller already has it."""
     spent_by_key: dict[str, float] = {}
-    kinds = classify_rows(tx_rows, remembered_rules)
+    if kinds is None:
+        kinds = classify_rows(tx_rows, remembered_rules)
     for row in tx_rows:
         if not str(row.get("date") or "").startswith(month):
             continue

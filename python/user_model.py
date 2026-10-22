@@ -71,11 +71,18 @@ def previous_month(month: str) -> str:
 # ── category_month_stats ────────────────────────────────────────────────
 
 
-def build_category_month_stats(tx_rows: list[dict], rules: dict[str, str]) -> list[dict]:
+def build_category_month_stats(
+    tx_rows: list[dict],
+    rules: dict[str, str],
+    *,
+    kinds: dict[str, tuple[str, str]] | None = None,
+) -> list[dict]:
     """Spend and count per (month, bucket). Buckets are the raw budget_bucket_for_row names,
-    before the Budget page folds unbudgeted ones into "Other"."""
+    before the Budget page folds unbudgeted ones into "Other". kinds is
+    classify_rows(tx_rows, rules) when the caller already has it."""
     totals: dict[tuple[str, str], list] = {}
-    kinds = classify_rows(tx_rows, rules)
+    if kinds is None:
+        kinds = classify_rows(tx_rows, rules)
     for row in tx_rows:
         month = str(row.get("date") or "")[:7]
         if len(month) != 7:
@@ -448,6 +455,8 @@ def finalize_month_alerts(
     tx_rows: list[dict],
     rules: dict[str, str],
     names: dict[str, str],
+    *,
+    kinds: dict[str, tuple[str, str]] | None = None,
 ) -> int | None:
     """Write a finished month's month-end result as alert history. None when the month has
     no budget rows (never opened in the app)."""
@@ -455,7 +464,7 @@ def finalize_month_alerts(
     if not budget_rows:
         return None
     alerts = build_month_end_alerts(
-        build_budget_progress(budget_rows, names, tx_rows, rules, month)
+        build_budget_progress(budget_rows, names, tx_rows, rules, month, kinds=kinds)
     )
     write_alerts(user_id, month, alerts, historical=True)
     return len(alerts)
@@ -515,7 +524,10 @@ def refresh_user_model(user_id: str, today: dt.date | None = None, history_month
         print(f"user model skipped for user {user_id}: {type(error).__name__}")
         return result
     result["tx_rows"] = tx_rows
-    stats = build_category_month_stats(tx_rows, rules)
+    # Classify once: stats, last month's history and this month's progress all read the
+    # same rows with the same rules.
+    kinds = classify_rows(tx_rows, rules)
+    stats = build_category_month_stats(tx_rows, rules, kinds=kinds)
 
     try:
         write_category_month_stats(user_id, stats)
@@ -526,7 +538,7 @@ def refresh_user_model(user_id: str, today: dt.date | None = None, history_month
     try:
         history = {}
         for past in previous_months(month, history_months):
-            written = finalize_month_alerts(user_id, past, tx_rows, rules, names)
+            written = finalize_month_alerts(user_id, past, tx_rows, rules, names, kinds=kinds)
             if written is not None:
                 history[past] = written
         result["history"] = history
@@ -543,7 +555,7 @@ def refresh_user_model(user_id: str, today: dt.date | None = None, history_month
 
     alerts = []
     try:
-        progress = build_budget_progress(budget_rows, names, tx_rows, rules, month)
+        progress = build_budget_progress(budget_rows, names, tx_rows, rules, month, kinds=kinds)
         alerts = build_alerts(progress, today)
         write_alerts(user_id, month, alerts)
         result["alerts"] = len(alerts)
