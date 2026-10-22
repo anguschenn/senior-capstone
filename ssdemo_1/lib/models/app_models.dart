@@ -65,15 +65,6 @@ class AppTransaction {
   final String rawPfcPrimary;
   final String rawPfcDetailed;
 
-  bool get usesCheckingSavingsPolarity => usesDepositoryPolarity(
-    accountName: accountName,
-    accountType: accountType,
-    accountSubtype: accountSubtype,
-  );
-
-  bool get isDepositoryAccount =>
-      accountType.toLowerCase().trim() == 'depository';
-
   bool get isExpense => amount != 0 && amount > 0;
 
   bool get isInflow => amount != 0 && !isExpense;
@@ -81,11 +72,6 @@ class AppTransaction {
   bool get isIncome => amount != 0 && amount < 0;
 
   bool get isRefundIncome => isIncome && _isRefundLike();
-
-  String get incomeType =>
-      !isIncome ? '' : (isRefundIncome ? 'refund' : 'other_income');
-
-  bool get isNonIncomeInflow => isInflow && !isIncome;
 
   double get displayAmount => amount.abs();
 
@@ -183,8 +169,6 @@ class AppTransaction {
   String get inflowLabel =>
       kind == TxKind.internal ? kInternalTransfer : 'Income';
 
-  double get nonIncomeInflowAmount => isNonIncomeInflow ? displayAmount : 0;
-
   factory AppTransaction.fromMap(Map<String, dynamic> row) {
     final merchant = (row['merchant_name'] as String?)?.trim();
     final fallbackName = (row['name'] as String?)?.trim();
@@ -262,34 +246,6 @@ class AppTransaction {
     );
   }
 
-  static bool usesDepositoryPolarity({
-    required String accountName,
-    required String accountType,
-    required String accountSubtype,
-  }) {
-    final type = accountType.toLowerCase().trim();
-    final subtype = accountSubtype.toLowerCase().trim();
-    if (type == 'depository') return true;
-    if (type == 'credit' || type == 'loan') return true;
-    if (subtype == 'checking' || subtype == 'savings') return true;
-    if (subtype.contains('credit')) return false;
-    final key = accountName.toLowerCase();
-    if (key.contains('checking') || key.contains('saving')) return true;
-    if (key.contains('credit')) return false;
-    return false;
-  }
-
-  static bool isDepositIncomeSignal({
-    required String transactionType,
-    required String category,
-    required String primaryCategory,
-    required String name,
-    required String description,
-  }) {
-    final desc = description.toLowerCase().replaceAll('_', ' ');
-    return RegExp(r'\bdeposit\b', caseSensitive: false).hasMatch(desc);
-  }
-
   /// Plaid labels the checking-side payment LOAN_PAYMENTS_CREDIT_CARD_PAYMENT.
   /// (The card side arrives as a negative amount, so it is never an expense.)
   static bool isCreditCardPaymentByPfc({
@@ -297,27 +253,6 @@ class AppTransaction {
     required String pfcPrimary,
   }) =>
       '$pfcDetailed $pfcPrimary'.toUpperCase().contains('CREDIT_CARD_PAYMENT');
-
-  static bool isExpenseByPfc({
-    required String pfcDetailed,
-    required String pfcPrimary,
-  }) =>
-      _directionByPfc(pfcDetailed: pfcDetailed, pfcPrimary: pfcPrimary) ==
-      _TxDirection.expense;
-
-  static bool isIncomeByPfc({
-    required String pfcDetailed,
-    required String pfcPrimary,
-  }) =>
-      _directionByPfc(pfcDetailed: pfcDetailed, pfcPrimary: pfcPrimary) ==
-      _TxDirection.income;
-
-  static bool isKnownByPfc({
-    required String pfcDetailed,
-    required String pfcPrimary,
-  }) =>
-      _directionByPfc(pfcDetailed: pfcDetailed, pfcPrimary: pfcPrimary) !=
-      _TxDirection.unknown;
 
   bool _isRefundLike() {
     final text =
@@ -328,25 +263,7 @@ class AppTransaction {
         text.contains('returned') ||
         text.contains('return');
   }
-
-  static _TxDirection _directionByPfc({
-    required String pfcDetailed,
-    required String pfcPrimary,
-  }) {
-    final detailed = pfcDetailed.toUpperCase().trim();
-    final primary = pfcPrimary.toUpperCase().trim();
-    final key = '$detailed $primary';
-    if (key.contains('INCOME')) return _TxDirection.income;
-    if (key.contains('FOOD_AND_DRINK')) return _TxDirection.expense;
-    if (key.contains('TRANSPORTATION')) return _TxDirection.expense;
-    if (key.contains('TRAVEL')) return _TxDirection.expense;
-    if (key.contains('ENTERTAINMENT')) return _TxDirection.expense;
-    if (key.contains('TRANSFER_OUT')) return _TxDirection.expense;
-    return _TxDirection.unknown;
-  }
 }
-
-enum _TxDirection { income, expense, unknown }
 
 // Lightweight subscription model shown in dashboard and subscription views.
 class DetectedSubscription {
@@ -432,8 +349,6 @@ class MonthlyFlowPoint {
   final String label;
   final double income;
   final double expenses;
-
-  double get cashFlowNet => income - expenses;
 }
 
 enum FlowViewMode { month, year, all }
@@ -538,13 +453,6 @@ class BudgetCategoryProgress {
     final over = projectedMonthEnd - limit;
     if (!over.isFinite || over <= 0) return 0;
     return over;
-  }
-
-  double get allowedDaily {
-    if (limit <= 0 || !limit.isFinite) return 0;
-    final now = DateTime.now();
-    final value = limit / daysInMonth(now.year, now.month);
-    return value.isFinite ? value : 0;
   }
 
   /// Projected to finish the month over the limit.
