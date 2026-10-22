@@ -9,6 +9,7 @@ from datetime import timedelta
 
 from .query_parser_v2 import category_named, credit_card_scope, group_months
 from .response_utils import describe_plaid_amount
+from .time_scope_resolver import previous_month_from_anchor as _prev_month_key
 
 
 def execute_plan_v2(plan, query_spec, summary, scope_label):
@@ -69,17 +70,6 @@ def execute_plan_v2(plan, query_spec, summary, scope_label):
     if plan.operation == "recent_transactions":
         return _exec_recent_transactions(summary, scope_label, query_spec)
     return None
-
-
-def _prev_month_key(month_key):
-    if not re.match(r"^20\d{2}-\d{2}$", month_key or ""):
-        return ""
-    year_s, month_s = month_key.split("-")
-    year = int(year_s)
-    month = int(month_s)
-    if month == 1:
-        return f"{year - 1}-12"
-    return f"{year}-{month - 1:02d}"
 
 
 def _exec_spending_change(query_spec, summary, scope_label):
