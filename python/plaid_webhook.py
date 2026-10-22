@@ -22,7 +22,10 @@ from plaid.model.webhook_verification_key_get_request import WebhookVerification
 
 MAX_WEBHOOK_AGE_SECONDS = 5 * 60
 
-_key_cache: dict[str, object] = {}
+# kid -> (public key, when it was fetched). Plaid can expire a key after it was cached, so a
+# cached key is fetched again (and its expired_at re-checked) once it is a day old.
+KEY_CACHE_TTL_SECONDS = 24 * 60 * 60
+_key_cache: dict[str, tuple[object, float]] = {}
 _key_cache_lock = threading.Lock()
 
 # Webhook work runs here so the route can answer Plaid inside its 10-second window.
@@ -38,17 +41,19 @@ def _fetch_jwk(key_id: str) -> dict:
     return response.to_dict()["key"]
 
 
-def _public_key_for(key_id: str, get_jwk):
+def _public_key_for(key_id: str, get_jwk, now=time.time):
     with _key_cache_lock:
         cached = _key_cache.get(key_id)
-    if cached is not None:
-        return cached
+    if cached is not None and now() - cached[1] < KEY_CACHE_TTL_SECONDS:
+        return cached[0]
     jwk = get_jwk(key_id)
     if jwk.get("expired_at") is not None:
+        with _key_cache_lock:
+            _key_cache.pop(key_id, None)
         raise ValueError(f"verification key {key_id} has expired")
     public_key = jwt.algorithms.ECAlgorithm.from_jwk(json.dumps(jwk))
     with _key_cache_lock:
-        _key_cache[key_id] = public_key
+        _key_cache[key_id] = (public_key, now())
     return public_key
 
 
@@ -67,7 +72,7 @@ def verify_plaid_webhook(body: bytes, token: str | None, *, get_jwk=_fetch_jwk, 
         return False, "missing kid"
 
     try:
-        public_key = _public_key_for(key_id, get_jwk)
+        public_key = _public_key_for(key_id, get_jwk, now)
     except Exception as error:
         return False, f"could not load verification key: {type(error).__name__}"
 

@@ -94,6 +94,26 @@ class PlaidWebhookVerificationTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("key", reason)
 
+    def test_cached_key_is_fetched_again_after_a_day_and_rejected_once_expired(self):
+        start = time.time()
+
+        def verify_at(offset):
+            return verify_plaid_webhook(
+                BODY,
+                self.sign(iat=int(start + offset)),
+                get_jwk=self.get_jwk,
+                now=lambda: start + offset,
+            )
+
+        self.assertTrue(verify_at(0)[0])
+        self.jwk["expired_at"] = 1700000000  # Plaid expires the key after it was cached
+        self.assertTrue(verify_at(60 * 60)[0])  # still inside the cache window
+        self.assertEqual(self.fetches, 1)
+        ok, reason = verify_at(25 * 60 * 60)
+        self.assertFalse(ok)
+        self.assertIn("key", reason)
+        self.assertEqual(self.fetches, 2)
+
 
 if __name__ == "__main__":
     unittest.main()
