@@ -40,8 +40,7 @@ class BudgetAlertHistoryCard extends StatefulWidget {
 class _BudgetAlertHistoryCardState extends State<BudgetAlertHistoryCard> {
   List<BudgetOverrun> _items = const [];
 
-  String get _monthKey =>
-      '${widget.month.year}-${widget.month.month.toString().padLeft(2, '0')}';
+  String get _monthKey => monthKeyOf(widget.month);
 
   @override
   void initState() {

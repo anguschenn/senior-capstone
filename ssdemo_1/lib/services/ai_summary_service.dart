@@ -75,9 +75,6 @@ class AiSummaryService {
     'tx_count': 0,
   };
 
-  String _monthKey(DateTime date) =>
-      '${date.year}-${date.month.toString().padLeft(2, '0')}';
-
   String _dateKey(DateTime date) => date.toIso8601String().split('T').first;
 
   double _clamp01(double value) {
@@ -221,7 +218,7 @@ class AiSummaryService {
       if (latestTxDate == null || tx.date.isAfter(latestTxDate)) {
         latestTxDate = tx.date;
       }
-      final monthKey = _monthKey(tx.date);
+      final monthKey = monthKeyOf(tx.date);
       final monthBucket = monthTotals.putIfAbsent(
         monthKey,
         () => _emptyMonthBucket(),
@@ -445,7 +442,7 @@ class AiSummaryService {
     // left of my food budget". A category without a limit isn't a budget, and
     // the all-year view's limits are yearly, so it sends none.
     final budgets = {
-      'month': _monthKey(anchor),
+      'month': monthKeyOf(anchor),
       'items': isAllYearOption(focus)
           ? const <Map<String, dynamic>>[]
           : [
@@ -739,7 +736,7 @@ class AiSummaryService {
       'warnings': warnings,
       'category_index': categoryTotalsAll,
       'time_anchor': {
-        'selected_month': _monthKey(anchor),
+        'selected_month': monthKeyOf(anchor),
         'selected_year': anchor.year,
         'tz': now.timeZoneName,
       },

@@ -106,9 +106,6 @@ class SyncService {
   const SyncService._();
   static const instance = SyncService._();
 
-  String _monthKey(DateTime date) =>
-      '${date.year}-${date.month.toString().padLeft(2, '0')}';
-
   Map<String, String> _backendHeaders() {
     final headers = <String, String>{
       'x-api-key': EnvConfig.instance.backendApiKey,
@@ -199,7 +196,7 @@ class SyncService {
         AuthService.instance.currentUserId,
       );
       if (raw == null) return null;
-      final monthYear = _monthKey(normalizedMonthOption(selectedMonth));
+      final monthYear = monthKeyOf(normalizedMonthOption(selectedMonth));
       // Budget limits are stored per month; don't show another month's limits.
       final usable = raw.monthYear == monthYear ? raw : raw.withoutBudgets();
       return CachedSyncResult(
@@ -224,7 +221,7 @@ class SyncService {
   ) async {
     try {
       final uri = ApiConfig.instance.budgetProgressUri.replace(
-        queryParameters: {'month': _monthKey(normalizedMonthOption(month))},
+        queryParameters: {'month': monthKeyOf(normalizedMonthOption(month))},
       );
       final response = await http
           .get(uri, headers: _backendHeaders())
@@ -259,7 +256,7 @@ class SyncService {
   /// Fetches everything a refresh needs from Supabase, unparsed.
   Future<RawSyncData> fetchRaw(String userId, DateTime selectedMonth) async {
     final focused = normalizedMonthOption(selectedMonth);
-    final monthYear = _monthKey(focused);
+    final monthYear = monthKeyOf(focused);
 
     final accountsRows = await AccountService.instance.fetchAccountRows(
       userId,

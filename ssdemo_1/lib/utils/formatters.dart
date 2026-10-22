@@ -1,3 +1,7 @@
+/// "2026-10": the month key the backend and database use.
+String monthKeyOf(DateTime date) =>
+    '${date.year}-${date.month.toString().padLeft(2, '0')}';
+
 /// Minus sign used in front of amounts (U+2212, same width as "+").
 const String kMinus = '\u2212';
 

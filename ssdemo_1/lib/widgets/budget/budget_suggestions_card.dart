@@ -37,8 +37,7 @@ class _BudgetSuggestionsCardState extends State<BudgetSuggestionsCard> {
   List<BudgetSuggestion> _items = const [];
   final Set<String> _busy = {};
 
-  String get _monthKey =>
-      '${widget.month.year}-${widget.month.month.toString().padLeft(2, '0')}';
+  String get _monthKey => monthKeyOf(widget.month);
 
   @override
   void initState() {

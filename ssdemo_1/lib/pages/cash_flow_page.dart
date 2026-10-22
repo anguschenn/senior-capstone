@@ -140,7 +140,7 @@ class _CashFlowPageState extends State<CashFlowPage> {
     final monthly = <String, MonthlyFlowPoint>{};
     for (final tx in txs) {
       final anchor = DateTime(tx.date.year, tx.date.month, 1);
-      final key = '${anchor.year}-${anchor.month.toString().padLeft(2, '0')}';
+      final key = monthKeyOf(anchor);
       final existing = monthly[key];
       final nextIncome = (existing?.income ?? 0) + tx.incomeAmount;
       final nextExpenses = (existing?.expenses ?? 0) + tx.expenseAmount;

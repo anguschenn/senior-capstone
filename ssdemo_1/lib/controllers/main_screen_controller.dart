@@ -85,9 +85,6 @@ class MainScreenController extends ChangeNotifier {
     netThisMonth: 0,
   );
 
-  String _monthKey(DateTime date) =>
-      '${date.year}-${date.month.toString().padLeft(2, '0')}';
-
   // --- Actions ---
 
   void selectTab(int i) {
@@ -487,7 +484,7 @@ class MainScreenController extends ChangeNotifier {
     syncStatus = 'Saving budget...';
     _notifyListenersSafe();
 
-    final monthYear = _monthKey(normalizedMonthOption(selectedMonth));
+    final monthYear = monthKeyOf(normalizedMonthOption(selectedMonth));
     liveBudgetLimitsByMonth = {
       ...liveBudgetLimitsByMonth,
       monthYear: {
