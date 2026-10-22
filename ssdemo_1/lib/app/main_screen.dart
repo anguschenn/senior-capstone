@@ -223,7 +223,6 @@ class _MainScreenState extends State<MainScreen> {
         budgetProgress: snapshot.budgetProgress,
         syncing: c.syncing,
         bankSyncBusy: c.refreshingInBackground,
-        syncStatus: c.syncStatus,
         onAddBank: c.connectBankAndPullData,
         onReconnect: c.reauthenticateBank,
         onRefresh: c.refreshLiveDataOnly,
@@ -260,7 +259,6 @@ class _MainScreenState extends State<MainScreen> {
         accessToken: AuthService.instance.currentAccessToken,
       ),
       BudgetPage(
-        isVisible: c.tabIndex == 2,
         insightsVersion: c.insightsVersion,
         stats: household.stats,
         budgetProgress: snapshot.budgetProgress,

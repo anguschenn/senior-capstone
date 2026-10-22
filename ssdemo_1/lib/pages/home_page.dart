@@ -63,7 +63,6 @@ class HomePage extends StatelessWidget {
     required this.onReviewConfirm,
     this.budgetProgress = const [],
     this.bankSyncBusy = false,
-    this.syncStatus = '',
     this.onOpenFlow,
     this.onOpenSettings,
     this.onSeeAllActivity,
@@ -84,7 +83,6 @@ class HomePage extends StatelessWidget {
   /// A background bank refresh is running: Add Bank waits, but the rest of
   /// the screen (e.g. switching wallet cards) stays usable.
   final bool bankSyncBusy;
-  final String syncStatus;
   final VoidCallback onAddBank;
   final VoidCallback? onReconnect;
   final VoidCallback? onRefresh;

@@ -38,7 +38,6 @@ class BudgetPage extends StatefulWidget {
     this.transactions = const [],
     this.reviewedCategoryByTxId = const {},
     this.onAsk,
-    this.isVisible = true,
     this.insightsVersion = 0,
   });
 
@@ -65,9 +64,6 @@ class BudgetPage extends StatefulWidget {
 
   /// Opens the AI with a question filled in (the ✦ chips).
   final void Function({String? prompt, String? contextLabel})? onAsk;
-
-  /// Whether the Budget tab is on screen; the popups' timer only runs then.
-  final bool isVisible;
 
   /// [MainScreenController.insightsVersion]: reloads the suggestions card.
   final int insightsVersion;

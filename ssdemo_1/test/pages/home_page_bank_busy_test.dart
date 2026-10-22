@@ -36,7 +36,6 @@ Widget _home({
         ),
         syncing: syncing,
         bankSyncBusy: bankSyncBusy,
-        syncStatus: 'status',
         onAddBank: () {},
         accountOptions: _accounts,
         selectedAccountId: kAllAccountsId,
