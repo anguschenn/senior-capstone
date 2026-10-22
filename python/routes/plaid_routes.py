@@ -290,6 +290,9 @@ def get_transactions():
                 "latest_transactions": rows,
                 "transactions": rows,
                 "sync": {**totals, "duration_ms": elapsed_ms},
+                # Banks that need the user to log in again; the app shows its reconnect
+                # banner when this is not empty, even though the other banks synced.
+                "login_required_items": login_required_items,
             }
         )
     except UserAuthError as error:

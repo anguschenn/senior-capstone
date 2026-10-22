@@ -57,6 +57,34 @@ class ItemLoginRequiredException implements Exception {
   String toString() => 'Bank re-authentication required';
 }
 
+/// What a bank sync reported: whether the backend confirmed it, and whether
+/// any linked bank needs the user to log in again (the other banks may still
+/// have synced).
+typedef BankSync = ({bool synced, bool loginRequired});
+
+/// Reads the backend's /api/transactions reply. A 400 with
+/// ITEM_LOGIN_REQUIRED (every bank needs a new login) throws
+/// [ItemLoginRequiredException]; a 200 can still name banks that need one in
+/// login_required_items. Plaid API errors also surface as 400, so the status
+/// alone is not enough.
+BankSync bankSyncFromResponse(int statusCode, String body) {
+  Object? decoded;
+  try {
+    decoded = jsonDecode(body);
+  } catch (_) {
+    decoded = null;
+  }
+  final map = decoded is Map ? decoded : const {};
+  if (statusCode == 400 && map['error_code'] == 'ITEM_LOGIN_REQUIRED') {
+    throw const ItemLoginRequiredException();
+  }
+  final items = map['login_required_items'];
+  return (
+    synced: statusCode == 200,
+    loginRequired: statusCode == 200 && items is List && items.isNotEmpty,
+  );
+}
+
 /// Result payload returned by a full sync or refresh.
 class SyncResult {
   const SyncResult({
@@ -124,13 +152,14 @@ class SyncService {
     return headers;
   }
 
-  /// Triggers the backend bank sync endpoint. Returns true when the backend
-  /// confirmed the sync, false when it could not be reached or failed.
-  /// Throws [ItemLoginRequiredException] if re-authentication is needed.
+  /// Triggers the backend bank sync endpoint. synced is true when the backend
+  /// confirmed the sync, false when it could not be reached or failed;
+  /// loginRequired is true when a linked bank needs a new login.
+  /// Throws [ItemLoginRequiredException] if every bank needs one.
   ///
   /// [full] (the Refresh button) also recomputes subscriptions, alerts and
   /// suggestions when the bank sent nothing new.
-  Future<bool> triggerBankSync({bool full = false}) async {
+  Future<BankSync> triggerBankSync({bool full = false}) async {
     final uri = ApiConfig.instance.transactionsUri;
     try {
       final response = await http
@@ -139,15 +168,12 @@ class SyncService {
             headers: _backendHeaders(),
           )
           .timeout(const Duration(seconds: 30));
-      if (response.statusCode == 400 && _isLoginRequired(response.body)) {
-        throw const ItemLoginRequiredException();
-      }
-      return response.statusCode == 200;
+      return bankSyncFromResponse(response.statusCode, response.body);
     } on ItemLoginRequiredException {
       rethrow;
     } catch (_) {
       // Other network/server errors are best-effort — don't block the UI.
-      return false;
+      return (synced: false, loginRequired: false);
     }
   }
 
@@ -162,17 +188,6 @@ class SyncService {
           )
           .timeout(const Duration(seconds: 30));
       return response.statusCode == 200;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  /// True only when the backend explicitly reports ITEM_LOGIN_REQUIRED.
-  /// Plaid API errors also surface as 400, so the status alone is not enough.
-  bool _isLoginRequired(String body) {
-    try {
-      final decoded = jsonDecode(body);
-      return decoded is Map && decoded['error_code'] == 'ITEM_LOGIN_REQUIRED';
     } catch (_) {
       return false;
     }

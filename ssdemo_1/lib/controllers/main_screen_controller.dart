@@ -185,8 +185,8 @@ class MainScreenController extends ChangeNotifier {
     syncStatus = 'Syncing with bank...';
     _notifyListenersSafe();
     try {
-      final synced = await _sync.triggerBankSync(full: true);
-      loginRequired = false;
+      final bank = await _sync.triggerBankSync(full: true);
+      loginRequired = bank.loginRequired;
       syncStatus = 'Loading...';
       _notifyListenersSafe();
       final result = await _sync.refreshFromSupabase(
@@ -195,7 +195,9 @@ class MainScreenController extends ChangeNotifier {
       );
       _applySyncResult(result);
       insightsVersion++;
-      syncStatus = result.hasData ? _updatedStatus(synced) : 'No data found';
+      syncStatus = result.hasData
+          ? _updatedStatus(bank.synced)
+          : 'No data found';
     } on ItemLoginRequiredException {
       loginRequired = true;
       syncStatus = 'Bank login expired — tap to re-authenticate';
@@ -264,13 +266,13 @@ class MainScreenController extends ChangeNotifier {
         _notifyListenersSafe();
       }
 
-      final bankSynced = await _sync.triggerBankSync();
+      final bank = await _sync.triggerBankSync();
       if (_isDisposed) return;
-      loginRequired = false;
+      loginRequired = bank.loginRequired;
       final synced = await _fetchAndApply();
       if (synced != null) {
         syncStatus = synced.hasData
-            ? _updatedStatus(bankSynced)
+            ? _updatedStatus(bank.synced)
             : 'No data found';
       }
     } on ItemLoginRequiredException {
@@ -330,13 +332,16 @@ class MainScreenController extends ChangeNotifier {
         loginRequired = false;
         syncStatus = 'Syncing transactions...';
         _notifyListenersSafe();
-        final synced = await _sync.triggerBankSync();
+        final bank = await _sync.triggerBankSync();
+        loginRequired = bank.loginRequired;
         final result = await _sync.refreshFromSupabase(
           reviewedCategoryByTxId,
           selectedMonth,
         );
         _applySyncResult(result);
-        syncStatus = result.hasData ? _updatedStatus(synced) : 'No data found';
+        syncStatus = result.hasData
+            ? _updatedStatus(bank.synced)
+            : 'No data found';
       } else {
         syncStatus = 'Re-authentication cancelled';
       }
@@ -361,14 +366,14 @@ class MainScreenController extends ChangeNotifier {
         // Web platform or user cancelled — fall back to syncing existing data.
         syncStatus = 'Refreshing...';
         notifyListeners();
-        await _sync.triggerBankSync();
+        loginRequired = (await _sync.triggerBankSync()).loginRequired;
       } else {
         syncStatus = 'Connecting bank...';
         notifyListeners();
         await PlaidService.instance.exchangePublicToken(publicToken);
         syncStatus = 'Syncing transactions...';
         notifyListeners();
-        await _sync.triggerBankSync();
+        loginRequired = (await _sync.triggerBankSync()).loginRequired;
       }
 
       final result = await _sync.refreshFromSupabase(

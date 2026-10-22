@@ -34,6 +34,7 @@ class _FakeSync implements SyncService {
   final supabaseReplies = <Completer<SyncResult>>[];
   final bankReply = Completer<void>();
   bool bankSucceeds = true;
+  bool bankNeedsLogin = false;
   DateTime? serverSyncedAt;
 
   @override
@@ -57,10 +58,12 @@ class _FakeSync implements SyncService {
   }
 
   @override
-  Future<bool> triggerBankSync({bool full = false}) {
+  Future<BankSync> triggerBankSync({bool full = false}) {
     calls.add('bank');
     lastBankSyncFull = full;
-    return bankReply.future.then((_) => bankSucceeds);
+    return bankReply.future.then(
+      (_) => (synced: bankSucceeds, loginRequired: bankNeedsLogin),
+    );
   }
 
   bool? lastBankSyncFull;
@@ -340,6 +343,26 @@ void main() {
       expect(controller.liveStats.totalBalance, 2);
       expect(controller.refreshingInBackground, isFalse);
     });
+
+    test(
+      'one expired bank raises the banner while the others still load',
+      () async {
+        build(cached: _saved(1));
+        sync.bankNeedsLogin = true;
+
+        final done = controller.loadCachedThenRefresh();
+        await pumpEventQueue();
+        sync.supabaseReplies[0].complete(_result(2));
+        await pumpEventQueue();
+        sync.bankReply.complete();
+        await pumpEventQueue();
+        sync.supabaseReplies[1].complete(_result(3));
+        await done;
+
+        expect(controller.loginRequired, isTrue);
+        expect(controller.liveStats.totalBalance, 3);
+      },
+    );
 
     test('a Supabase failure keeps the saved data on screen', () async {
       build(cached: _saved(1));
