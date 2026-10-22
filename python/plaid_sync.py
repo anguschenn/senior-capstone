@@ -163,12 +163,18 @@ def _sync_transactions_unlocked(user_id: str, plaid_item_id: str, plaid_access_t
 
     for transaction in modified:
         pfc = transaction.get("personal_finance_category") or {}
+        # A modified transaction can move to another day (and month), get a cleaner name,
+        # or show up under another account, so those are refreshed with the amount.
         supabase.table("transactions").update(
             {
                 "amount": transaction.get("amount"),
                 "pending": transaction.get("pending"),
                 "pfc_primary": pfc.get("primary"),
                 "pfc_detailed": pfc.get("detailed"),
+                "date": str(transaction.get("date")),
+                "name": transaction.get("name"),
+                "merchant_name": transaction.get("merchant_name"),
+                "plaid_account_id": transaction.get("account_id"),
             }
         ).eq("plaid_transaction_id", transaction.get("transaction_id")).execute()
 
