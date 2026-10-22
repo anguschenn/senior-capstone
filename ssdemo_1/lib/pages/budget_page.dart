@@ -806,9 +806,10 @@ class _BudgetPageState extends State<BudgetPage> {
   }
 
   // -------------------------------------------------------------------------
-  /// Spending transactions behind each card, largest first. Grouped exactly
-  /// like the card's "spent" figure (BudgetService.rebasedProgressFromTemplate),
-  /// so the rows add up to it.
+  /// Spending transactions behind each card, largest first, then refunds.
+  /// Grouped exactly like the card's "spent" figure
+  /// (BudgetService.rebasedProgressFromTemplate), refunds included, so the
+  /// rows add up to it.
   Map<String, List<AppTransaction>> _transactionsByCategory() {
     final focus = widget.selectedMonth;
     final cardKeys = {
@@ -816,7 +817,7 @@ class _BudgetPageState extends State<BudgetPage> {
     };
     final out = <String, List<AppTransaction>>{};
     for (final tx in widget.transactions) {
-      if (tx.expenseAmount <= 0) continue;
+      if (tx.expenseAmount == 0) continue;
       if (viewMode == BudgetViewMode.month &&
           (tx.date.year != focus.year || tx.date.month != focus.month)) {
         continue;

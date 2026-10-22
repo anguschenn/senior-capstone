@@ -320,7 +320,10 @@ class _TransactionBreakdown extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  formatMoney(tx.expenseAmount, signed: false),
+                  // A refund nets against the card, so it shows as money back.
+                  tx.expenseAmount < 0
+                      ? dollars(-tx.expenseAmount, sign: true)
+                      : formatMoney(tx.expenseAmount, signed: false),
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
