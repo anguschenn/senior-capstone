@@ -147,9 +147,9 @@ class _MainScreenState extends State<MainScreen> {
   void _openSettings() {
     _push(() {
       final c = _ctrl;
-      final subs = FinancialSnapshotService.instance
-          .build(c, targetMonth: c.selectedMonth)
-          .subscriptions;
+      // Read directly: a full snapshot here only to get subscriptions
+      // recomputed every budget on each notify.
+      final subs = c.liveSubscriptions;
       return SettingsPage(
         email: AuthService.instance.currentUser?.email,
         accountOptions: c.liveAccountOptions,
