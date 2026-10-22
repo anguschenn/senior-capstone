@@ -263,4 +263,16 @@ void main() {
       expect(kinds['out-3'], TxKind.spend);
     }
   });
+
+  test('p2pCounterparty reads the person after to or from', () {
+    expect(
+      AppTransaction.p2pCounterparty('Zelle payment to Hendrick Yang Conf# 12'),
+      'hendrick yang',
+    );
+    expect(
+      AppTransaction.p2pCounterparty('ZELLE PAYMENT FROM ALICE HUANG 3141'),
+      'alice huang',
+    );
+    expect(AppTransaction.p2pCounterparty('VENMO PAYMENT 1023'), '');
+  });
 }

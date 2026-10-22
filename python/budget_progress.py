@@ -246,6 +246,17 @@ def is_peer_to_peer(text: str) -> bool:
     return any(n in lowered for n in _PEER_TO_PEER)
 
 
+def p2p_counterparty(name: str) -> str:
+    """The person a Zelle/Venmo row names after "to" or "from", as its first two words in
+    lowercase letters ("Zelle payment to Hendrick Yang Conf# 12" -> "hendrick yang"), or ""
+    (AppTransaction.p2pCounterparty)."""
+    match = re.search(r"\b(?:to|from)\s+(.+)", name.lower())
+    if not match:
+        return ""
+    words = re.sub(r"[^a-z ]", " ", match.group(1)).split()
+    return " ".join(words[:2])
+
+
 def _row_fields(row: dict) -> tuple[str, str, str, str]:
     """(name, description, pfc_primary, pfc_detailed) as AppTransaction.fromMap reads them."""
     name_raw = row.get("name")
@@ -401,6 +412,7 @@ def classify_rows(
                 "amount": amount,
                 "key": merchant_match_key(name),
                 "p2p": is_peer_to_peer(f"{name} {description}"),
+                "counterparty": p2p_counterparty(name),
                 "pays_back": str(
                     (decisions.get(rid) or {}).get("paid_back_purchase_id") or ""
                 ).strip()
@@ -483,9 +495,10 @@ def looks_like_transfer(name: str, description: str, pfc_primary: str, pfc_detai
 
 def _pair_own_transfers(parsed: list[dict]) -> None:
     """Money leaving one linked account and the same amount arriving in another within 5
-    days is a move between own accounts (_pairOwnTransfers), Zelle or Venmo included. Money to
-    or from an account the app doesn't have counts as spending or income, and a payment the
-    user linked as a payback never pairs."""
+    days is a move between own accounts (_pairOwnTransfers). Zelle or Venmo pairs only with
+    Zelle or Venmo naming the same person on both sides ("to Hendrick Yang" and "from Hendrick
+    Yang"). Money to or from an account the app doesn't have counts as spending or income, and
+    a payment the user linked as a payback never pairs."""
 
     def candidate(item: dict) -> bool:
         if not item["account"] or item["day"] is None:
@@ -510,6 +523,13 @@ def _pair_own_transfers(parsed: list[dict]) -> None:
             if into["id"] in paired or into["account"] == out["account"]:
                 continue
             if abs(into["amount"] - out["amount"]) >= 0.005:
+                continue
+            if (out["p2p"] or into["p2p"]) and not (
+                out["p2p"]
+                and into["p2p"]
+                and out["counterparty"]
+                and out["counterparty"] == into["counterparty"]
+            ):
                 continue
             gap = abs((into["day"] - out["day"]).days)
             if gap > 5:

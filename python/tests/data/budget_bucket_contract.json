@@ -1008,7 +1008,7 @@
       ]
     },
     {
-      "_comment": "Zelle or Venmo between two of the user's linked accounts is a move between own accounts, not spending and income; money to or from other people still counts, and a payment linked as a payback never pairs.",
+      "_comment": "Zelle or Venmo between two of the user's linked accounts is a move between own accounts when both sides name the same person ('to Hendrick Yang', 'from Hendrick Yang'); money to one person and from another with the same amount still counts, and a payment linked as a payback never pairs.",
       "month": "2026-09",
       "categories": {
         "c-food": "Food",
@@ -1087,6 +1087,26 @@
           "amount": -45,
           "pfc_primary": "TRANSFER_IN",
           "pfc_detailed": "TRANSFER_IN_DEPOSIT"
+        },
+        {
+          "plaid_transaction_id": "kim-out",
+          "plaid_account_id": "acc-chk",
+          "date": "2026-09-20",
+          "name": "Zelle payment to Kim Lee",
+          "merchant_name": null,
+          "amount": 25,
+          "pfc_primary": "TRANSFER_OUT",
+          "pfc_detailed": "TRANSFER_OUT_ACCOUNT_TRANSFER"
+        },
+        {
+          "plaid_transaction_id": "joe-in",
+          "plaid_account_id": "acc-bofa",
+          "date": "2026-09-21",
+          "name": "Zelle payment from Joe Park",
+          "merchant_name": null,
+          "amount": -25,
+          "pfc_primary": "TRANSFER_IN",
+          "pfc_detailed": "TRANSFER_IN_DEPOSIT"
         }
       ],
       "decisions": {
@@ -1100,7 +1120,9 @@
         "sam-in": "income",
         "dinner": "spend",
         "mom-out": "spend",
-        "amy-in": "payback"
+        "amy-in": "payback",
+        "kim-out": "spend",
+        "joe-in": "income"
       },
       "expected_paid_back": {
         "dinner": 45.0
@@ -1115,7 +1137,7 @@
         {
           "category_id": "c-fees",
           "category": "Fees & Transfers",
-          "spent": 45.0,
+          "spent": 70.0,
           "limit": 100.0
         }
       ]

@@ -103,6 +103,15 @@ class BudgetBucketContractTests(unittest.TestCase):
                 ]
                 self.assertEqual(actual, case["expected"])
 
+    def test_p2p_counterparty(self):
+        from budget_progress import p2p_counterparty
+
+        self.assertEqual(
+            p2p_counterparty("Zelle payment to Hendrick Yang Conf# 12"), "hendrick yang"
+        )
+        self.assertEqual(p2p_counterparty("ZELLE PAYMENT FROM ALICE HUANG 3141"), "alice huang")
+        self.assertEqual(p2p_counterparty("VENMO PAYMENT 1023"), "")
+
     def test_progress_feeds_burn_rate_check(self):
         """Output shape is what PredictService's burn-rate check sanitizes and reads."""
         from ai.validators import sanitize_budget_progress

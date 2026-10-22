@@ -192,6 +192,23 @@ class AppTransaction {
   static bool isPeerToPeer(String text) =>
       _peerToPeerWords.any(text.toLowerCase().contains);
 
+  /// The person a Zelle/Venmo row names after "to" or "from", as its first
+  /// two words in lowercase letters ("Zelle payment to Hendrick Yang Conf# 12"
+  /// -> "hendrick yang"), or "".
+  static String p2pCounterparty(String name) {
+    final match = RegExp(
+      r'\b(?:to|from)\s+(.+)',
+    ).firstMatch(name.toLowerCase());
+    if (match == null) return '';
+    final words = match
+        .group(1)!
+        .replaceAll(RegExp(r'[^a-z ]'), ' ')
+        .split(' ')
+        .where((w) => w.isNotEmpty)
+        .take(2);
+    return words.join(' ');
+  }
+
   static const _peerToPeerWords = [
     'zelle',
     'venmo',
@@ -730,8 +747,9 @@ Classified classifyTransactions(
 /// The app only manages linked accounts, so money to or from any other
 /// account counts as spending or income.
 /// Only transfer- or payment-looking rows pair, so a purchase never pairs with
-/// an unrelated deposit. Zelle or Venmo between two linked accounts pairs too;
-/// a payment the user linked as a payback never does.
+/// an unrelated deposit. Zelle or Venmo pairs only with Zelle or Venmo naming
+/// the same person on both sides ("to Hendrick Yang" and "from Hendrick
+/// Yang"); a payment the user linked as a payback never pairs.
 void _pairOwnTransfers(
   List<AppTransaction> transactions,
   Map<String, String> userCategoryById,
@@ -777,6 +795,7 @@ void _pairOwnTransfers(
         continue;
       }
       if ((into.displayAmount - out.displayAmount).abs() >= 0.005) continue;
+      if (!_sameP2pPerson(out, into)) continue;
       final gap = into.date.difference(out.date).inDays.abs();
       if (gap > 5) continue;
       if (best == null || gap < bestGap) {
@@ -789,6 +808,20 @@ void _pairOwnTransfers(
     kinds[out.id] = TxKind.internal;
     kinds[best.id] = TxKind.internal;
   }
+}
+
+/// True unless either row is Zelle/Venmo; then both must be, naming the same
+/// person.
+bool _sameP2pPerson(AppTransaction out, AppTransaction into) {
+  final outP2p = AppTransaction.isPeerToPeer('${out.name} ${out.description}');
+  final intoP2p = AppTransaction.isPeerToPeer(
+    '${into.name} ${into.description}',
+  );
+  if (!outP2p && !intoP2p) return true;
+  if (!outP2p || !intoP2p) return false;
+  final person = AppTransaction.p2pCounterparty(out.name);
+  return person.isNotEmpty &&
+      person == AppTransaction.p2pCounterparty(into.name);
 }
 
 /// A row a bank would use for moving money: Plaid's transfer and loan
