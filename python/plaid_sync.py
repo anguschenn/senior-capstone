@@ -47,40 +47,6 @@ client = plaid_api.PlaidApi(api_client)
 products = [Products(p) for p in PLAID_PRODUCTS]
 
 
-def get_stored_item_credentials(user_id: str, plaid_item_id: str) -> tuple[str, str]:
-    row = (
-        supabase.table("plaid_items")
-        .select("access_token,item_id")
-        .eq("id", plaid_item_id)
-        .eq("user_id", user_id)
-        .limit(1)
-        .execute()
-    )
-    if not row.data:
-        # fallback: look up by item_id column (legacy rows keyed by user_id)
-        row = (
-            supabase.table("plaid_items")
-            .select("access_token,item_id")
-            .eq("user_id", user_id)
-            .limit(1)
-            .execute()
-        )
-    if not row.data:
-        raise IdentityStateError(
-            IdentityStateError.STORED_ITEM_NOT_FOUND,
-            "No stored plaid_items record for current user",
-        )
-    record = row.data[0]
-    access_token = record.get("access_token")
-    item_id = record.get("item_id")
-    if not access_token:
-        raise IdentityStateError(
-            IdentityStateError.STORED_ACCESS_TOKEN_MISSING,
-            "Stored Plaid access token is missing",
-        )
-    return access_token, item_id
-
-
 def save_accounts_to_supabase(user_id: str, plaid_item_id: str, plaid_access_token: str) -> int:
     response = client.accounts_get(AccountsGetRequest(access_token=plaid_access_token)).to_dict()
     accounts = response.get("accounts", [])
