@@ -17,7 +17,10 @@ class ApiConfig {
       .._aiCategorySuggestUri = Uri.parse(
         '${env.backendUrl}/api/ai/suggest_category',
       )
-      .._budgetProgressUri = Uri.parse('${env.backendUrl}/api/budget_progress');
+      .._budgetProgressUri = Uri.parse('${env.backendUrl}/api/budget_progress')
+      .._refreshInsightsUri = Uri.parse(
+        '${env.backendUrl}/api/refresh_insights',
+      );
   }
 
   late final Uri _transactionsUri;
@@ -25,6 +28,7 @@ class ApiConfig {
   late final Uri _aiBudgetSuggestUri;
   late final Uri _aiCategorySuggestUri;
   late final Uri _budgetProgressUri;
+  late final Uri _refreshInsightsUri;
 
   Uri get transactionsUri => _transactionsUri;
   Uri get aiChatUri => _aiChatUri;
@@ -33,4 +37,7 @@ class ApiConfig {
 
   /// Base URI for GET /api/budget_progress; callers append ?month=YYYY-MM.
   Uri get budgetProgressUri => _budgetProgressUri;
+
+  /// POST: recompute subscriptions, budget alerts and suggestions.
+  Uri get refreshInsightsUri => _refreshInsightsUri;
 }

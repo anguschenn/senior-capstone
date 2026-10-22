@@ -39,6 +39,7 @@ class BudgetPage extends StatefulWidget {
     this.reviewedCategoryByTxId = const {},
     this.onAsk,
     this.isVisible = true,
+    this.insightsVersion = 0,
   });
 
   final DashboardStats stats;
@@ -67,6 +68,9 @@ class BudgetPage extends StatefulWidget {
 
   /// Whether the Budget tab is on screen; the popups' timer only runs then.
   final bool isVisible;
+
+  /// [MainScreenController.insightsVersion]: reloads the suggestions card.
+  final int insightsVersion;
 
   @override
   State<BudgetPage> createState() => _BudgetPageState();
@@ -442,6 +446,8 @@ class _BudgetPageState extends State<BudgetPage> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: BudgetSuggestionsCard(
+              // A new version means the server recomputed them: reload.
+              key: ValueKey(widget.insightsVersion),
               month: widget.selectedMonth,
               onUpdateBudgetLimit: widget.onUpdateBudgetLimit,
               onAskWhy: widget.onAsk == null

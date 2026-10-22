@@ -88,6 +88,34 @@ class PredictAuthTests(_AuthCases, unittest.TestCase):
         _assert_no_detail(self, response)
 
 
+class RefreshInsightsAuthTests(_AuthCases, unittest.TestCase):
+    path = "/api/refresh_insights"
+
+    def test_valid_token_refreshes_that_user(self):
+        from routes import budget_routes
+
+        with (
+            app_client() as client,
+            mock.patch.object(budget_routes, "run_post_sync") as run,
+        ):
+            response = self._call(client, VALID_TOKEN)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(run.call_args.args[0], USER_ID)
+
+    def test_internal_error_hides_exception_text(self):
+        from routes import budget_routes
+
+        with (
+            app_client() as client,
+            mock.patch.object(
+                budget_routes, "run_post_sync", side_effect=RuntimeError(SECRET_DETAIL)
+            ),
+        ):
+            response = self._call(client, VALID_TOKEN)
+        self.assertEqual(response.status_code, 500)
+        _assert_no_detail(self, response)
+
+
 class PingAuthTests(_AuthCases, unittest.TestCase):
     method = "get"
     path = "/api/ai/ping"

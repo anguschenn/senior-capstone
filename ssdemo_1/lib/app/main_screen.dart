@@ -261,6 +261,7 @@ class _MainScreenState extends State<MainScreen> {
       ),
       BudgetPage(
         isVisible: c.tabIndex == 2,
+        insightsVersion: c.insightsVersion,
         stats: household.stats,
         budgetProgress: snapshot.budgetProgress,
         budgetProgressYear: snapshot.budgetProgressYear,

@@ -3,11 +3,12 @@
 import datetime as dt
 import re
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 
 from api.http_helpers import log_route_error
 from auth import UserAuthError, require_supabase_user_id
 from budget_progress import compute_budget_progress
+from sync_jobs import run_post_sync
 
 budget_bp = Blueprint("budgets", __name__)
 _MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
@@ -26,4 +27,20 @@ def get_budget_progress():
         return jsonify({"error": str(error)}), 401
     except Exception as error:
         log_route_error("/api/budget_progress unexpected", error)
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@budget_bp.route("/api/refresh_insights", methods=["POST"])
+def refresh_insights():
+    """Recompute subscriptions, budget alerts and suggestions from the stored
+    transactions, after the user changed a budget, a category rule or a hidden account.
+    A bank sync only does this when the bank sent something new."""
+    try:
+        user_id = require_supabase_user_id()
+        run_post_sync(user_id, current_app.config["snapshot_service"])
+        return jsonify({"ok": True})
+    except UserAuthError as error:
+        return jsonify({"error": str(error)}), 401
+    except Exception as error:
+        log_route_error("/api/refresh_insights unexpected", error)
         return jsonify({"error": "Internal server error"}), 500

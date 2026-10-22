@@ -272,8 +272,9 @@ def get_transactions():
             ), 400
         print(f"Sync complete for user {user_id}: {totals}")
         record_sync(user_id, "app")
-        # Subscription detection re-reads every transaction; skip it when nothing changed.
-        if any(totals.values()):
+        # Subscription detection re-reads every transaction; skip it when nothing changed,
+        # unless the user pressed Refresh (?full=1).
+        if any(totals.values()) or request.args.get("full") == "1":
             run_post_sync(user_id, current_app.config["snapshot_service"])
 
         rows = []

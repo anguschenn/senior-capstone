@@ -57,9 +57,21 @@ class _FakeSync implements SyncService {
   }
 
   @override
-  Future<bool> triggerBankSync() {
+  Future<bool> triggerBankSync({bool full = false}) {
     calls.add('bank');
+    lastBankSyncFull = full;
     return bankReply.future.then((_) => bankSucceeds);
+  }
+
+  bool? lastBankSyncFull;
+
+  // Tracked separately from `calls`, like serverBudgetProgressRequests.
+  int insightRefreshes = 0;
+
+  @override
+  Future<bool> refreshInsights() async {
+    insightRefreshes++;
+    return false;
   }
 
   @override
@@ -222,6 +234,9 @@ void main() {
       sync.supabaseReplies[0].complete(_result(2));
       await done;
       expect(controller.syncStatus, startsWith('Updated · bank synced '));
+      // The button also recomputes subscriptions, alerts and suggestions.
+      expect(sync.lastBankSyncFull, isTrue);
+      expect(controller.insightsVersion, 1);
     });
 
     test('first launch with nothing saved shows Loading, then data', () async {

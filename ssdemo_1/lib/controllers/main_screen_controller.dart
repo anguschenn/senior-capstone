@@ -161,7 +161,7 @@ class MainScreenController extends ChangeNotifier {
     syncStatus = 'Syncing with bank...';
     _notifyListenersSafe();
     try {
-      final synced = await _sync.triggerBankSync();
+      final synced = await _sync.triggerBankSync(full: true);
       loginRequired = false;
       syncStatus = 'Loading...';
       _notifyListenersSafe();
@@ -170,6 +170,7 @@ class MainScreenController extends ChangeNotifier {
         selectedMonth,
       );
       _applySyncResult(result);
+      insightsVersion++;
       syncStatus = result.hasData ? _updatedStatus(synced) : 'No data found';
     } on ItemLoginRequiredException {
       loginRequired = true;
@@ -453,6 +454,7 @@ class MainScreenController extends ChangeNotifier {
           syncStatus = result.hasData
               ? 'Review saved. Data refreshed.'
               : 'Review saved. No DB data yet.';
+          unawaited(_refreshInsights());
         } catch (e) {
           syncStatus = 'Review saved, but refresh failed: $e';
         }
@@ -503,10 +505,27 @@ class MainScreenController extends ChangeNotifier {
       syncStatus = 'Budget saved.';
       // A month that had no rows has one now: pick up the server's view.
       unawaited(_refreshServerBudgetProgress());
+      unawaited(_refreshInsights());
     } catch (e) {
       // Keep optimistic UI state even when persistence fails.
       syncStatus = 'Saved locally, but DB update failed: $e';
     }
+    _notifyListenersSafe();
+  }
+
+  /// Bumped when the server's subscriptions, alerts and suggestions were
+  /// recomputed, so cards that load them on their own reload.
+  int insightsVersion = 0;
+
+  /// After a budget, rule or hidden-account change: the server recomputes
+  /// subscriptions, alerts and suggestions (a bank sync only does that when
+  /// the bank sent something new), then the app reads them again.
+  Future<void> _refreshInsights() async {
+    final ok = await _sync.refreshInsights();
+    if (!ok || _isDisposed) return;
+    await _fetchAndApply();
+    if (_isDisposed) return;
+    insightsVersion++;
     _notifyListenersSafe();
   }
 
@@ -592,6 +611,7 @@ class MainScreenController extends ChangeNotifier {
     final userId = AuthService.instance.currentUserId;
     await HiddenAccountsStore.instance.save(userId, next);
     await HiddenAccountsStore.instance.saveToServer(userId, ids, hidden);
+    unawaited(_refreshInsights());
   }
 
   /// Every Plaid account id behind the hidden accounts.
