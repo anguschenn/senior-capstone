@@ -249,7 +249,7 @@ class _CashFlowPageState extends State<CashFlowPage> {
             onViewModeChanged: (mode) => setState(() => viewMode = mode),
             onMonthChanged: widget.onMonthChanged,
             onYearChanged: (year) =>
-                widget.onMonthChanged(DateTime(year, 1, 2)),
+                widget.onMonthChanged(allYearOptionFor(year)),
             onPickCustomRange: () async {
               final picked = await showRangeCalendar(
                 context: context,

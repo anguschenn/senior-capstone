@@ -114,7 +114,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
     VoidCallback? yearStep(int step) {
       final i = yearIndex + step;
       if (yearIndex < 0 || i < 0 || i >= years.length) return null;
-      return () => widget.onMonthChanged(DateTime(years[i], 1, 2));
+      return () => widget.onMonthChanged(allYearOptionFor(years[i]));
     }
 
     final periodTransactions = widget.transactions.where((tx) {
@@ -440,7 +440,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
                               selected: selectedMonth.year,
                             );
                             if (picked != null) {
-                              widget.onMonthChanged(DateTime(picked, 1, 2));
+                              widget.onMonthChanged(allYearOptionFor(picked));
                             }
                           },
                         ),

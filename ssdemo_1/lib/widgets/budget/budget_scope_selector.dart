@@ -54,7 +54,7 @@ class BudgetScopeSelector extends StatelessWidget {
     VoidCallback? yearStep(int step) {
       final i = yearIndex + step;
       if (yearIndex < 0 || i < 0 || i >= years.length) return null;
-      return () => onMonthChanged(DateTime(years[i], 1, 2));
+      return () => onMonthChanged(allYearOptionFor(years[i]));
     }
 
     final Widget scope = switch (viewMode) {
@@ -81,7 +81,7 @@ class BudgetScopeSelector extends StatelessWidget {
             years: yearOptions,
             selected: selectedMonth.year,
           );
-          if (picked != null) onMonthChanged(DateTime(picked, 1, 2));
+          if (picked != null) onMonthChanged(allYearOptionFor(picked));
         },
       ),
       BudgetViewMode.all => const ScopeLine(label: 'All time'),

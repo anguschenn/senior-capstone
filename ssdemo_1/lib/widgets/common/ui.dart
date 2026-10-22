@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/material.dart';
 
 import '../../app/app_theme.dart';
+import '../../utils/app_helpers.dart';
 
 /// Shared building blocks for the Wallet look: large titles, rounded
 /// sections, a segmented control, the scope line and the ✦ "ask" chip.
@@ -1176,7 +1177,6 @@ Future<DateTime?> showMonthGridPicker({
   required List<DateTime> options,
   required DateTime selected,
 }) {
-  bool isAllYear(DateTime d) => d.month == 1 && d.day == 2;
   final optionSet = options.toSet();
   final years = {for (final o in options) o.year}.toList()..sort();
   if (years.isEmpty) years.add(selected.year);
@@ -1191,7 +1191,7 @@ Future<DateTime?> showMonthGridPicker({
         builder: (context, setState) {
           final c = context.colors;
           final yi = years.indexOf(year);
-          final allYear = DateTime(year, 1, 2);
+          final allYear = allYearOptionFor(year);
           void pick(DateTime value) => Navigator.of(context).pop(value);
           // A past month that can't be picked had no transactions.
           final anyEmpty = [
@@ -1232,7 +1232,8 @@ Future<DateTime?> showMonthGridPicker({
                               return _PickerCell(
                                 label: _monthShort[m.month - 1],
                                 height: 46,
-                                selected: !isAllYear(selected) && selected == m,
+                                selected:
+                                    !isAllYearOption(selected) && selected == m,
                                 current:
                                     m.year == now.year && m.month == now.month,
                                 onTap: optionSet.contains(m)
