@@ -115,17 +115,34 @@ class _AuthGateState extends State<_AuthGate> {
     return FutureBuilder<void>(
       future: _autoLoginFuture,
       builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
+        final ready = snapshot.connectionState == ConnectionState.done;
         return StreamBuilder(
           stream: AuthService.instance.authStateChanges,
           builder: (context, _) {
             final user = AuthService.instance.currentUser;
-            if (user == null) return const AuthPage();
-            return const MainScreen();
+            final Widget page = !ready
+                ? const Scaffold(
+                    key: ValueKey('auth-loading'),
+                    body: Center(child: CircularProgressIndicator()),
+                  )
+                : user == null
+                ? const AuthPage(key: ValueKey('auth-page'))
+                : const MainScreen(key: ValueKey('main-screen'));
+            // Fade the next page in over the page colour. The old page is
+            // dropped at once rather than faded out: after sign-out it
+            // would rebuild with no user.
+            return ColoredBox(
+              color: context.colors.background,
+              child: AnimatedSwitcher(
+                duration: MediaQuery.of(context).disableAnimations
+                    ? Duration.zero
+                    : const Duration(milliseconds: 300),
+                switchInCurve: Curves.easeOutCubic,
+                layoutBuilder: (current, _) =>
+                    current ?? const SizedBox.shrink(),
+                child: page,
+              ),
+            );
           },
         );
       },

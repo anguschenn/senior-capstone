@@ -78,6 +78,8 @@ class _AuthPageState extends State<AuthPage> {
       _message = '';
     });
     try {
+      // On success the auth gate swaps this page for the app, so only the
+      // "confirm your email" case needs a message here.
       if (_isSignUp) {
         final result = await AuthService.instance.signUp(
           email: email,
@@ -86,18 +88,14 @@ class _AuthPageState extends State<AuthPage> {
         if (!mounted) return;
         if (result.requiresEmailConfirmation) {
           setState(() {
-            _message = 'Registration successful. Check your email to confirm.';
+            _message = 'Account created. Check your email to confirm it.';
             _isSignUp = false;
+            _passwordController.clear();
+            _confirmPasswordController.clear();
           });
-        } else {
-          setState(
-            () => _message = 'Registration successful. You are signed in.',
-          );
         }
       } else {
         await AuthService.instance.signIn(email: email, password: password);
-        if (!mounted) return;
-        setState(() => _message = 'Sign in successful.');
       }
     } catch (e) {
       if (!mounted) return;
@@ -126,7 +124,9 @@ class _AuthPageState extends State<AuthPage> {
     try {
       await AuthService.instance.resetPasswordForEmail(email);
       if (!mounted) return;
-      setState(() => _message = 'Password reset email sent. Check your inbox.');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Reset link sent to $email')));
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = _friendlyError(e));
@@ -135,9 +135,49 @@ class _AuthPageState extends State<AuthPage> {
     }
   }
 
+  void _setSignUp(bool isSignUp) {
+    if (isSignUp == _isSignUp) return;
+    setState(() {
+      _isSignUp = isSignUp;
+      _error = '';
+      _message = '';
+      _passwordController.clear();
+      _confirmPasswordController.clear();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final c = context.colors;
+    final motion = MediaQuery.of(context).disableAnimations
+        ? Duration.zero
+        : const Duration(milliseconds: 250);
+
+    // Fades and folds [child] in or out, so rows that come and go (the
+    // confirm field, Forgot password, notices) don't make the form jump.
+    Widget reveal(Widget? child) => AnimatedSwitcher(
+      duration: motion,
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      transitionBuilder: (child, animation) => FadeTransition(
+        opacity: animation,
+        child: SizeTransition(
+          sizeFactor: animation,
+          axisAlignment: -1,
+          child: child,
+        ),
+      ),
+      child: child ?? const SizedBox(width: double.infinity),
+    );
+
+    // Swaps one line of text for another with a cross-fade.
+    Widget fade(Widget child) => AnimatedSwitcher(
+      duration: motion,
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      child: child,
+    );
+
     return Scaffold(
       resizeToAvoidBottomInset: true,
       body: SafeArea(
@@ -159,132 +199,171 @@ class _AuthPageState extends State<AuthPage> {
                   // Centre instead of IntrinsicHeight: SegmentedTabs uses a
                   // LayoutBuilder, which has no intrinsic height.
                   child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          'SmartSpend',
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.headlineMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          _isSignUp ? 'Create account' : 'Sign in',
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 24),
-                        SegmentedTabs<bool>(
-                          margin: EdgeInsets.zero,
-                          value: _isSignUp,
-                          segments: const {false: 'Sign In', true: 'Sign Up'},
-                          onChanged: (isSignUp) {
-                            if (isSignUp == _isSignUp) return;
-                            setState(() {
-                              _isSignUp = isSignUp;
-                              _error = '';
-                              _message = '';
-                              _passwordController.clear();
-                              _confirmPasswordController.clear();
-                            });
-                          },
-                        ),
-                        const SizedBox(height: 20),
-                        TextField(
-                          controller: _emailController,
-                          keyboardType: TextInputType.emailAddress,
-                          autofillHints: const [AutofillHints.username],
-                          textInputAction: TextInputAction.next,
-                          onSubmitted: (_) => _passwordFocusNode.requestFocus(),
-                          decoration: const InputDecoration(labelText: 'Email'),
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _passwordController,
-                          focusNode: _passwordFocusNode,
-                          obscureText: !_passwordVisible,
-                          autofillHints: const [AutofillHints.password],
-                          textInputAction: _isSignUp
-                              ? TextInputAction.next
-                              : TextInputAction.done,
-                          onSubmitted: (_) {
-                            if (_isSignUp) {
-                              _confirmPasswordFocusNode.requestFocus();
-                            } else {
-                              _submit();
-                            }
-                          },
-                          decoration: InputDecoration(
-                            labelText: 'Password',
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _passwordVisible
-                                    ? Icons.visibility
-                                    : Icons.visibility_off,
-                              ),
-                              onPressed: () => setState(
-                                () => _passwordVisible = !_passwordVisible,
-                              ),
+                    child: AutofillGroup(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const Text(
+                            'SmartSpend',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 34,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: -0.9,
                             ),
                           ),
-                        ),
-                        if (!_isSignUp)
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: TextButton(
-                              onPressed: _submitting
-                                  ? null
-                                  : _sendPasswordReset,
-                              child: const Text('Forgot password?'),
+                          const SizedBox(height: 6),
+                          fade(
+                            Text(
+                              _isSignUp ? 'Create account' : 'Sign in',
+                              key: ValueKey(_isSignUp),
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontSize: 15, color: c.muted),
                             ),
                           ),
-                        if (_isSignUp) ...[
+                          const SizedBox(height: 24),
+                          SegmentedTabs<bool>(
+                            margin: EdgeInsets.zero,
+                            value: _isSignUp,
+                            segments: const {false: 'Sign In', true: 'Sign Up'},
+                            onChanged: _setSignUp,
+                          ),
+                          const SizedBox(height: 20),
+                          TextField(
+                            controller: _emailController,
+                            keyboardType: TextInputType.emailAddress,
+                            autofillHints: const [AutofillHints.username],
+                            textInputAction: TextInputAction.next,
+                            onSubmitted: (_) =>
+                                _passwordFocusNode.requestFocus(),
+                            decoration: const InputDecoration(
+                              hintText: 'Email',
+                            ),
+                          ),
                           const SizedBox(height: 12),
                           TextField(
-                            controller: _confirmPasswordController,
-                            focusNode: _confirmPasswordFocusNode,
+                            controller: _passwordController,
+                            focusNode: _passwordFocusNode,
                             obscureText: !_passwordVisible,
-                            textInputAction: TextInputAction.done,
-                            onSubmitted: (_) => _submit(),
-                            decoration: const InputDecoration(
-                              labelText: 'Confirm password',
+                            autofillHints: [
+                              _isSignUp
+                                  ? AutofillHints.newPassword
+                                  : AutofillHints.password,
+                            ],
+                            textInputAction: _isSignUp
+                                ? TextInputAction.next
+                                : TextInputAction.done,
+                            onSubmitted: (_) {
+                              if (_isSignUp) {
+                                _confirmPasswordFocusNode.requestFocus();
+                              } else {
+                                _submit();
+                              }
+                            },
+                            decoration: InputDecoration(
+                              hintText: 'Password',
+                              suffixIcon: IconButton(
+                                tooltip: _passwordVisible
+                                    ? 'Hide password'
+                                    : 'Show password',
+                                icon: Icon(
+                                  _passwordVisible
+                                      ? Icons.visibility_rounded
+                                      : Icons.visibility_off_rounded,
+                                  size: 20,
+                                  color: c.muted,
+                                ),
+                                onPressed: () => setState(
+                                  () => _passwordVisible = !_passwordVisible,
+                                ),
+                              ),
+                            ),
+                          ),
+                          reveal(
+                            _isSignUp
+                                ? Padding(
+                                    key: const ValueKey('confirm'),
+                                    padding: const EdgeInsets.only(top: 12),
+                                    child: TextField(
+                                      controller: _confirmPasswordController,
+                                      focusNode: _confirmPasswordFocusNode,
+                                      obscureText: !_passwordVisible,
+                                      autofillHints: const [
+                                        AutofillHints.newPassword,
+                                      ],
+                                      textInputAction: TextInputAction.done,
+                                      onSubmitted: (_) => _submit(),
+                                      decoration: const InputDecoration(
+                                        hintText: 'Confirm password',
+                                      ),
+                                    ),
+                                  )
+                                : Align(
+                                    key: const ValueKey('forgot'),
+                                    alignment: Alignment.centerRight,
+                                    child: TextButton(
+                                      onPressed: _submitting
+                                          ? null
+                                          : _sendPasswordReset,
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: c.muted,
+                                      ),
+                                      child: const Text('Forgot password'),
+                                    ),
+                                  ),
+                          ),
+                          reveal(
+                            _error.isEmpty
+                                ? null
+                                : _Notice(
+                                    key: ValueKey('error:$_error'),
+                                    icon: Icons.error_outline_rounded,
+                                    color: c.bad,
+                                    text: _error,
+                                  ),
+                          ),
+                          reveal(
+                            _message.isEmpty
+                                ? null
+                                : _Notice(
+                                    key: ValueKey('message:$_message'),
+                                    icon: Icons.mark_email_read_rounded,
+                                    color: c.good,
+                                    text: _message,
+                                  ),
+                          ),
+                          const SizedBox(height: 20),
+                          FilledButton(
+                            onPressed: _submitting ? null : _submit,
+                            // Keep the button's own colours while it works,
+                            // instead of Material's grey disabled look.
+                            style: FilledButton.styleFrom(
+                              disabledBackgroundColor: c.button,
+                              disabledForegroundColor: c.onButton,
+                            ),
+                            child: fade(
+                              _submitting
+                                  ? SizedBox(
+                                      key: const ValueKey('spinner'),
+                                      width: 18,
+                                      height: 18,
+                                      // The theme's spinner colour is the
+                                      // button fill, so it would vanish on
+                                      // the button.
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: c.onButton,
+                                      ),
+                                    )
+                                  : Text(
+                                      _isSignUp ? 'Create Account' : 'Sign In',
+                                      key: ValueKey(_isSignUp),
+                                    ),
                             ),
                           ),
                         ],
-                        if (_error.isNotEmpty) ...[
-                          const SizedBox(height: 12),
-                          Text(
-                            _error,
-                            style: TextStyle(color: context.colors.bad),
-                          ),
-                        ],
-                        if (_message.isNotEmpty) ...[
-                          const SizedBox(height: 12),
-                          Text(
-                            _message,
-                            style: TextStyle(color: context.colors.good),
-                          ),
-                        ],
-                        const SizedBox(height: 20),
-                        FilledButton(
-                          onPressed: _submitting ? null : _submit,
-                          child: _submitting
-                              ? SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  // The theme's spinner colour is the button
-                                  // fill, so it would vanish on the button.
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: context.colors.onButton,
-                                  ),
-                                )
-                              : Text(_isSignUp ? 'Create Account' : 'Sign In'),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -292,6 +371,40 @@ class _AuthPageState extends State<AuthPage> {
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+/// One line of feedback under the form: an error or a "check your email".
+class _Notice extends StatelessWidget {
+  const _Notice({
+    super.key,
+    required this.icon,
+    required this.color,
+    required this.text,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: Icon(icon, size: 16, color: color),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(text, style: TextStyle(fontSize: 13.5, color: color)),
+          ),
+        ],
       ),
     );
   }
