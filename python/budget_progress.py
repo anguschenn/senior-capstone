@@ -324,11 +324,13 @@ def row_id(row: dict) -> str:
 
 class Decided(NamedTuple):
     """How one transaction counts. paid_back is what friends paid back on this purchase
-    (inflows linked to it): it no longer counts as the user's spending."""
+    (inflows linked to it): it no longer counts as the user's spending. extra is the part
+    of a payback beyond what was left of its purchase: it counts as income instead."""
 
     kind: str
     bucket: str
     paid_back: float = 0.0
+    extra: float = 0.0
 
 
 def is_p2p_inflow(row: dict) -> bool:
@@ -456,7 +458,10 @@ def _apply_paybacks(parsed: list[dict], by_id: dict[str, dict], out: dict[str, D
             continue
         take = min(item["amount"], max(purchase["amount"] - paid.get(purchase["id"], 0.0), 0.0))
         paid[purchase["id"]] = paid.get(purchase["id"], 0.0) + take
-        out[item["id"]] = Decided("payback", decided.bucket)
+        # More than was left (the purchase posted lower, or another payback was linked
+        # elsewhere first): the rest is still money the user received.
+        extra = round(item["amount"] - take, 2)
+        out[item["id"]] = Decided("payback", decided.bucket, 0.0, extra if extra >= 0.005 else 0.0)
     for purchase_id, amount in paid.items():
         decided = out[purchase_id]
         out[purchase_id] = Decided(decided.kind, decided.bucket, round(amount, 2))
@@ -593,7 +598,7 @@ def build_budget_progress(
         if rid in counted:
             continue
         counted.add(rid)
-        kind, bucket, paid_back = kinds[rid]
+        kind, bucket, paid_back, _ = kinds[rid]
         amount = signed_spend(kind, float(row["amount"]), paid_back)
         if amount == 0:
             continue

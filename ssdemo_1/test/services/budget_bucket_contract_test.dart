@@ -195,6 +195,7 @@ void main() {
         addTearDown(() {
           AppTransaction.kindById = const {};
           AppTransaction.paidBackById = const {};
+          AppTransaction.extraIncomeById = const {};
           AppTransaction.sharedAmountById = const {};
           AppTransaction.purchaseByPaybackId = const {};
         });

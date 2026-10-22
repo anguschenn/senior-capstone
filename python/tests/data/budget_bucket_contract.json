@@ -1119,6 +1119,81 @@
           "limit": 100.0
         }
       ]
+    },
+    {
+      "_comment": "Paybacks linked past what was left of the purchase (it posted lower, or another one was linked first): the purchase goes to zero and the rest of the later payback still counts as income.",
+      "month": "2026-09",
+      "categories": {
+        "c-food": "Food"
+      },
+      "budgets": [
+        {
+          "id": "b-food",
+          "category_id": "c-food",
+          "monthly_limit": 300
+        }
+      ],
+      "rules": {},
+      "transactions": [
+        {
+          "plaid_transaction_id": "x-dinner",
+          "plaid_account_id": "acc-card",
+          "date": "2026-09-10",
+          "name": "Olive Garden",
+          "merchant_name": null,
+          "amount": 60,
+          "pfc_primary": "FOOD_AND_DRINK",
+          "pfc_detailed": "FOOD_AND_DRINK_RESTAURANT"
+        },
+        {
+          "plaid_transaction_id": "x-amy",
+          "plaid_account_id": "acc-chk",
+          "date": "2026-09-12",
+          "name": "Zelle payment from Amy",
+          "merchant_name": null,
+          "amount": -40,
+          "pfc_primary": "TRANSFER_IN",
+          "pfc_detailed": "TRANSFER_IN_DEPOSIT"
+        },
+        {
+          "plaid_transaction_id": "x-ben",
+          "plaid_account_id": "acc-chk",
+          "date": "2026-09-14",
+          "name": "Venmo from Ben",
+          "merchant_name": null,
+          "amount": -30,
+          "pfc_primary": "TRANSFER_IN",
+          "pfc_detailed": "TRANSFER_IN_DEPOSIT"
+        }
+      ],
+      "decisions": {
+        "x-amy": {
+          "paid_back_purchase_id": "x-dinner"
+        },
+        "x-ben": {
+          "paid_back_purchase_id": "x-dinner"
+        }
+      },
+      "expected_kinds": {
+        "x-dinner": "spend",
+        "x-amy": "payback",
+        "x-ben": "payback"
+      },
+      "expected_paid_back": {
+        "x-dinner": 60.0
+      },
+      "expected_income": {
+        "x-amy": 0.0,
+        "x-ben": 10.0
+      },
+      "expected": [
+        {
+          "category_id": "c-food",
+          "category": "Food",
+          "spent": 0.0,
+          "limit": 300.0
+        }
+      ]
     }
   ]
 }

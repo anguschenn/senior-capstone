@@ -89,7 +89,7 @@ def build_category_month_stats(
         month = str(row.get("date") or "")[:7]
         if len(month) != 7:
             continue
-        kind, bucket, paid_back = kinds[row_id(row)]
+        kind, bucket, paid_back, _ = kinds[row_id(row)]
         amount = signed_spend(kind, float(row["amount"]), paid_back)
         if amount == 0:
             continue

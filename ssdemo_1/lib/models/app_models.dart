@@ -143,6 +143,10 @@ class AppTransaction {
   /// What friends paid back on this purchase.
   double get paidBack => paidBackById[id] ?? 0;
 
+  /// Paybacks larger than what was left of their purchase -> the part beyond
+  /// it, which still counts as income. Set by [classifyTransactions].
+  static Map<String, double> extraIncomeById = const {};
+
   /// Purchases split with others: what they will pay back (the user's
   /// decisions). Display only: spending goes down when they actually pay.
   static Map<String, double> sharedAmountById = const {};
@@ -229,7 +233,13 @@ class AppTransaction {
         text.contains('autopay');
   }
 
-  double get incomeAmount => kind == TxKind.income ? displayAmount : 0;
+  /// Income; for a payback, only what was beyond what was left of its
+  /// purchase.
+  double get incomeAmount => switch (kind) {
+    TxKind.income => displayAmount,
+    TxKind.payback => extraIncomeById[id] ?? 0,
+    _ => 0,
+  };
 
   /// Money paid onto a credit card, seen from the card's side.
   double get cardPaymentAmount => isCardPaymentCredit ? displayAmount : 0;
@@ -579,6 +589,7 @@ typedef Classified = ({
   Map<String, String> purchaseIdByRefundId,
   Map<String, String> purchaseIdByPaybackId,
   Map<String, double> paidBackById,
+  Map<String, double> extraIncomeById,
 });
 
 /// Makes [classified] what every [AppTransaction] reads: kinds, what friends
@@ -591,6 +602,7 @@ void useClassification(
   final byId = {for (final tx in transactions) tx.id: tx};
   AppTransaction.kindById = classified.kinds;
   AppTransaction.paidBackById = classified.paidBackById;
+  AppTransaction.extraIncomeById = classified.extraIncomeById;
   AppTransaction.sharedAmountById = {
     for (final e in decisions.entries)
       if (e.value.sharedAmount > 0) e.key: e.value.sharedAmount,
@@ -662,6 +674,7 @@ Classified classifyTransactions(
   // Oldest payback first, each lowering its purchase until nothing is left.
   final purchaseIdByPaybackId = <String, String>{};
   final paidBackById = <String, double>{};
+  final extraIncomeById = <String, double>{};
   final linked =
       transactions
           .where(
@@ -692,6 +705,10 @@ Classified classifyTransactions(
       math.max(purchase.displayAmount - paid, 0),
     );
     paidBackById[purchaseId] = paid + take;
+    // More than was left (the purchase posted lower, or another payback was
+    // linked elsewhere first): the rest is still money the user received.
+    final extra = ((tx.displayAmount - take) * 100).roundToDouble() / 100;
+    if (extra >= 0.005) extraIncomeById[tx.id] = extra;
     kinds[tx.id] = TxKind.payback;
     purchaseIdByRefundId.remove(tx.id);
     purchaseIdByPaybackId[tx.id] = purchaseId;
@@ -704,6 +721,7 @@ Classified classifyTransactions(
       for (final e in paidBackById.entries)
         e.key: (e.value * 100).roundToDouble() / 100,
     },
+    extraIncomeById: extraIncomeById,
   );
 }
 

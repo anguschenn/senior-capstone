@@ -87,6 +87,7 @@ class Tx:
         "bucket",
         "kind",
         "paid_back",
+        "extra_income",
     )
 
     def __init__(
@@ -141,6 +142,7 @@ class Tx:
         # paybacks linked to a purchase).
         self.kind = row_kind(row, user_category, self.account_type)
         self.paid_back = 0.0
+        self.extra_income = 0.0
 
     # ── AppTransaction getters ──
     @property
@@ -201,6 +203,9 @@ class Tx:
 
     @property
     def income_amount(self) -> float:
+        """Income; for a payback, only what was beyond what was left of its purchase."""
+        if self.kind == "payback":
+            return self.extra_income
         return self.display_amount if self.kind == "income" else 0.0
 
     @property
@@ -238,7 +243,7 @@ def build_transactions(
     decided = classify_rows(unique_rows, rules, account_types, decisions)
     for tx in out:
         if tx.id in decided:
-            tx.kind, tx.bucket, tx.paid_back = decided[tx.id]
+            tx.kind, tx.bucket, tx.paid_back, tx.extra_income = decided[tx.id]
     return out
 
 
