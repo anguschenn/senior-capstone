@@ -14,13 +14,29 @@ from supabase_repo import supabase
 # ── Simple in-memory sliding-window rate limiter ─────────────────────
 _rate_buckets: dict[str, list[float]] = {}
 _rate_lock = threading.Lock()
+_RATE_WINDOW_SECONDS = 60.0
+_last_sweep = 0.0
+
+
+def _sweep_idle_buckets(now: float) -> None:
+    """Drop keys with no request inside the window, at most once a window, so one key per
+    user id and client IP doesn't stay in memory forever. Caller holds _rate_lock."""
+    global _last_sweep
+    if now - _last_sweep < _RATE_WINDOW_SECONDS:
+        return
+    _last_sweep = now
+    for key in [
+        k for k, ts in _rate_buckets.items() if not ts or now - ts[-1] >= _RATE_WINDOW_SECONDS
+    ]:
+        del _rate_buckets[key]
 
 
 def _check_rate_limit(key: str, limit: int = AI_RATE_LIMIT_PER_MINUTE) -> bool:
     """Return True if within limit, False if exceeded."""
     now = time.time()
-    window = 60.0
+    window = _RATE_WINDOW_SECONDS
     with _rate_lock:
+        _sweep_idle_buckets(now)
         timestamps = _rate_buckets.get(key, [])
         timestamps = [t for t in timestamps if now - t < window]
         if len(timestamps) >= limit:

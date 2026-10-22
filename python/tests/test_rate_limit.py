@@ -108,6 +108,29 @@ class BudgetSuggestAuthTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
 
 
+class BucketCleanupTests(unittest.TestCase):
+    def setUp(self):
+        auth._rate_buckets.clear()
+        auth._last_sweep = 0.0
+        self.addCleanup(auth._rate_buckets.clear)
+
+    def test_idle_keys_are_dropped_after_a_window(self):
+        with mock.patch.object(auth.time, "time", return_value=1000.0):
+            auth._check_rate_limit("ai:ip:1.1.1.1", 5)
+        with mock.patch.object(auth.time, "time", return_value=1030.0):
+            auth._check_rate_limit("ai:ip:2.2.2.2", 5)
+        with mock.patch.object(auth.time, "time", return_value=1065.0):
+            auth._check_rate_limit("ai:ip:3.3.3.3", 5)
+        # 1.1.1.1 was idle a full window; 2.2.2.2 is still inside it.
+        self.assertEqual(set(auth._rate_buckets), {"ai:ip:2.2.2.2", "ai:ip:3.3.3.3"})
+
+    def test_cleanup_keeps_counting_an_active_key(self):
+        with mock.patch.object(auth.time, "time", return_value=1000.0):
+            self.assertTrue(auth._check_rate_limit("ai:user:a", 1))
+        with mock.patch.object(auth.time, "time", return_value=1059.0):
+            self.assertFalse(auth._check_rate_limit("ai:user:a", 1))
+
+
 class ProxyFixConfigTests(unittest.TestCase):
     def test_app_trusts_exactly_one_forwarded_for_hop_and_nothing_else(self):
         with app_client() as client:
