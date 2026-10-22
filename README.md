@@ -62,6 +62,12 @@ Both the backend and frontend require environment variables to be configured bef
 
 Once configured, start the Python backend server and then run the Flutter app targeting your preferred platform (web recommended for development).
 
+`ssdemo_1/.env` ships inside the app (on the web anyone can download it), so it only holds values the app needs anyway: the Supabase URL and anon key, the backend URL and its API key. Never put a password in it. To sign a test account in automatically while debugging, pass it at launch instead; the app refuses to start if `AUTO_LOGIN_EMAIL` or `AUTO_LOGIN_PASSWORD` is set in `.env`:
+
+```bash
+flutter run --dart-define=AUTO_LOGIN_EMAIL=you@example.com --dart-define=AUTO_LOGIN_PASSWORD=...
+```
+
 Refer to each subdirectory's README for more detailed setup instructions.
 
 ---
