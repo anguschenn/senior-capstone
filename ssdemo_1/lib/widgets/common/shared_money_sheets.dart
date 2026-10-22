@@ -166,6 +166,16 @@ double othersShareOf(double total, int people) {
   return ((total - yours) * 100).roundToDouble() / 100;
 }
 
+/// "Your share \$82.16 · \$15.16 to get back (\$67.00 already paid back)".
+String splitPreview(AppTransaction purchase, double others) {
+  final left = others - purchase.paidBack;
+  final paid = purchase.paidBack > 0
+      ? ' (${dollars(purchase.paidBack)} already paid back)'
+      : '';
+  return 'Your share ${dollars(purchase.displayAmount - others)} · '
+      '${dollars(left > 0 ? left : 0)} to get back$paid';
+}
+
 class _SplitPurchaseSheet extends StatefulWidget {
   const _SplitPurchaseSheet({required this.purchase});
 
@@ -262,8 +272,7 @@ class _SplitPurchaseSheetState extends State<_SplitPurchaseSheet> {
                 ? (_byPeople
                       ? 'Enter 2 or more people.'
                       : 'Enter less than ${dollars(purchase.displayAmount)}.')
-                : 'Your share ${dollars(purchase.displayAmount - others)} · '
-                      '${dollars(others)} to get back',
+                : splitPreview(purchase, others),
             style: TextStyle(color: c.muted, fontSize: 13),
           ),
           const SizedBox(height: 16),

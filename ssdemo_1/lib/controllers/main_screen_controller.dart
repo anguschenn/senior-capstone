@@ -551,7 +551,10 @@ class MainScreenController extends ChangeNotifier {
       decision: decision,
     );
     if (ok) {
-      confirmedReviewTxIds = Set<String>.from(confirmedReviewTxIds)..add(txId);
+      // Undoing a decision sends money from a friend back to Review.
+      final confirmed = Set<String>.from(confirmedReviewTxIds);
+      decision.isEmpty ? confirmed.remove(txId) : confirmed.add(txId);
+      confirmedReviewTxIds = confirmed;
       try {
         _refreshGen++;
         final result = await _sync.refreshFromSupabase(
@@ -770,10 +773,15 @@ class MainScreenController extends ChangeNotifier {
     liveCategoryOptions = result.categoryOptions;
     liveAccountOptions = result.accountOptions;
     liveStats = result.stats;
+    // Only the user's own picks carry over; everything else is the fresh
+    // result, so a linked payback shows its purchase's category, not the
+    // Income it read before.
     reviewedCategoryByTxId = {
       ...result.autoReviewedCategoryByTxId,
       for (final entry in reviewedCategoryByTxId.entries)
-        if (txIdSet.contains(entry.key)) entry.key: entry.value,
+        if (txIdSet.contains(entry.key) &&
+            manualReviewedTxIds.contains(entry.key))
+          entry.key: entry.value,
     };
     manualReviewedTxIds = {
       for (final txId in manualReviewedTxIds)

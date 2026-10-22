@@ -72,6 +72,14 @@ void main() {
     expect(othersShareOf(80, 1), 0);
   });
 
+  test('the split preview counts what friends already paid back', () {
+    AppTransaction.paidBackById = {'p1': 30};
+    expect(
+      splitPreview(dinner, 40),
+      r'Your share $40.00 · $10.00 to get back ($30.00 already paid back)',
+    );
+  });
+
   test('actions: purchases split, payments from people link', () {
     expect(actionsFor(dinner), [TransactionAction.split]);
     expect(actionsFor(zelle), [
