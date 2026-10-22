@@ -944,5 +944,68 @@
         "limit": 100.0
       }
     ]
-  }
+  },
+  "classify_cases": [
+    {
+      "_comment": "A refund only matches a purchase that still counts as spending: an outflow paired as a move between own accounts can't absorb a later inflow with the same name.",
+      "month": "2026-09",
+      "categories": {
+        "c-shop": "Shopping"
+      },
+      "budgets": [
+        {
+          "id": "b-shop",
+          "category_id": "c-shop",
+          "monthly_limit": 200
+        }
+      ],
+      "rules": {},
+      "decisions": {},
+      "transactions": [
+        {
+          "plaid_transaction_id": "rm-out",
+          "plaid_account_id": "acc-chk",
+          "date": "2026-09-10",
+          "name": "Online Transfer Savings",
+          "merchant_name": null,
+          "amount": 50,
+          "pfc_primary": "TRANSFER_OUT",
+          "pfc_detailed": "TRANSFER_OUT_ACCOUNT_TRANSFER"
+        },
+        {
+          "plaid_transaction_id": "rm-in",
+          "plaid_account_id": "acc-sav",
+          "date": "2026-09-11",
+          "name": "Online Transfer Checking",
+          "merchant_name": null,
+          "amount": -50,
+          "pfc_primary": "TRANSFER_IN",
+          "pfc_detailed": "TRANSFER_IN_ACCOUNT_TRANSFER"
+        },
+        {
+          "plaid_transaction_id": "rm-back",
+          "plaid_account_id": "acc-chk",
+          "date": "2026-09-15",
+          "name": "Online Transfer Savings",
+          "merchant_name": null,
+          "amount": -20,
+          "pfc_primary": "TRANSFER_IN",
+          "pfc_detailed": "TRANSFER_IN_ACCOUNT_TRANSFER"
+        }
+      ],
+      "expected_kinds": {
+        "rm-out": "internal",
+        "rm-in": "internal",
+        "rm-back": "income"
+      },
+      "expected": [
+        {
+          "category_id": "c-shop",
+          "category": "Shopping",
+          "spent": 0.0,
+          "limit": 200.0
+        }
+      ]
+    }
+  ]
 }

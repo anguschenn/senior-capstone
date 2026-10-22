@@ -186,4 +186,78 @@ void main() {
       expect(result.autoReviewedCategoryByTxId['pb-amy-1'], 'Food');
     });
   });
+  group('classify cases (shared with Python)', () {
+    for (final raw in _fixture['classify_cases'] as List) {
+      final spec = raw as Map<String, dynamic>;
+      test(spec['_comment'], () {
+        final categories = (spec['categories'] as Map<String, dynamic>)
+            .cast<String, String>();
+        addTearDown(() {
+          AppTransaction.kindById = const {};
+          AppTransaction.paidBackById = const {};
+          AppTransaction.sharedAmountById = const {};
+          AppTransaction.purchaseByPaybackId = const {};
+        });
+        final result = SyncService.instance.buildResult(
+          RawSyncData(
+            userId: 'u1',
+            monthYear: spec['month'] as String,
+            savedAt: DateTime(2026, 10, 10),
+            accountsRows: const [],
+            categories: [
+              for (final e in categories.entries)
+                CategoryOption(id: e.key, name: e.value),
+            ],
+            budgetRows: [
+              for (final b
+                  in (spec['budgets'] as List).cast<Map<String, dynamic>>())
+                {...b, 'month_year': spec['month']},
+            ],
+            subscriptionRows: const [],
+            txRows: (spec['transactions'] as List).cast<Map<String, dynamic>>(),
+            rememberedRules: {
+              for (final e in (spec['rules'] as Map<String, dynamic>).entries)
+                e.key: {'category': e.value as String, 'confidence': 'high'},
+            },
+            decisions: {
+              for (final e
+                  in (spec['decisions'] as Map<String, dynamic>).entries)
+                e.key: (e.value as Map).cast<String, dynamic>(),
+            },
+          ),
+          const {},
+          asOf: DateTime.parse('${spec['month']}-30'),
+        );
+
+        final byId = {for (final tx in result.transactions) tx.id: tx};
+        final expectedKinds = spec['expected_kinds'] as Map<String, dynamic>;
+        expect({
+          for (final id in expectedKinds.keys) id: byId[id]!.kind.name,
+        }, expectedKinds);
+        final paidBack =
+            (spec['expected_paid_back'] as Map<String, dynamic>?) ?? const {};
+        for (final e in paidBack.entries) {
+          expect(
+            byId[e.key]!.paidBack,
+            closeTo((e.value as num).toDouble(), 0.005),
+          );
+        }
+        final income =
+            (spec['expected_income'] as Map<String, dynamic>?) ?? const {};
+        for (final e in income.entries) {
+          expect(
+            byId[e.key]!.incomeAmount,
+            closeTo((e.value as num).toDouble(), 0.005),
+          );
+        }
+        for (final e
+            in (spec['expected'] as List).cast<Map<String, dynamic>>()) {
+          final card = result.budgetProgress.firstWhere(
+            (p) => p.categoryId == e['category_id'],
+          );
+          expect(card.spent, closeTo((e['spent'] as num).toDouble(), 0.005));
+        }
+      });
+    }
+  });
 }

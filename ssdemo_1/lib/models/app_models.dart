@@ -627,15 +627,17 @@ Classified classifyTransactions(
   for (final tx in transactions) {
     byId.putIfAbsent(tx.id, () => tx);
     final userCategory = userCategoryById[tx.id] ?? '';
-    var kind = tx.ownKind(userCategory: userCategory);
-    if (kind == TxKind.spend) {
-      purchasesByMerchant
-          .putIfAbsent(merchantMatchKey(tx.name), () => [])
-          .add(tx);
-    }
-    kinds[tx.id] = kind;
+    kinds[tx.id] = tx.ownKind(userCategory: userCategory);
   }
   _pairOwnTransfers(transactions, userCategoryById, kinds);
+  // After pairing, like the server: a move between own accounts is not a
+  // purchase a refund can come back for.
+  for (final tx in transactions) {
+    if (kinds[tx.id] != TxKind.spend) continue;
+    purchasesByMerchant
+        .putIfAbsent(merchantMatchKey(tx.name), () => [])
+        .add(tx);
+  }
   for (final tx in transactions) {
     final kind = kinds[tx.id];
     if (kind != TxKind.income && kind != TxKind.refund) continue;

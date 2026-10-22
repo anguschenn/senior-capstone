@@ -70,6 +70,39 @@ class BudgetBucketContractTests(unittest.TestCase):
         ]
         self.assertEqual(actual, spec["expected"])
 
+    def test_classify_cases(self):
+        """Whole-list decisions (own-account pairs, refunds, paybacks) the app must match:
+        each case's kinds, paid-back amounts, income and month spending."""
+        from ai.server_summary import build_transactions
+
+        for case in FIXTURE["classify_cases"]:
+            with self.subTest(case["_comment"]):
+                txs = {
+                    tx.id: tx
+                    for tx in build_transactions(
+                        case["transactions"], {}, case["rules"], decisions=case["decisions"]
+                    )
+                }
+                kinds = {tx_id: txs[tx_id].kind for tx_id in case["expected_kinds"]}
+                self.assertEqual(kinds, case["expected_kinds"])
+                for tx_id, amount in case.get("expected_paid_back", {}).items():
+                    self.assertAlmostEqual(txs[tx_id].paid_back, amount, places=2)
+                for tx_id, amount in case.get("expected_income", {}).items():
+                    self.assertAlmostEqual(txs[tx_id].income_amount, amount, places=2)
+                progress = build_budget_progress(
+                    case["budgets"],
+                    case["categories"],
+                    case["transactions"],
+                    case["rules"],
+                    case["month"],
+                    decisions=case["decisions"],
+                )
+                actual = [
+                    {k: item[k] for k in ("category_id", "category", "spent", "limit")}
+                    for item in progress
+                ]
+                self.assertEqual(actual, case["expected"])
+
     def test_progress_feeds_burn_rate_check(self):
         """Output shape is what PredictService's burn-rate check sanitizes and reads."""
         from ai.validators import sanitize_budget_progress
