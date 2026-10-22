@@ -478,15 +478,18 @@ def looks_like_transfer(name: str, description: str, pfc_primary: str, pfc_detai
 
 def _pair_own_transfers(parsed: list[dict]) -> None:
     """Money leaving one linked account and the same amount arriving in another within 5
-    days is a move between own accounts (_pairOwnTransfers). Money to or from an account the
-    app doesn't have counts as spending or income."""
+    days is a move between own accounts (_pairOwnTransfers), Zelle or Venmo included. Money to
+    or from an account the app doesn't have counts as spending or income, and a payment the
+    user linked as a payback never pairs."""
 
     def candidate(item: dict) -> bool:
         if not item["account"] or item["day"] is None:
             return False
         if item["user_category"] and item["user_category"] != "Fees & Transfers":
             return False
-        return item["kind"] in ("spend", "income") and not item["p2p"] and item["transfer_like"]
+        return (
+            item["kind"] in ("spend", "income") and not item["pays_back"] and item["transfer_like"]
+        )
 
     # Oldest first, each taking the closest-dated match, so the app and the server pair
     # the same rows whatever order they arrive in.

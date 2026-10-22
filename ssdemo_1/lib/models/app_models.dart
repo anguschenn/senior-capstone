@@ -629,7 +629,12 @@ Classified classifyTransactions(
     final userCategory = userCategoryById[tx.id] ?? '';
     kinds[tx.id] = tx.ownKind(userCategory: userCategory);
   }
-  _pairOwnTransfers(transactions, userCategoryById, kinds);
+  _pairOwnTransfers(
+    transactions,
+    userCategoryById,
+    kinds,
+    paidBackPurchaseById,
+  );
   // After pairing, like the server: a move between own accounts is not a
   // purchase a refund can come back for.
   for (final tx in transactions) {
@@ -707,11 +712,13 @@ Classified classifyTransactions(
 /// The app only manages linked accounts, so money to or from any other
 /// account counts as spending or income.
 /// Only transfer- or payment-looking rows pair, so a purchase never pairs with
-/// an unrelated deposit; person-to-person payments never pair.
+/// an unrelated deposit. Zelle or Venmo between two linked accounts pairs too;
+/// a payment the user linked as a payback never does.
 void _pairOwnTransfers(
   List<AppTransaction> transactions,
   Map<String, String> userCategoryById,
   Map<String, TxKind> kinds,
+  Map<String, String> paidBackPurchaseById,
 ) {
   bool candidate(AppTransaction tx) {
     if (tx.accountId.isEmpty) return false;
@@ -721,9 +728,7 @@ void _pairOwnTransfers(
     }
     final kind = kinds[tx.id];
     if (kind != TxKind.spend && kind != TxKind.income) return false;
-    if (AppTransaction.isPeerToPeer('${tx.name} ${tx.description}')) {
-      return false;
-    }
+    if ((paidBackPurchaseById[tx.id] ?? '').isNotEmpty) return false;
     return looksLikeTransfer(
       tx.name,
       tx.description,

@@ -1006,6 +1006,119 @@
           "limit": 200.0
         }
       ]
+    },
+    {
+      "_comment": "Zelle or Venmo between two of the user's linked accounts is a move between own accounts, not spending and income; money to or from other people still counts, and a payment linked as a payback never pairs.",
+      "month": "2026-09",
+      "categories": {
+        "c-food": "Food",
+        "c-fees": "Fees & Transfers"
+      },
+      "budgets": [
+        {
+          "id": "b-food",
+          "category_id": "c-food",
+          "monthly_limit": 300
+        },
+        {
+          "id": "b-fees",
+          "category_id": "c-fees",
+          "monthly_limit": 100
+        }
+      ],
+      "rules": {},
+      "transactions": [
+        {
+          "plaid_transaction_id": "own-out",
+          "plaid_account_id": "acc-chk",
+          "date": "2026-09-05",
+          "name": "Zelle payment to Hendrick Yang",
+          "merchant_name": null,
+          "amount": 200,
+          "pfc_primary": "TRANSFER_OUT",
+          "pfc_detailed": "TRANSFER_OUT_ACCOUNT_TRANSFER"
+        },
+        {
+          "plaid_transaction_id": "own-in",
+          "plaid_account_id": "acc-bofa",
+          "date": "2026-09-06",
+          "name": "Zelle payment from Hendrick Yang",
+          "merchant_name": null,
+          "amount": -200,
+          "pfc_primary": "TRANSFER_IN",
+          "pfc_detailed": "TRANSFER_IN_ACCOUNT_TRANSFER"
+        },
+        {
+          "plaid_transaction_id": "sam-in",
+          "plaid_account_id": "acc-bofa",
+          "date": "2026-09-08",
+          "name": "Venmo from Sam",
+          "merchant_name": null,
+          "amount": -30,
+          "pfc_primary": "TRANSFER_IN",
+          "pfc_detailed": "TRANSFER_IN_DEPOSIT"
+        },
+        {
+          "plaid_transaction_id": "dinner",
+          "plaid_account_id": "acc-card",
+          "date": "2026-09-10",
+          "name": "Olive Garden",
+          "merchant_name": null,
+          "amount": 90,
+          "pfc_primary": "FOOD_AND_DRINK",
+          "pfc_detailed": "FOOD_AND_DRINK_RESTAURANT"
+        },
+        {
+          "plaid_transaction_id": "mom-out",
+          "plaid_account_id": "acc-chk",
+          "date": "2026-09-12",
+          "name": "Zelle payment to Mom",
+          "merchant_name": null,
+          "amount": 45,
+          "pfc_primary": "TRANSFER_OUT",
+          "pfc_detailed": "TRANSFER_OUT_ACCOUNT_TRANSFER"
+        },
+        {
+          "plaid_transaction_id": "amy-in",
+          "plaid_account_id": "acc-bofa",
+          "date": "2026-09-13",
+          "name": "Zelle payment from Amy",
+          "merchant_name": null,
+          "amount": -45,
+          "pfc_primary": "TRANSFER_IN",
+          "pfc_detailed": "TRANSFER_IN_DEPOSIT"
+        }
+      ],
+      "decisions": {
+        "amy-in": {
+          "paid_back_purchase_id": "dinner"
+        }
+      },
+      "expected_kinds": {
+        "own-out": "internal",
+        "own-in": "internal",
+        "sam-in": "income",
+        "dinner": "spend",
+        "mom-out": "spend",
+        "amy-in": "payback"
+      },
+      "expected_paid_back": {
+        "dinner": 45.0
+      },
+      "expected": [
+        {
+          "category_id": "c-food",
+          "category": "Food",
+          "spent": 45.0,
+          "limit": 300.0
+        },
+        {
+          "category_id": "c-fees",
+          "category": "Fees & Transfers",
+          "spent": 45.0,
+          "limit": 100.0
+        }
+      ]
     }
   ]
 }
