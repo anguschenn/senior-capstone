@@ -225,7 +225,15 @@ class PredictService:
 
     def _subscription_cost(self, summary, subscriptions):
         """Normalize recurring charges to monthly/annual cost projections."""
-        factors = {"monthly": 1.0, "yearly": 1.0 / 12.0, "weekly": 52.0 / 12.0, "daily": 30.0}
+        # subscription_detector labels yearly charges "annual"; "yearly" is kept for
+        # summaries from older app builds.
+        factors = {
+            "monthly": 1.0,
+            "annual": 1.0 / 12.0,
+            "yearly": 1.0 / 12.0,
+            "weekly": 52.0 / 12.0,
+            "daily": 30.0,
+        }
         monthly_total = 0.0
         top = []
         for sub in subscriptions:
