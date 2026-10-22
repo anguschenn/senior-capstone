@@ -180,26 +180,40 @@ class AppTheme {
         backgroundColor: c.background,
         surfaceTintColor: Colors.transparent,
       ),
+      // Fills and outlines are drawn by [pressableFill] so whole buttons
+      // can grow on hover and shrink on press.
       filledButtonTheme: FilledButtonThemeData(
-        style: FilledButton.styleFrom(
-          backgroundColor: c.button,
-          foregroundColor: c.onButton,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
+        style:
+            FilledButton.styleFrom(
+              backgroundColor: Colors.transparent,
+              disabledBackgroundColor: Colors.transparent,
+              foregroundColor: c.onButton,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ).copyWith(
+              backgroundBuilder: pressableFill(
+                fill: c.button,
+                disabledFill: c.raised,
+              ),
+            ),
       ),
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(foregroundColor: c.text),
+        style: TextButton.styleFrom(
+          foregroundColor: c.text,
+        ).copyWith(foregroundBuilder: _pressableLabel),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
-        style: OutlinedButton.styleFrom(
-          foregroundColor: c.text,
-          side: BorderSide(color: c.line),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
+        style:
+            OutlinedButton.styleFrom(
+              foregroundColor: c.text,
+              side: BorderSide.none,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ).copyWith(
+              backgroundBuilder: pressableFill(side: BorderSide(color: c.line)),
+            ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -219,6 +233,66 @@ class AppTheme {
     );
   }
 }
+
+/// How much a button grows or shrinks for [states].
+double _pressScale(
+  Set<WidgetState> states, {
+  required double rest,
+  required double hover,
+}) {
+  if (states.contains(WidgetState.disabled)) return rest;
+  if (states.contains(WidgetState.pressed)) return rest - 0.03;
+  if (states.contains(WidgetState.hovered) ||
+      states.contains(WidgetState.focused)) {
+    return hover;
+  }
+  return rest;
+}
+
+Widget _scaled(BuildContext context, double scale, Widget? child) =>
+    AnimatedScale(
+      scale: scale,
+      duration: MediaQuery.of(context).disableAnimations
+          ? Duration.zero
+          : const Duration(milliseconds: 150),
+      curve: Curves.easeOutCubic,
+      child: child,
+    );
+
+/// Draws a button's [fill] and [side] so the whole button can grow a
+/// little on hover and shrink a little on press. A button clips these
+/// layers to its shape, so the fill rests slightly inset and "grows" back
+/// to full size on hover rather than past the edge.
+ButtonLayerBuilder pressableFill({
+  Color? fill,
+  Color? disabledFill,
+  BorderSide side = BorderSide.none,
+  double radius = 12,
+}) {
+  return (context, states, child) => _scaled(
+    context,
+    _pressScale(states, rest: 0.99, hover: 1),
+    DecoratedBox(
+      decoration: ShapeDecoration(
+        color: states.contains(WidgetState.disabled)
+            ? disabledFill ?? fill
+            : fill,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(radius),
+          side: side,
+        ),
+      ),
+      child: child,
+    ),
+  );
+}
+
+/// Text buttons have no fill, so only their label grows and shrinks.
+Widget _pressableLabel(
+  BuildContext context,
+  Set<WidgetState> states,
+  Widget? child,
+) => _scaled(context, _pressScale(states, rest: 1, hover: 1.04), child);
 
 /// System / Light / Dark choice, saved on the device.
 class AppearanceController extends ValueNotifier<ThemeMode> {
