@@ -2,7 +2,6 @@
 
 import os
 import re
-import threading
 
 import certifi
 from dotenv import load_dotenv
@@ -106,8 +105,6 @@ ALLOWED_ORIGINS = parse_allowed_origins(os.getenv("ALLOWED_ORIGINS", ""))
 
 # ── Caching ──────────────────────────────────────────────────────────
 SPENDING_SNAPSHOT_CACHE_TTL_SECONDS = int(os.getenv("SPENDING_SNAPSHOT_CACHE_TTL_SECONDS", "60"))
-_SPENDING_SNAPSHOT_CACHE: dict = {}
-_SPENDING_SNAPSHOT_CACHE_LOCK = threading.Lock()
 
 # ── Rate limiting ────────────────────────────────────────────────────
 AI_RATE_LIMIT_PER_MINUTE = int(os.getenv("AI_RATE_LIMIT_PER_MINUTE", "12"))
