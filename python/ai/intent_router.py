@@ -80,7 +80,6 @@ class IntentRouter:
         "any tips",
         "suggestions",
     )
-    GENERAL_ADVISORY_KEYWORDS = ("advice", "how am i doing", "help me")
     TOP_CATEGORY_KEYWORDS = (
         "top category",
         "highest category",
@@ -98,7 +97,6 @@ class IntentRouter:
         "recent purchases",
         "last few transactions",
     )
-    AMOUNT_QUERY_HINTS = ("how much", "amount", "total", "spend", "spent", "spending")
     ADVICE_OR_REASON_KEYWORDS = (
         "why",
         "explain",
