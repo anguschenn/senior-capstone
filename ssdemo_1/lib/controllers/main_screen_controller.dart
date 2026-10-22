@@ -508,6 +508,21 @@ class MainScreenController extends ChangeNotifier {
         status: 'Payback linked.',
       );
 
+  /// Links friends' [payments] to the [purchase] they pay back, from the
+  /// purchase's side.
+  Future<bool> linkPaybacks(
+    List<AppTransaction> payments,
+    AppTransaction purchase,
+  ) => _saveDecisions({
+    for (final p in payments) p.id: TxDecision(paidBackPurchaseId: purchase.id),
+  }, status: payments.length == 1 ? 'Payback linked.' : 'Paybacks linked.');
+
+  /// Payments from a person the user said aren't paybacks.
+  Set<String> get notPaybackIds => {
+    for (final e in decisions.entries)
+      if (e.value.category.isNotEmpty) e.key,
+  };
+
   /// Undoes [linkPayback]; the money goes back to Review.
   Future<bool> unlinkPayback(AppTransaction inflow) =>
       _saveDecision(inflow.id, const TxDecision(), status: 'Payback unlinked.');
@@ -540,35 +555,44 @@ class MainScreenController extends ChangeNotifier {
     String txId,
     TxDecision decision, {
     required String status,
+  }) => _saveDecisions({txId: decision}, status: status);
+
+  /// Saves several choices, then refreshes once.
+  Future<bool> _saveDecisions(
+    Map<String, TxDecision> changes, {
+    required String status,
   }) async {
-    if (syncing) return false;
+    if (syncing || changes.isEmpty) return false;
     syncing = true;
     syncStatus = 'Saving...';
     _notifyListenersSafe();
-    final ok = await TransactionDecisionService.instance.save(
-      userId: AuthService.instance.currentUserId,
-      txId: txId,
-      decision: decision,
-    );
-    if (ok) {
-      // Undoing a decision sends money from a friend back to Review.
-      final confirmed = Set<String>.from(confirmedReviewTxIds);
-      decision.isEmpty ? confirmed.remove(txId) : confirmed.add(txId);
-      confirmedReviewTxIds = confirmed;
-      try {
-        _refreshGen++;
-        final result = await _sync.refreshFromSupabase(
-          reviewedCategoryByTxId,
-          selectedMonth,
-        );
-        _applySyncResult(result);
-        syncStatus = status;
-        unawaited(_refreshInsights());
-      } catch (e) {
-        syncStatus = '$status Refresh failed: $e';
+    var ok = true;
+    final confirmed = Set<String>.from(confirmedReviewTxIds);
+    for (final e in changes.entries) {
+      final saved = await TransactionDecisionService.instance.save(
+        userId: AuthService.instance.currentUserId,
+        txId: e.key,
+        decision: e.value,
+      );
+      if (!saved) {
+        ok = false;
+        continue;
       }
-    } else {
-      syncStatus = 'Could not save. Try again.';
+      // Undoing a decision sends money from a friend back to Review.
+      e.value.isEmpty ? confirmed.remove(e.key) : confirmed.add(e.key);
+    }
+    confirmedReviewTxIds = confirmed;
+    try {
+      _refreshGen++;
+      final result = await _sync.refreshFromSupabase(
+        reviewedCategoryByTxId,
+        selectedMonth,
+      );
+      _applySyncResult(result);
+      syncStatus = ok ? status : 'Some changes could not be saved. Try again.';
+      unawaited(_refreshInsights());
+    } catch (e) {
+      syncStatus = '$status Refresh failed: $e';
     }
     syncing = false;
     _notifyListenersSafe();

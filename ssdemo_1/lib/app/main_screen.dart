@@ -142,19 +142,33 @@ class _MainScreenState extends State<MainScreen> {
     AppTransaction tx,
   ) async {
     if (actionsFor(tx).isEmpty) return;
-    final action = await showTransactionActionsSheet(context: context, tx: tx);
-    if (action == null || !context.mounted) return;
-    switch (action) {
+    final choice = await showTransactionActionsSheet(
+      context: context,
+      tx: tx,
+      transactions: _ctrl.liveTransactions,
+    );
+    if (choice == null || !context.mounted) return;
+    switch (choice.action) {
       case TransactionAction.split:
         final amount = await showSplitPurchaseSheet(
           context: context,
           purchase: tx,
         );
         if (amount != null) await _ctrl.setSharedAmount(tx, amount);
+      case TransactionAction.addPayback:
+        final payments = await showLinkPaymentSheet(
+          context: context,
+          purchase: tx,
+          transactions: _ctrl.liveTransactions,
+          notPaybackIds: _ctrl.notPaybackIds,
+        );
+        if (payments != null && payments.isNotEmpty) {
+          await _ctrl.linkPaybacks(payments, tx);
+        }
       case TransactionAction.linkPayback:
         await _linkPayback(context, tx);
       case TransactionAction.unlinkPayback:
-        await _ctrl.unlinkPayback(tx);
+        await _ctrl.unlinkPayback(choice.other ?? tx);
       case TransactionAction.notPayback:
         await showTransactionCategoryPicker(
           context: context,

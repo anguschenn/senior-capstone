@@ -73,6 +73,22 @@ const _sheetShape = RoundedRectangleBorder(
   borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
 );
 
+/// A list row on a card: the card is the row's Material, so its ink
+/// splash and check box show.
+class _CardTile extends StatelessWidget {
+  const _CardTile({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: context.colors.card,
+    shape: cardShape(context),
+    clipBehavior: Clip.antiAlias,
+    child: child,
+  );
+}
+
 /// Lets the user pick the purchase [inflow] pays back. Null when closed.
 Future<AppTransaction?> showLinkPurchaseSheet({
   required BuildContext context,
@@ -115,24 +131,25 @@ Future<AppTransaction?> showLinkPurchaseSheet({
                 ),
               ),
             for (final tx in purchases)
-              Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                decoration: cardDecoration(sheetContext),
-                child: ListTile(
-                  key: ValueKey('link-${tx.id}'),
-                  onTap: () => Navigator.of(sheetContext).pop(tx),
-                  title: Text(tx.name, overflow: TextOverflow.ellipsis),
-                  subtitle: Text(
-                    [
-                      shortDate(tx.date, alwaysShowYear: true),
-                      if (tx.toGetBack > 0)
-                        '${dollars(tx.toGetBack)} to get back',
-                    ].join(' · '),
-                    style: TextStyle(color: c.muted, fontSize: 12),
-                  ),
-                  trailing: Text(
-                    dollars(tx.displayAmount),
-                    style: const TextStyle(fontWeight: FontWeight.w600),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _CardTile(
+                  child: ListTile(
+                    key: ValueKey('link-${tx.id}'),
+                    onTap: () => Navigator.of(sheetContext).pop(tx),
+                    title: Text(tx.name, overflow: TextOverflow.ellipsis),
+                    subtitle: Text(
+                      [
+                        shortDate(tx.date, alwaysShowYear: true),
+                        if (tx.toGetBack > 0)
+                          '${dollars(tx.toGetBack)} to get back',
+                      ].join(' · '),
+                      style: TextStyle(color: c.muted, fontSize: 12),
+                    ),
+                    trailing: Text(
+                      dollars(tx.displayAmount),
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
                   ),
                 ),
               ),
@@ -296,13 +313,203 @@ class _SplitPurchaseSheetState extends State<_SplitPurchaseSheet> {
   }
 }
 
-/// What the user can do with one transaction from Activity.
-enum TransactionAction { split, linkPayback, unlinkPayback, notPayback }
+/// Payments from a person that could pay back [purchase]: not linked yet,
+/// not marked "not a payback" ([notPaybackIds]), from the purchase's day up
+/// to 120 days after, and no bigger than what is left of it. The two weeks
+/// after the purchase come first, closest first; then the rest, newest
+/// first. The user picks; nothing is chosen for them.
+List<AppTransaction> linkablePayments(
+  AppTransaction purchase,
+  List<AppTransaction> transactions, {
+  Set<String> notPaybackIds = const {},
+}) {
+  final latest = purchase.date.add(kPaybackLookback);
+  final room = purchase.displayAmount - purchase.paidBack;
+  final candidates = transactions.where((tx) {
+    if (!tx.isPeerToPeerInflow || tx.kind == TxKind.payback) return false;
+    if (notPaybackIds.contains(tx.id)) return false;
+    if (tx.date.isBefore(purchase.date) || tx.date.isAfter(latest)) {
+      return false;
+    }
+    return tx.displayAmount <= room + 0.005;
+  }).toList();
+  bool soon(AppTransaction tx) =>
+      tx.date.difference(purchase.date).inDays <= 14;
+  candidates.sort((a, b) {
+    if (soon(a) != soon(b)) return soon(a) ? -1 : 1;
+    final byDate = soon(a)
+        ? a.date.compareTo(b.date)
+        : b.date.compareTo(a.date);
+    return byDate != 0 ? byDate : a.id.compareTo(b.id);
+  });
+  return candidates;
+}
 
-/// The actions offered for [tx]: split a purchase; link, unlink or mark
-/// as "not a payback" for money from a person.
+/// The payments linked to [purchase], oldest first.
+List<AppTransaction> paybacksOf(
+  AppTransaction purchase,
+  List<AppTransaction> transactions,
+) =>
+    transactions
+        .where(
+          (tx) => AppTransaction.purchaseByPaybackId[tx.id]?.id == purchase.id,
+        )
+        .toList()
+      ..sort((a, b) => a.date.compareTo(b.date));
+
+/// Lets the user tick friends' payments that pay back [purchase], several
+/// at once (two friends paying their share). Null when closed.
+Future<List<AppTransaction>?> showLinkPaymentSheet({
+  required BuildContext context,
+  required AppTransaction purchase,
+  required List<AppTransaction> transactions,
+  Set<String> notPaybackIds = const {},
+}) {
+  final payments = linkablePayments(
+    purchase,
+    transactions,
+    notPaybackIds: notPaybackIds,
+  );
+  return showModalBottomSheet<List<AppTransaction>>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    shape: _sheetShape,
+    builder: (_) => _LinkPaymentsSheet(purchase: purchase, payments: payments),
+  );
+}
+
+class _LinkPaymentsSheet extends StatefulWidget {
+  const _LinkPaymentsSheet({required this.purchase, required this.payments});
+
+  final AppTransaction purchase;
+  final List<AppTransaction> payments;
+
+  @override
+  State<_LinkPaymentsSheet> createState() => _LinkPaymentsSheetState();
+}
+
+class _LinkPaymentsSheetState extends State<_LinkPaymentsSheet> {
+  final _picked = <String>{};
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final purchase = widget.purchase;
+    final room = purchase.displayAmount - purchase.paidBack;
+    final chosen = [
+      for (final p in widget.payments)
+        if (_picked.contains(p.id)) p,
+    ];
+    final total = chosen.fold<double>(0, (sum, p) => sum + p.displayAmount);
+    final fits = total <= room + 0.005;
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.75,
+      maxChildSize: 0.95,
+      builder: (_, scroll) => Column(
+        children: [
+          Expanded(
+            child: ListView(
+              controller: scroll,
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              children: [
+                _sheetHeader(
+                  context,
+                  'Add a payback',
+                  '${purchase.name} · ${dollars(purchase.displayAmount)} on '
+                      '${shortDate(purchase.date)}. Tick the money friends '
+                      'sent for it. Room left ${dollars(room)}.',
+                ),
+                if (widget.payments.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    child: Center(
+                      child: Text(
+                        'No money from friends fits this purchase yet.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: c.muted),
+                      ),
+                    ),
+                  ),
+                for (final tx in widget.payments)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _CardTile(
+                      child: CheckboxListTile(
+                        key: ValueKey('payment-${tx.id}'),
+                        value: _picked.contains(tx.id),
+                        onChanged: (on) => setState(
+                          () => on == true
+                              ? _picked.add(tx.id)
+                              : _picked.remove(tx.id),
+                        ),
+                        controlAffinity: ListTileControlAffinity.leading,
+                        title: Text(tx.name, overflow: TextOverflow.ellipsis),
+                        subtitle: Text(
+                          shortDate(tx.date, alwaysShowYear: true),
+                          style: TextStyle(color: c.muted, fontSize: 12),
+                        ),
+                        secondary: Text(
+                          '+${dollars(tx.displayAmount)}',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    chosen.isEmpty
+                        ? ''
+                        : fits
+                        ? '${dollars(total)} of ${dollars(room)}'
+                        : 'More than the ${dollars(room)} left',
+                    style: TextStyle(
+                      color: fits ? c.muted : c.bad,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+                FilledButton(
+                  key: const ValueKey('link-payments'),
+                  onPressed: chosen.isEmpty || !fits
+                      ? null
+                      : () => Navigator.of(context).pop(chosen),
+                  child: Text(
+                    chosen.length > 1 ? 'Link ${chosen.length}' : 'Link',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// What the user can do with one transaction from Activity.
+enum TransactionAction {
+  split,
+  addPayback,
+  linkPayback,
+  unlinkPayback,
+  notPayback,
+}
+
+/// The actions offered for [tx]: split a purchase or add a payback to it;
+/// link, unlink or mark as "not a payback" for money from a person.
 List<TransactionAction> actionsFor(AppTransaction tx) {
-  if (tx.kind == TxKind.spend) return const [TransactionAction.split];
+  if (tx.kind == TxKind.spend) {
+    return const [TransactionAction.split, TransactionAction.addPayback];
+  }
   if (tx.kind == TxKind.payback) {
     return const [TransactionAction.unlinkPayback];
   }
@@ -312,15 +519,26 @@ List<TransactionAction> actionsFor(AppTransaction tx) {
   return const [];
 }
 
-Future<TransactionAction?> showTransactionActionsSheet({
+/// The chosen action, and the payment it is about when it isn't [tx]
+/// itself (unlinking one payback from a purchase).
+typedef TransactionChoice = ({TransactionAction action, AppTransaction? other});
+
+/// A purchase shows what friends paid back and what's left, with each
+/// linked payment and a way to unlink it.
+Future<TransactionChoice?> showTransactionActionsSheet({
   required BuildContext context,
   required AppTransaction tx,
+  List<AppTransaction> transactions = const [],
 }) {
   final actions = actionsFor(tx);
   final paidFor = AppTransaction.purchaseByPaybackId[tx.id];
+  final paybacks = tx.kind == TxKind.spend
+      ? paybacksOf(tx, transactions)
+      : const <AppTransaction>[];
   String label(TransactionAction a) => switch (a) {
     TransactionAction.split =>
       tx.sharedAmount > 0 ? 'Edit split' : 'Split with others',
+    TransactionAction.addPayback => 'Add a payback',
     TransactionAction.linkPayback => 'Link to a purchase',
     TransactionAction.unlinkPayback =>
       paidFor == null ? 'Unlink payback' : 'Unlink from ${paidFor.name}',
@@ -328,36 +546,76 @@ Future<TransactionAction?> showTransactionActionsSheet({
   };
   IconData icon(TransactionAction a) => switch (a) {
     TransactionAction.split => Icons.call_split_rounded,
+    TransactionAction.addPayback => Icons.add_link_rounded,
     TransactionAction.linkPayback => Icons.link_rounded,
     TransactionAction.unlinkPayback => Icons.link_off_rounded,
     TransactionAction.notPayback => Icons.sell_outlined,
   };
-  return showModalBottomSheet<TransactionAction>(
+  final summary = [
+    '${shortDate(tx.date, alwaysShowYear: true)} · '
+        '${dollars(tx.displayAmount)}',
+    if (tx.paidBack > 0) '${dollars(tx.paidBack)} paid back',
+    if (tx.toGetBack > 0)
+      '${dollars(tx.toGetBack)} to get back'
+    else if (tx.sharedAmount > 0)
+      'Settled',
+  ].join(' · ');
+  return showModalBottomSheet<TransactionChoice>(
     context: context,
+    isScrollControlled: true,
     useSafeArea: true,
     shape: _sheetShape,
-    builder: (sheetContext) => Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _sheetHeader(
-            sheetContext,
-            tx.name,
-            '${shortDate(tx.date, alwaysShowYear: true)} · '
-            '${dollars(tx.displayAmount)}',
-          ),
-          for (final a in actions)
-            ListTile(
-              key: ValueKey('action-${a.name}'),
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(icon(a)),
-              title: Text(label(a)),
-              onTap: () => Navigator.of(sheetContext).pop(a),
-            ),
-        ],
-      ),
-    ),
+    builder: (sheetContext) {
+      final c = sheetContext.colors;
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _sheetHeader(sheetContext, tx.name, summary),
+            if (paybacks.isNotEmpty) ...[
+              Text(
+                'PAID BACK BY',
+                style: TextStyle(
+                  color: c.muted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              for (final p in paybacks)
+                ListTile(
+                  key: ValueKey('payback-${p.id}'),
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(p.name, overflow: TextOverflow.ellipsis),
+                  subtitle: Text(
+                    '${shortDate(p.date, alwaysShowYear: true)} · '
+                    '+${dollars(p.displayAmount)}',
+                    style: TextStyle(color: c.muted, fontSize: 12),
+                  ),
+                  trailing: IconButton(
+                    key: ValueKey('unlink-${p.id}'),
+                    tooltip: 'Unlink',
+                    icon: const Icon(Icons.link_off_rounded),
+                    onPressed: () => Navigator.of(
+                      sheetContext,
+                    ).pop((action: TransactionAction.unlinkPayback, other: p)),
+                  ),
+                ),
+              Divider(height: 16, thickness: 0.5, color: c.line),
+            ],
+            for (final a in actions)
+              ListTile(
+                key: ValueKey('action-${a.name}'),
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(icon(a)),
+                title: Text(label(a)),
+                onTap: () =>
+                    Navigator.of(sheetContext).pop((action: a, other: null)),
+              ),
+          ],
+        ),
+      );
+    },
   );
 }

@@ -72,6 +72,114 @@ void main() {
     expect(othersShareOf(80, 1), 0);
   });
 
+  test(
+    'from a purchase: unlinked payments since it, that fit, closest first',
+    () {
+      final early = _tx(
+        'z0',
+        'Venmo from Bob',
+        -20,
+        DateTime(2026, 9, 20),
+        pfcPrimary: 'TRANSFER_IN',
+      );
+      final big = _tx(
+        'z2',
+        'Zelle payment from Cat',
+        -90,
+        DateTime(2026, 10, 1),
+        pfcPrimary: 'TRANSFER_IN',
+      );
+      final linked = _tx(
+        'z3',
+        'Zelle payment from Dan',
+        -10,
+        DateTime(2026, 9, 29),
+        pfcPrimary: 'TRANSFER_IN',
+      );
+      AppTransaction.kindById = {'z3': TxKind.payback};
+      AppTransaction.purchaseByPaybackId = {'z3': dinner};
+      final txs = [...all, early, big, linked];
+      // Bob paid before the dinner, Cat's is more than the dinner, Dan's is
+      // already linked: only Amy's is offered.
+      expect(linkablePayments(dinner, txs).map((t) => t.id), ['z1']);
+      expect(paybacksOf(dinner, txs).map((t) => t.id), ['z3']);
+      // One the user said isn't a payback isn't offered either.
+      expect(linkablePayments(dinner, txs, notPaybackIds: {'z1'}), isEmpty);
+    },
+  );
+
+  test('two weeks after the purchase first, closest first; then newest', () {
+    AppTransaction.kindById = const {};
+    final trip = _tx('t1', 'Airbnb', 600, DateTime(2026, 6, 1));
+    AppTransaction p(String id, int month, int day) => _tx(
+      id,
+      'Venmo from $id',
+      -20,
+      DateTime(2026, month, day),
+      pfcPrimary: 'TRANSFER_IN',
+    );
+    final txs = [trip, p('a', 6, 10), p('b', 6, 3), p('c', 7, 1), p('d', 8, 1)];
+    expect(linkablePayments(trip, txs).map((t) => t.id), ['b', 'a', 'd', 'c']);
+  });
+
+  testWidgets('add paybacks: tick two and link both; too much greys it', (
+    tester,
+  ) async {
+    final amy = _tx(
+      'za',
+      'Zelle payment from Amy',
+      -40,
+      DateTime(2026, 9, 29),
+      pfcPrimary: 'TRANSFER_IN',
+    );
+    final bob = _tx(
+      'zb',
+      'Venmo from Bob',
+      -30,
+      DateTime(2026, 9, 30),
+      pfcPrimary: 'TRANSFER_IN',
+    );
+    List<AppTransaction>? linked;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () async {
+              linked = await showLinkPaymentSheet(
+                context: context,
+                purchase: dinner,
+                transactions: [dinner, amy, bob],
+              );
+            },
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('payment-za')));
+    await tester.tap(find.byKey(const ValueKey('payment-zb')));
+    await tester.pump();
+    // $70 fits in the $80 dinner.
+    expect(find.text('Link 2'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('link-payments')));
+    await tester.pumpAndSettle();
+    expect(linked?.map((t) => t.id), ['za', 'zb']);
+
+    AppTransaction.paidBackById = {'p1': 20};
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('payment-za')));
+    await tester.tap(find.byKey(const ValueKey('payment-zb')));
+    await tester.pump();
+    expect(find.text(r'More than the $60.00 left'), findsOneWidget);
+    final button = tester.widget<FilledButton>(
+      find.byKey(const ValueKey('link-payments')),
+    );
+    expect(button.onPressed, isNull);
+  });
+
   test('the split preview counts what friends already paid back', () {
     AppTransaction.paidBackById = {'p1': 30};
     expect(
@@ -81,7 +189,10 @@ void main() {
   });
 
   test('actions: purchases split, payments from people link', () {
-    expect(actionsFor(dinner), [TransactionAction.split]);
+    expect(actionsFor(dinner), [
+      TransactionAction.split,
+      TransactionAction.addPayback,
+    ]);
     expect(actionsFor(zelle), [
       TransactionAction.linkPayback,
       TransactionAction.notPayback,
