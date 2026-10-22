@@ -128,11 +128,33 @@ class MainScreenController extends ChangeNotifier {
     _notifyListenersSafe();
   }
 
+  bool _budgetProgressRunning = false;
+  bool _budgetProgressAgain = false;
+
   /// Fetches server-computed budget progress for the now-selected month.
-  /// Fire-and-forget from callers: applies only if [selectedMonth] is still
-  /// the same month when the response arrives, so a slow response can't
-  /// clobber progress for whatever month the user has since switched to.
+  /// Calls made while one is in flight (a launch applies up to three sync
+  /// results) are folded into a single follow-up fetch once it returns, so
+  /// the newest data is still read without a request per call.
   Future<void> _refreshServerBudgetProgress() async {
+    if (_budgetProgressRunning) {
+      _budgetProgressAgain = true;
+      return;
+    }
+    _budgetProgressRunning = true;
+    try {
+      do {
+        _budgetProgressAgain = false;
+        await _fetchServerBudgetProgressOnce();
+      } while (_budgetProgressAgain && !_isDisposed);
+    } finally {
+      _budgetProgressRunning = false;
+    }
+  }
+
+  /// Applies only if [selectedMonth] is still the same month when the
+  /// response arrives, so a slow response can't clobber progress for
+  /// whatever month the user has since switched to.
+  Future<void> _fetchServerBudgetProgressOnce() async {
     final month = normalizedMonthOption(selectedMonth);
     if (isAllYearOption(month)) {
       // The endpoint computes one calendar month; nothing to fetch for

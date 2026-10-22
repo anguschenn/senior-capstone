@@ -89,12 +89,20 @@ class _FakeSync implements SyncService {
   // financial_snapshot_service_test.dart instead.
   final serverBudgetProgressRequests = <DateTime>[];
 
+  /// When set, each budget progress request waits for the test to complete
+  /// its reply.
+  List<Completer<List<BudgetCategoryProgress>?>>? budgetProgressReplies;
+
   @override
   Future<List<BudgetCategoryProgress>?> fetchServerBudgetProgress(
     DateTime month,
   ) async {
     serverBudgetProgressRequests.add(month);
-    return null;
+    final replies = budgetProgressReplies;
+    if (replies == null) return null;
+    final reply = Completer<List<BudgetCategoryProgress>?>();
+    replies.add(reply);
+    return reply.future;
   }
 
   @override
@@ -116,6 +124,28 @@ void main() {
     addTearDown(controller.dispose);
     return controller;
   }
+
+  group('server budget progress', () {
+    test('calls during a request fold into one follow-up request', () async {
+      build();
+      sync.budgetProgressReplies = [];
+      final month = DateTime(2026, 9, 1);
+
+      controller.selectMonth(month);
+      controller.selectMonth(month);
+      controller.selectMonth(month);
+      await pumpEventQueue();
+      expect(sync.serverBudgetProgressRequests, hasLength(1));
+
+      sync.budgetProgressReplies![0].complete(null);
+      await pumpEventQueue();
+      expect(sync.serverBudgetProgressRequests, hasLength(2));
+
+      sync.budgetProgressReplies![1].complete(null);
+      await pumpEventQueue();
+      expect(sync.serverBudgetProgressRequests, hasLength(2));
+    });
+  });
 
   group('launch: loadCachedThenRefresh', () {
     test('paints saved data before Supabase or the bank respond', () async {
