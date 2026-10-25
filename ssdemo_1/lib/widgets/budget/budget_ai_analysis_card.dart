@@ -82,14 +82,14 @@ class BudgetAiAnalysisCard extends StatelessWidget {
               const Spacer(),
               TextButton.icon(
                 onPressed: loading || !canGenerate ? null : onGenerate,
-                icon: loading
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const AskMark(size: 16),
-                label: Text(showSuggestion ? 'Generate again' : 'Generate'),
+                icon: AskMark(size: 16, color: loading ? c.muted : null),
+                label: Text(
+                  loading
+                      ? 'Analyzing...'
+                      : showSuggestion
+                      ? 'Generate again'
+                      : 'Generate',
+                ),
               ),
             ],
           ),
@@ -104,88 +104,125 @@ class BudgetAiAnalysisCard extends StatelessWidget {
             style: TextStyle(color: c.muted),
           ),
           const SizedBox(height: 10),
-          if (!canGenerate && suggestion == null && error.isEmpty)
-            const Padding(
-              padding: EdgeInsets.only(bottom: 8),
-              child: Text(
-                'Need more expense history before generating AI suggestions.',
-                style: TextStyle(fontWeight: FontWeight.w500),
-              ),
-            ),
-          if (error.isNotEmpty)
-            Text(
-              error,
-              style: TextStyle(
-                color: c.bad,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          if (error.isEmpty && canGenerate && suggestion == null)
-            const Text(
-              // Nothing judged yet: don't claim the pace is fine.
-              'Tap Generate for suggestions on this period.',
-              style: TextStyle(fontWeight: FontWeight.w500),
-            ),
-          if (showSuggestion) ...[
-            Row(
+          // The result area: a skeleton of the answer while it is being
+          // made (unless it comes back quickly), then the answer itself.
+          DelayedSkeleton(
+            loading: loading,
+            skeleton: const _AnalysisSkeleton(),
+            child: Column(
+              // A new answer is a new subtree, so its blocks come in again.
+              key: ObjectKey(suggestion),
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (contextSource.isNotEmpty &&
-                    contextSource != 'rule_fallback')
-                  _metaBadge(contextSource, c.muted),
-                if (showConfidenceBadge) ...[
-                  const SizedBox(width: 6),
-                  _metaBadge(
-                    suggestion!.confidence,
-                    _confidenceBadgeColor(c, suggestion!.confidence),
+                if (!canGenerate && suggestion == null && error.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      'Need more expense history before generating AI suggestions.',
+                      style: TextStyle(fontWeight: FontWeight.w500),
+                    ),
                   ),
-                ],
+                if (error.isNotEmpty)
+                  Text(
+                    error,
+                    style: TextStyle(
+                      color: c.bad,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                if (error.isEmpty && canGenerate && suggestion == null)
+                  const Text(
+                    // Nothing judged yet: don't claim the pace is fine.
+                    'Tap Generate for suggestions on this period.',
+                    style: TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                if (showSuggestion)
+                  ...FadeSlideIn.staggered(
+                    _suggestionBlocks(
+                      c,
+                      displayCopy,
+                      showConfidenceBadge,
+                      actionLines,
+                    ),
+                  ),
               ],
             ),
-            const SizedBox(height: 6),
-            if (displayCopy.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Text(
-                  displayCopy,
-                  style: const TextStyle(fontWeight: FontWeight.w500),
-                ),
-              ),
-            if (suggestion!.alerts.isNotEmpty) ...[
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The answer in blocks (badges, summary, alerts, actions), so they can
+  /// come in one after another.
+  List<Widget> _suggestionBlocks(
+    AppColors c,
+    String displayCopy,
+    bool showConfidenceBadge,
+    List<String> actionLines,
+  ) {
+    final s = suggestion!;
+    return [
+      Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Row(
+          children: [
+            if (contextSource.isNotEmpty && contextSource != 'rule_fallback')
+              _metaBadge(contextSource, c.muted),
+            if (showConfidenceBadge) ...[
+              const SizedBox(width: 6),
+              _metaBadge(s.confidence, _confidenceBadgeColor(c, s.confidence)),
+            ],
+          ],
+        ),
+      ),
+      if (displayCopy.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Text(
+            displayCopy,
+            style: const TextStyle(fontWeight: FontWeight.w500),
+          ),
+        ),
+      if (s.alerts.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               const Text(
                 'Alerts',
                 style: TextStyle(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 6),
-              ...suggestion!.alerts
-                  .take(3)
-                  .map(
-                    (item) => Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: Text(
-                        '• [${item.severity}] ${item.category}: ${item.reason}',
-                      ),
-                    ),
-                  ),
-              const SizedBox(height: 10),
-            ],
-            if (actionLines.isNotEmpty) ...[
-              const Text(
-                'Actions',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 6),
-              ...actionLines.map((line) {
-                return Padding(
+              for (final item in s.alerts.take(3))
+                Padding(
                   padding: const EdgeInsets.only(bottom: 6),
-                  child: Text('• $line'),
-                );
-              }),
+                  child: Text(
+                    '• [${item.severity}] ${item.category}: ${item.reason}',
+                  ),
+                ),
             ],
+          ),
+        ),
+      if (actionLines.isNotEmpty)
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Actions',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            for (final line in actionLines)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text('• $line'),
+              ),
           ],
-        ],
-      ),
-    );
+        ),
+    ];
   }
 
   Widget _metaBadge(String label, Color color) {
@@ -217,5 +254,51 @@ class BudgetAiAnalysisCard extends StatelessWidget {
       default:
         return c.muted;
     }
+  }
+}
+
+/// Stands in for the answer while it is being made: badges, a few lines of
+/// summary and a short list of actions, where the real ones will land.
+class _AnalysisSkeleton extends StatelessWidget {
+  const _AnalysisSkeleton();
+
+  static Widget _line(double widthFactor, {double height = 13}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: FractionallySizedBox(
+        alignment: Alignment.centerLeft,
+        widthFactor: widthFactor,
+        child: SkeletonBox(height: height),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SkeletonShimmer(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                SkeletonBox(width: 58, height: 16),
+                SizedBox(width: 6),
+                SkeletonBox(width: 44, height: 16),
+              ],
+            ),
+          ),
+          _line(1),
+          _line(0.94),
+          _line(0.6),
+          const SizedBox(height: 8),
+          _line(0.22, height: 14),
+          _line(0.88),
+          _line(0.74),
+          _line(0.8),
+        ],
+      ),
+    );
   }
 }
