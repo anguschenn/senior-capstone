@@ -33,6 +33,11 @@ class MainScreenController extends ChangeNotifier {
   /// whole screen: saved or Supabase data is already showing and stays usable;
   /// only the bank-sync buttons wait, so two bank syncs never overlap.
   bool refreshingInBackground = false;
+
+  /// True on a first launch with nothing saved on the device, until the
+  /// first read of the user's data lands: lists show placeholders instead
+  /// of "no transactions".
+  bool loadingFirstData = false;
   bool loginRequired = false;
   String syncStatus = 'No data loaded yet';
 
@@ -187,7 +192,7 @@ class MainScreenController extends ChangeNotifier {
     try {
       final bank = await _sync.triggerBankSync(full: true);
       loginRequired = bank.loginRequired;
-      syncStatus = 'Loading...';
+      syncStatus = 'Loading the latest transactions...';
       _notifyListenersSafe();
       final result = await _sync.refreshFromSupabase(
         reviewedCategoryByTxId,
@@ -240,12 +245,17 @@ class MainScreenController extends ChangeNotifier {
         syncStatus =
             'Showing saved data (${_ago(cached.savedAt)}) · refreshing...';
       } else {
-        syncStatus = 'Loading...';
+        syncStatus = 'Loading your accounts and transactions...';
+        loadingFirstData = true;
       }
       _notifyListenersSafe();
 
       final fresh = await _fetchAndApply();
       if (_isDisposed) return;
+      if (loadingFirstData) {
+        loadingFirstData = false;
+        _notifyListenersSafe();
+      }
 
       // Webhooks keep Supabase current, so when the last sync is recent the
       // data just read is already up to date: skip the bank round trip (and a
@@ -282,6 +292,7 @@ class MainScreenController extends ChangeNotifier {
       syncStatus = 'Refresh failed: $e';
     } finally {
       refreshingInBackground = false;
+      loadingFirstData = false;
       _notifyListenersSafe();
     }
   }
