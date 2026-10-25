@@ -718,7 +718,7 @@ class _StepArrow extends StatelessWidget {
   }
 }
 
-/// Three dots bouncing one after another: "the assistant is typing".
+/// Three dots breathing one after another: "the assistant is typing".
 class TypingDots extends StatefulWidget {
   const TypingDots({super.key, this.color});
 
@@ -754,23 +754,24 @@ class _TypingDotsState extends State<TypingDots>
           children: [
             for (var i = 0; i < 3; i++) ...[
               if (i > 0) const SizedBox(width: 5),
-              Transform.translate(
-                // Each dot hops in turn, a third of the loop apart.
-                offset: Offset(
-                  0,
-                  still ? 0 : -5 * _hop((_ctrl.value - i * 0.18) % 1.0),
-                ),
-                child: Container(
-                  width: 7,
-                  height: 7,
-                  decoration: BoxDecoration(
-                    color: color,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
+              _dot(still ? 0.4 : _hop((_ctrl.value - i * 0.18) % 1.0), color),
             ],
           ],
+        ),
+      ),
+    );
+  }
+
+  /// A dot at [hop] (0 rest, 1 top): it rises and brightens, then settles.
+  Widget _dot(double hop, Color color) {
+    return Transform.translate(
+      offset: Offset(0, -4 * hop),
+      child: Opacity(
+        opacity: 0.35 + 0.65 * hop,
+        child: Container(
+          width: 7,
+          height: 7,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
       ),
     );
@@ -781,6 +782,266 @@ class _TypingDotsState extends State<TypingDots>
     if (t > 0.4) return 0;
     final x = t / 0.4;
     return 4 * x * (1 - x);
+  }
+}
+
+/// Fades its child in while lifting it into place, once, when it first
+/// appears. [delay] staggers blocks that appear together.
+class FadeSlideIn extends StatefulWidget {
+  const FadeSlideIn({
+    super.key,
+    required this.child,
+    this.delay = Duration.zero,
+    this.duration = const Duration(milliseconds: 250),
+    this.lift = 8,
+    this.animate = true,
+  });
+
+  final Widget child;
+  final Duration delay;
+  final Duration duration;
+
+  /// False shows the child in place right away, e.g. when it is built
+  /// again after scrolling back into view.
+  final bool animate;
+
+  /// How far below its place the child starts; 0 just fades.
+  final double lift;
+
+  /// Wraps [children] so each one comes in [step] after the one before.
+  static List<Widget> staggered(
+    List<Widget> children, {
+    Duration step = const Duration(milliseconds: 60),
+  }) => [
+    for (final (i, child) in children.indexed)
+      FadeSlideIn(delay: step * i, child: child),
+  ];
+
+  @override
+  State<FadeSlideIn> createState() => _FadeSlideInState();
+}
+
+class _FadeSlideInState extends State<FadeSlideIn>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: widget.duration,
+  );
+  late final Animation<double> _t = CurvedAnimation(
+    parent: _ctrl,
+    curve: Curves.easeOutCubic,
+  );
+  Timer? _start;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_ctrl.isCompleted || _ctrl.isAnimating || _start != null) return;
+    if (!widget.animate || MediaQuery.disableAnimationsOf(context)) {
+      _ctrl.value = 1;
+    } else if (widget.delay == Duration.zero) {
+      _ctrl.forward();
+    } else {
+      _start = Timer(widget.delay, () {
+        if (mounted) _ctrl.forward();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _start?.cancel();
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _t,
+      builder: (context, child) => Opacity(
+        opacity: _t.value,
+        child: Transform.translate(
+          offset: Offset(0, widget.lift * (1 - _t.value)),
+          child: child,
+        ),
+      ),
+      child: widget.child,
+    );
+  }
+}
+
+/// A grey block standing in for text or a badge while content loads. Put it
+/// inside a [SkeletonShimmer] so the light band passes over it.
+class SkeletonBox extends StatelessWidget {
+  const SkeletonBox({
+    super.key,
+    this.width,
+    required this.height,
+    this.radius = 6,
+  });
+
+  final double? width;
+  final double height;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: context.colors.raised,
+        borderRadius: BorderRadius.circular(radius),
+      ),
+    );
+  }
+}
+
+/// Sweeps a soft diagonal band of light across the [SkeletonBox]es inside,
+/// left to right every 1.5 seconds. Holds still when the system asks for
+/// reduced motion.
+class SkeletonShimmer extends StatefulWidget {
+  const SkeletonShimmer({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  State<SkeletonShimmer> createState() => _SkeletonShimmerState();
+}
+
+class _SkeletonShimmerState extends State<SkeletonShimmer>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1500),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _ctrl.stop();
+    } else if (!_ctrl.isAnimating) {
+      _ctrl.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final base = context.colors.raised;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final light = Color.alphaBlend(
+      Colors.white.withValues(alpha: dark ? 0.07 : 0.45),
+      base,
+    );
+    final still = MediaQuery.disableAnimationsOf(context);
+    return Semantics(
+      label: 'Loading',
+      child: ExcludeSemantics(
+        child: AnimatedBuilder(
+          animation: _ctrl,
+          builder: (context, child) => ShaderMask(
+            blendMode: BlendMode.srcATop,
+            shaderCallback: (bounds) => LinearGradient(
+              begin: const Alignment(-1, -0.4),
+              end: const Alignment(1, 0.4),
+              colors: still ? [base, base] : [base, light, base],
+              stops: still ? const [0, 1] : const [0.35, 0.5, 0.65],
+              transform: _SweepTransform(_ctrl.value),
+            ).createShader(bounds),
+            child: child,
+          ),
+          child: widget.child,
+        ),
+      ),
+    );
+  }
+}
+
+/// Slides the shimmer gradient from just off the left edge to just off the
+/// right edge as [t] goes 0 → 1.
+class _SweepTransform extends GradientTransform {
+  const _SweepTransform(this.t);
+
+  final double t;
+
+  @override
+  Matrix4? transform(Rect bounds, {TextDirection? textDirection}) {
+    return Matrix4.translationValues(bounds.width * (2 * t - 1), 0, 0);
+  }
+}
+
+/// Shows [skeleton] in place of [child] while [loading], but only once the
+/// wait has passed [delay]: a quick load swaps straight to the result with
+/// no skeleton flashing by.
+class DelayedSkeleton extends StatefulWidget {
+  const DelayedSkeleton({
+    super.key,
+    required this.loading,
+    required this.skeleton,
+    required this.child,
+    this.delay = const Duration(milliseconds: 300),
+  });
+
+  final bool loading;
+  final Widget skeleton;
+  final Widget child;
+  final Duration delay;
+
+  @override
+  State<DelayedSkeleton> createState() => _DelayedSkeletonState();
+}
+
+class _DelayedSkeletonState extends State<DelayedSkeleton> {
+  Timer? _timer;
+  bool _showSkeleton = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.loading) _arm();
+  }
+
+  @override
+  void didUpdateWidget(DelayedSkeleton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.loading && !oldWidget.loading) {
+      _arm();
+    } else if (!widget.loading && oldWidget.loading) {
+      _timer?.cancel();
+      _timer = null;
+      _showSkeleton = false;
+    }
+  }
+
+  void _arm() {
+    _timer?.cancel();
+    _timer = Timer(widget.delay, () {
+      if (mounted && widget.loading) setState(() => _showSkeleton = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_showSkeleton) return widget.child;
+    return FadeSlideIn(
+      duration: const Duration(milliseconds: 150),
+      lift: 0,
+      child: widget.skeleton,
+    );
   }
 }
 

@@ -18,6 +18,7 @@ class _ChatTurn {
     required this.prompt,
     this.response,
     this.error,
+    this.live = false,
     DateTime? askedAt,
   }) : askedAt = askedAt ?? DateTime.now();
 
@@ -25,6 +26,11 @@ class _ChatTurn {
   final AiChatResponse? response;
   final String? error;
   final DateTime askedAt;
+
+  /// Answered while the panel was open, so the reply fades in; saved turns
+  /// loaded from history just appear. Cleared once it has been built, so
+  /// scrolling back to it doesn't fade it in again.
+  bool live;
 }
 
 class AIAssistantPanel extends StatefulWidget {
@@ -81,6 +87,11 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
   String? _selectedAccountId;
   bool _sending = false;
 
+  /// Whether new messages pull the list down to them. Off once the user
+  /// scrolls up to read; back on when they return near the end.
+  bool _followBottom = true;
+  static const double _followDistance = 120;
+
   @override
   void initState() {
     super.initState();
@@ -127,7 +138,7 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
           ),
       ]);
     });
-    _scrollToBottom();
+    _scrollToBottom(force: true);
   }
 
   /// Saves an answered turn; failed ones aren't worth keeping.
@@ -206,13 +217,21 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
     return history;
   }
 
-  /// Keeps the newest message in view. The list builds long answers lazily
-  /// and the sheet is still sliding open, so the end keeps moving for a few
-  /// frames: follow it until it settles, then check once more after the
-  /// sheet has opened.
-  void _scrollToBottom({int frames = 8, bool recheck = true}) {
+  /// Keeps the newest message in view while the user is following along.
+  /// The list builds long answers lazily and the sheet is still sliding
+  /// open, so the end keeps moving for a few frames: follow it until it
+  /// settles, then check once more after the sheet has opened. [force]
+  /// follows again even if the user had scrolled up (they just sent).
+  void _scrollToBottom({
+    int frames = 8,
+    bool recheck = true,
+    bool force = false,
+  }) {
+    if (force) _followBottom = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_scrollController.hasClients) return;
+      if (!mounted || !_scrollController.hasClients || !_followBottom) {
+        return;
+      }
       final position = _scrollController.position;
       if ((position.maxScrollExtent - position.pixels).abs() > 0.5) {
         _scrollController.jumpTo(position.maxScrollExtent);
@@ -228,6 +247,21 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
     }
   }
 
+  /// Tracks whether the user has scrolled away from the newest message.
+  /// Only their own drags and flings count; the list growing under them
+  /// doesn't.
+  bool _onScroll(ScrollNotification n) {
+    if (n.depth != 0) return false;
+    final userMoved =
+        (n is ScrollUpdateNotification && n.dragDetails != null) ||
+        n is ScrollEndNotification;
+    if (userMoved) {
+      final m = n.metrics;
+      _followBottom = m.maxScrollExtent - m.pixels < _followDistance;
+    }
+    return false;
+  }
+
   Future<void> _sendPrompt() async {
     final prompt = _controller.text.trim();
     if (prompt.isEmpty || _sending) return;
@@ -239,7 +273,7 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
       _sending = true;
     });
     _controller.clear();
-    _scrollToBottom();
+    _scrollToBottom(force: true);
 
     try {
       final aiRespRaw = await _client.sendChat(
@@ -256,6 +290,7 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
           prompt: prompt,
           response: aiRespRaw,
           askedAt: turn.askedAt,
+          live: true,
         );
       });
       _saveTurn(_turns.last);
@@ -267,6 +302,7 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
               ? e.message
               : 'Failed to reach AI service.',
           askedAt: turn.askedAt,
+          live: true,
         );
       });
     } finally {
@@ -336,25 +372,51 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
           ),
           const SizedBox(height: 8),
 
-          // Response or loading/error
+          // The reply bubble shows up as soon as the question is sent, with
+          // dots until the answer arrives; the answer then fades in whole.
           if (turn.response == null && turn.error == null)
-            const Padding(
-              padding: EdgeInsets.fromLTRB(6, 8, 0, 4),
-              child: TypingDots(),
-            ),
-
-          if (turn.error != null)
-            Padding(
-              padding: const EdgeInsets.only(left: 4),
-              child: Text(
-                turn.error!,
-                style: TextStyle(color: c.bad, fontSize: 12),
+            FadeSlideIn(
+              key: const ValueKey('reply-pending'),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 15,
+                  ),
+                  decoration: cardDecoration(context),
+                  child: const TypingDots(),
+                ),
               ),
             ),
 
-          if (turn.response != null) AiResponseCard(response: turn.response!),
+          if (turn.error != null)
+            _reveal(
+              turn,
+              Padding(
+                padding: const EdgeInsets.only(left: 4),
+                child: Text(
+                  turn.error!,
+                  style: TextStyle(color: c.bad, fontSize: 12),
+                ),
+              ),
+            ),
+
+          if (turn.response != null)
+            _reveal(turn, AiResponseCard(response: turn.response!)),
         ],
       ),
+    );
+  }
+
+  /// Fades a just-answered reply in; saved replies show as they are.
+  Widget _reveal(_ChatTurn turn, Widget child) {
+    final animate = turn.live;
+    turn.live = false;
+    return FadeSlideIn(
+      key: const ValueKey('reply'),
+      animate: animate,
+      child: child,
     );
   }
 
@@ -497,31 +559,34 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
 
               // Message list
               Expanded(
-                child: ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                  itemCount: _turns.isEmpty ? 1 : _turns.length,
-                  itemBuilder: (_, i) {
-                    if (_turns.isEmpty && _loadingHistory) {
-                      return const Padding(
-                        padding: EdgeInsets.only(top: 60),
-                        child: Center(child: TypingDots()),
-                      );
-                    }
-                    if (_turns.isEmpty) {
-                      return Padding(
-                        padding: const EdgeInsets.only(top: 60),
-                        child: Center(
-                          child: Text(
-                            'Choose Overall or one account above, then ask about your spending.',
-                            style: TextStyle(color: c.muted),
-                            textAlign: TextAlign.center,
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: _onScroll,
+                  child: ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                    itemCount: _turns.isEmpty ? 1 : _turns.length,
+                    itemBuilder: (_, i) {
+                      if (_turns.isEmpty && _loadingHistory) {
+                        return const Padding(
+                          padding: EdgeInsets.only(top: 60),
+                          child: Center(child: TypingDots()),
+                        );
+                      }
+                      if (_turns.isEmpty) {
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 60),
+                          child: Center(
+                            child: Text(
+                              'Choose Overall or one account above, then ask about your spending.',
+                              style: TextStyle(color: c.muted),
+                              textAlign: TextAlign.center,
+                            ),
                           ),
-                        ),
-                      );
-                    }
-                    return _buildTurn(_turns[i]);
-                  },
+                        );
+                      }
+                      return _buildTurn(_turns[i]);
+                    },
+                  ),
                 ),
               ),
 
