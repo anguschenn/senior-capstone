@@ -4,7 +4,8 @@ import '../app/app_theme.dart';
 import '../models/app_models.dart';
 import '../utils/app_helpers.dart';
 import '../widgets/common/ui.dart';
-import 'home_page.dart' show TransactionRow, effectiveCategoryFor;
+import 'home_page.dart'
+    show TransactionListSkeleton, TransactionRow, effectiveCategoryFor;
 
 class TransactionsPage extends StatefulWidget {
   const TransactionsPage({
@@ -17,6 +18,7 @@ class TransactionsPage extends StatefulWidget {
     required this.reviewedCategoryByTxId,
     required this.onTransactionCategorySelected,
     this.onTransactionTap,
+    this.loading = false,
     this.aiCategorySuggestUri,
     this.apiKey,
     this.accessToken,
@@ -35,6 +37,10 @@ class TransactionsPage extends StatefulWidget {
   /// a friend's payment to one).
   final void Function(BuildContext context, AppTransaction tx)?
   onTransactionTap;
+
+  /// The first read of the user's data is still on its way: placeholder
+  /// rows, not "No transactions found".
+  final bool loading;
   final Uri? aiCategorySuggestUri;
   final String? apiKey;
   final String? accessToken;
@@ -551,7 +557,18 @@ class _TransactionsPageState extends State<TransactionsPage> {
                     ],
                   ),
                 ),
-                if (filtered.isEmpty)
+                if (filtered.isEmpty && widget.loading)
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    sliver: SliverToBoxAdapter(
+                      child: Material(
+                        color: c.card,
+                        shape: cardShape(context),
+                        child: const TransactionListSkeleton(rows: 6),
+                      ),
+                    ),
+                  )
+                else if (filtered.isEmpty)
                   SliverFillRemaining(
                     hasScrollBody: false,
                     child: Center(
