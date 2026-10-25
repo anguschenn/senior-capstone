@@ -277,12 +277,17 @@ void main() {
 
       final done = controller.loadCachedThenRefresh();
       await pumpEventQueue();
-      expect(controller.syncStatus, 'Loading...');
+      expect(
+        controller.syncStatus,
+        'Loading your accounts and transactions...',
+      );
+      expect(controller.loadingFirstData, isTrue);
       expect(controller.liveStats.totalBalance, 0);
 
       sync.supabaseReplies[0].complete(_result(2));
       await pumpEventQueue();
       expect(controller.liveStats.totalBalance, 2);
+      expect(controller.loadingFirstData, isFalse);
 
       sync.bankReply.complete();
       await pumpEventQueue();

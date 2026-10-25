@@ -65,6 +65,7 @@ class HomePage extends StatelessWidget {
     this.onTransactionTap,
     this.budgetProgress = const [],
     this.bankSyncBusy = false,
+    this.loadingFirstData = false,
     this.onOpenFlow,
     this.onOpenSettings,
     this.onSeeAllActivity,
@@ -85,6 +86,10 @@ class HomePage extends StatelessWidget {
   /// A background bank refresh is running: Add Bank waits, but the rest of
   /// the screen (e.g. switching wallet cards) stays usable.
   final bool bankSyncBusy;
+
+  /// The first read of the user's data is still on its way: the recent list
+  /// shows placeholder rows, not "no transactions".
+  final bool loadingFirstData;
   final VoidCallback onAddBank;
   final VoidCallback? onReconnect;
   final VoidCallback? onRefresh;
@@ -247,7 +252,9 @@ class HomePage extends StatelessWidget {
           Section(
             // Rows pad themselves, so their tap highlight spans the card.
             padding: const EdgeInsets.symmetric(vertical: 4),
-            child: recentTransactions.isEmpty
+            child: recentTransactions.isEmpty && loadingFirstData
+                ? const TransactionListSkeleton(rows: 3)
+                : recentTransactions.isEmpty
                 ? Padding(
                     padding: const EdgeInsets.all(14),
                     child: Text(
@@ -872,6 +879,68 @@ class _FlowThumbnail extends StatelessWidget {
 
 /// One transaction: category dot, merchant, date + category tag, amount.
 /// Tapping the tag opens the category picker (spending only).
+/// Placeholder rows shaped like [TransactionRow] while transactions load.
+/// They hold their space but stay hidden for the first 300ms, so a quick
+/// load never flashes them.
+class TransactionListSkeleton extends StatelessWidget {
+  const TransactionListSkeleton({super.key, required this.rows});
+
+  final int rows;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final skeleton = SkeletonShimmer(
+      child: Column(
+        children: [
+          for (var i = 0; i < rows; i++) ...[
+            if (i > 0)
+              Divider(
+                height: 0.5,
+                thickness: 0.5,
+                indent: 14,
+                endIndent: 14,
+                color: c.line,
+              ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 14),
+              child: Row(
+                children: [
+                  const SkeletonBox(width: 34, height: 34, radius: 17),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        FractionallySizedBox(
+                          widthFactor: i.isEven ? 0.55 : 0.45,
+                          child: const SkeletonBox(height: 13),
+                        ),
+                        const SizedBox(height: 7),
+                        const FractionallySizedBox(
+                          widthFactor: 0.3,
+                          child: SkeletonBox(height: 10),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const SkeletonBox(width: 56, height: 13),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+    return DelayedSkeleton(
+      loading: true,
+      skeleton: skeleton,
+      child: Opacity(opacity: 0, child: skeleton),
+    );
+  }
+}
+
 class TransactionRow extends StatelessWidget {
   const TransactionRow({
     super.key,
