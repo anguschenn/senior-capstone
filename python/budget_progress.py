@@ -278,6 +278,37 @@ def _is_refund_like(text: str, primary: str, detailed: str) -> bool:
     return any(n in lowered for n in ("refund", "reversal", "returned", "return"))
 
 
+def _is_card_payment_credit(
+    amount: float,
+    name: str,
+    description: str,
+    pfc_primary: str,
+    pfc_detailed: str,
+    account_type: str,
+) -> bool:
+    """The card side of paying off a credit card: money moving between the user's own
+    accounts, not income. Unlike _pair_own_transfers (needs both legs loaded, within 5
+    days), this decides from this row alone. Mirrors AppTransaction.isCardPaymentCredit."""
+    if amount >= 0:
+        return False
+    if is_credit_card_payment_row({"pfc_detailed": pfc_detailed, "pfc_primary": pfc_primary}):
+        return True
+    text = f"{name.lower()} {description.lower()}"
+    acct_type = account_type.lower().strip()
+    if not acct_type:
+        return "payment thank you" in text
+    if acct_type != "credit" or _is_refund_like(text, pfc_primary, pfc_detailed):
+        return False
+    pfc = f"{pfc_primary} {pfc_detailed}".upper()
+    return (
+        "LOAN_DISBURSEMENTS" in pfc
+        or "LOAN_PAYMENTS" in pfc
+        or "TRANSFER_IN" in pfc
+        or "payment" in text
+        or "autopay" in text
+    )
+
+
 def kind_of(
     amount: float,
     name: str,
@@ -387,7 +418,8 @@ def classify_rows(
     for row in tx_rows:
         user_category = user_category_for_row(row, remembered_rules, decisions)
         account_id = _coalesce(row.get("plaid_account_id")).strip()
-        kind = row_kind(row, user_category, account_type_by_id.get(account_id, ""))
+        account_type = account_type_by_id.get(account_id, "")
+        kind = row_kind(row, user_category, account_type)
         try:
             day = dt.date.fromisoformat(str(row.get("date") or "")[:10])
         except ValueError:
@@ -408,6 +440,11 @@ def classify_rows(
                 "bucket": user_category or _pfc_bucket_for_row(row),
                 "user_category": user_category,
                 "account": account_id,
+                "account_type": account_type,
+                "name": name,
+                "description": description,
+                "pfc_primary": primary,
+                "pfc_detailed": detailed,
                 "day": day,
                 "amount": amount,
                 "key": merchant_match_key(name),
@@ -421,6 +458,20 @@ def classify_rows(
             }
         )
     _pair_own_transfers(parsed)
+    # Gap: an unpaired card-payment credit defaulted to "income". Catch it here, after
+    # pairing, so it never steals a match from a real pairing candidate.
+    for item in parsed:
+        if item["kind"] != "income":
+            continue
+        if _is_card_payment_credit(
+            item["signed"],
+            item["name"],
+            item["description"],
+            item["pfc_primary"],
+            item["pfc_detailed"],
+            item["account_type"],
+        ):
+            item["kind"] = "internal"
     purchases: dict[str, list[dict]] = {}
     by_id: dict[str, dict] = {}
     for item in parsed:

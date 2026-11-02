@@ -664,6 +664,13 @@ Classified classifyTransactions(
     kinds,
     paidBackPurchaseById,
   );
+  // Gap: an unpaired card-payment credit defaulted to Income. Catch it here, after
+  // pairing, so it never steals a match from a real pairing candidate. Mirrors
+  // budget_progress.py classify_rows.
+  for (final tx in transactions) {
+    if (kinds[tx.id] != TxKind.income) continue;
+    if (tx.isCardPaymentCredit) kinds[tx.id] = TxKind.internal;
+  }
   // After pairing, like the server: a move between own accounts is not a
   // purchase a refund can come back for.
   for (final tx in transactions) {

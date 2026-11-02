@@ -173,6 +173,84 @@ class OwnTransferPairingTests(unittest.TestCase):
         )
 
 
+class CardPaymentFallbackTests(unittest.TestCase):
+    """A card payment that didn't pair (legs too far apart, or one account hidden) used to
+    default to "income" -- the bug this fix closes."""
+
+    def test_unpaired_card_payment_credit_is_internal_not_income(self):
+        from budget_progress import classify_rows
+
+        rows = [
+            {
+                "plaid_transaction_id": "checking-debit",
+                "plaid_account_id": "checking",
+                "amount": 200,
+                "date": "2026-10-28",
+                "name": "Online Payment to Card",
+                "merchant_name": None,
+                "pfc_primary": "LOAN_PAYMENTS",
+                "pfc_detailed": "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT",
+            },
+            {
+                # 8 days after the debit above -- outside the 5-day pairing window, so
+                # _pair_own_transfers can't link them.
+                "plaid_transaction_id": "card-credit",
+                "plaid_account_id": "card",
+                "amount": -200,
+                "date": "2026-11-05",
+                "name": "AUTOPAY PAYMENT THANK YOU",
+                "merchant_name": None,
+                "pfc_primary": "",
+                "pfc_detailed": "",
+            },
+        ]
+        account_types = {"checking": "depository", "card": "credit"}
+        kinds = {k: v[0] for k, v in classify_rows(rows, {}, account_types).items()}
+        self.assertEqual(kinds["card-credit"], "internal")
+
+    def test_hidden_paying_account_still_excludes_the_card_credit(self):
+        """The checking leg isn't even in the loaded rows (hidden account), so there's
+        nothing to pair against -- the fallback has to work from the card row alone."""
+        from budget_progress import classify_rows
+
+        rows = [
+            {
+                "plaid_transaction_id": "card-credit",
+                "plaid_account_id": "card",
+                "amount": -75.5,
+                "date": "2026-10-20",
+                "name": "PAYMENT THANK YOU",
+                "merchant_name": None,
+                "pfc_primary": "",
+                "pfc_detailed": "",
+            },
+        ]
+        account_types = {"card": "credit"}
+        kinds = {k: v[0] for k, v in classify_rows(rows, {}, account_types).items()}
+        self.assertEqual(kinds["card-credit"], "internal")
+
+    def test_a_real_deposit_still_counts_as_income(self):
+        """Negative control: a real paycheck deposit, not a card payment, must still
+        count as income -- the fallback is specific, not a blanket exclusion."""
+        from budget_progress import classify_rows
+
+        rows = [
+            {
+                "plaid_transaction_id": "paycheck",
+                "plaid_account_id": "checking",
+                "amount": -1500,
+                "date": "2026-10-15",
+                "name": "ACME CORP PAYROLL",
+                "merchant_name": None,
+                "pfc_primary": "INCOME",
+                "pfc_detailed": "INCOME_WAGES",
+            },
+        ]
+        account_types = {"checking": "depository"}
+        kinds = {k: v[0] for k, v in classify_rows(rows, {}, account_types).items()}
+        self.assertEqual(kinds["paycheck"], "income")
+
+
 class PairingEdgeTests(unittest.TestCase):
     def _row(self, tid, account, amount, day):
         return {
