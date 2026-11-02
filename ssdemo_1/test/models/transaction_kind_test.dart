@@ -82,6 +82,35 @@ void main() {
     expect(bankSide.expenseAmount, 330);
   });
 
+  test('an unpaired card payment credit is internal, not income '
+      '(legs posted too far apart, or the paying account is hidden)', () {
+    final cardSide = _tx(
+      id: 't1',
+      amount: -200,
+      name: 'AUTOPAY PAYMENT THANK YOU',
+      date: DateTime(2026, 11, 5),
+    );
+    // No checking-side debit loaded at all -- either it's on a hidden account, or it
+    // posted more than 5 days ago and _pairOwnTransfers already gave up on it. Either
+    // way there's nothing to pair against, so this has to be caught on its own.
+    AppTransaction.kindById = classifyTransactions([cardSide], const {}).kinds;
+    expect(cardSide.kind, TxKind.internal);
+    expect(cardSide.incomeAmount, 0);
+  });
+
+  test('a real deposit on a credit account still counts as income', () {
+    final deposit = _tx(
+      id: 't1',
+      amount: -500,
+      name: 'ACME CORP PAYROLL',
+      pfcPrimary: 'INCOME',
+      pfcDetailed: 'INCOME_WAGES',
+    );
+    AppTransaction.kindById = classifyTransactions([deposit], const {}).kinds;
+    expect(deposit.kind, TxKind.income);
+    expect(deposit.incomeAmount, 500);
+  });
+
   test('Zelle with a person and cash deposits still count', () {
     final zelleOut = _tx(
       id: 't1',
