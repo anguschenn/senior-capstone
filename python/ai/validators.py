@@ -1,3 +1,6 @@
+import re
+
+
 def clamp_str(value, max_len):
     if not isinstance(value, str):
         return ""
@@ -369,8 +372,7 @@ def sanitize_spending_summary(summary):
             )
     cleaned["recent_transactions"] = recent
 
-    budgets = summary.get("budgets")
-    if isinstance(budgets, dict) and isinstance(budgets.get("items"), list):
+    def budget_block(budgets):
         items = []
         for item in budgets["items"][:30]:
             if not isinstance(item, dict):
@@ -380,9 +382,23 @@ def sanitize_spending_summary(summary):
             if name and limit > 0:
                 spent = max(0.0, to_float(item.get("spent", 0)))
                 items.append({"category": name, "spent": spent, "limit": limit})
-        cleaned["budgets"] = {"month": clamp_str(budgets.get("month", ""), 16), "items": items}
+        block = {"month": clamp_str(budgets.get("month", ""), 16), "items": items}
         if isinstance(budgets.get("spent_total"), (int, float)):
-            cleaned["budgets"]["spent_total"] = to_float(budgets["spent_total"])
+            block["spent_total"] = to_float(budgets["spent_total"])
+        return block
+
+    budgets = summary.get("budgets")
+    if isinstance(budgets, dict) and isinstance(budgets.get("items"), list):
+        cleaned["budgets"] = budget_block(budgets)
+    history = summary.get("budget_history")
+    if isinstance(history, dict):
+        cleaned["budget_history"] = {
+            month: budget_block(block)
+            for month, block in sorted(history.items())[-12:]
+            if re.match(r"^20\d{2}-\d{2}$", str(month))
+            and isinstance(block, dict)
+            and isinstance(block.get("items"), list)
+        }
 
     alert_history = summary.get("alert_history")
     if isinstance(alert_history, list):

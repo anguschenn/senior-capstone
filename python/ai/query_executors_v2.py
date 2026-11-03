@@ -3665,10 +3665,92 @@ def _biggest_purchases(picks, period, category, query_spec):
     }
 
 
+def _budget_months(query_spec, summary):
+    """ "Have I been on budget for the last 3 months": each month's over-budget
+    categories, from the Budget tab's figures for those months."""
+    asked = [k for k in (query_spec.period_key or "").split(",") if k]
+    current = summary.get("budgets") if isinstance(summary.get("budgets"), dict) else {}
+    history = summary.get("budget_history")
+    span = f"{asked[0]} to {asked[-1]}" if len(asked) > 1 else asked[0]
+    if not isinstance(history, dict):
+        return _pointer(
+            f"Chat only gets the budgets for the month picked in the app, so it can't check "
+            f"{span}. Pick each month in the Month menu and ask about it.",
+            "Pick a month in the Month menu.",
+        )
+    category = (query_spec.category or "").split(",")[0].lower()
+    running = date_cls.today().strftime("%Y-%m")
+    lines, unset, unseen = [], [], []
+    for month in asked:
+        block = history.get(month) or (current if current.get("month") == month else None)
+        if block is None:
+            unseen.append(month)  # older than the months chat gets budgets for
+            continue
+        items = [
+            i
+            for i in (block or {}).get("items") or []
+            if not category or str(i.get("category", "")).lower() == category
+        ]
+        if not items:
+            unset.append(month)
+            continue
+        over = [i for i in items if float(i["spent"]) > float(i["limit"])]
+        so_far = " so far" if month == running else ""
+        listed = [
+            f"{i['category']} (${float(i['spent']):,.0f} of ${float(i['limit']):,.0f})"
+            for i in over
+        ]
+        if len(listed) > 1:
+            listed = [", ".join(listed[:-1]) + f" and {listed[-1]}"]
+        lines.append(
+            f"{month}: over in {listed[0]}{so_far}" if over else f"{month}: within budget{so_far}"
+        )
+    budgeted = len(lines)
+    over_months = sum(": over in " in line for line in lines)
+    what = f"your {query_spec.category.split(',')[0]} budget" if category else "budget"
+    if not budgeted and unseen and not unset:
+        lead = f"Chat can't see your budgets for {span}."
+    elif not budgeted:
+        lead = f"No {what} was set from {span}."
+    elif not over_months:
+        lead = f"You stayed within {what} in every month with a budget from {span}."
+    else:
+        some = bool(unset)  # months with no budget aren't counted
+        if over_months == budgeted:
+            share = (
+                "every month that had one"
+                if some
+                else ("both months" if budgeted == 2 else f"all {budgeted} months")
+            )
+        else:
+            share = f"{over_months} of the {budgeted} months" + (" that had one" if some else "")
+        lead = f"You went over {what} in {share}."
+    if unset and budgeted:
+        lines.append(
+            "no budget set in "
+            + (", ".join(unset) if len(unset) <= 3 else f"{len(unset)} other months")
+        )
+    if unseen:
+        lines.append(
+            f"chat can't see budgets before {min(history) if history else asked[-1]}, so "
+            f"{unseen[0]}" + (f" to {unseen[-1]}" if len(unseen) > 1 else "") + " isn't checked"
+        )
+    return {
+        "reply": f"{lead} " + "; ".join(lines) + ".",
+        "insights": ["Limits and spending are the Budget tab's figures for each month."],
+        "actions": ["Open the Budget tab and step through the months for details."],
+        "missing_fields": [],
+        "facts_used": ["budget_history"],
+        "period_resolved": span,
+    }
+
+
 def _budget_status(query_spec, summary):
     """Budget asks answered from the limits the app sends for its selected month:
     one category's limit and what's left, or which categories are over or on pace to go
     over. None when the app sent no budget block (older app versions)."""
+    if query_spec.period_type == "month_range":
+        return _budget_months(query_spec, summary)
     budgets = summary.get("budgets") if isinstance(summary, dict) else None
     if not isinstance(budgets, dict) or not isinstance(budgets.get("items"), list):
         return None

@@ -789,7 +789,7 @@ def _load(
 def summary_for(user_id: str, context: dict, tx_rows=None) -> dict:
     """Build (or reuse) the summary for a parsed context. Raises on database errors; the
     caller falls back to the app-sent summary."""
-    from user_model import fetch_budget_rows
+    from user_model import fetch_budget_rows, fetch_budget_rows_by_month, previous_months
 
     hidden = context.get("hidden_account_ids") or []
     key = (user_id, tuple(context["account_ids"]), tuple(hidden), context["month"])
@@ -808,16 +808,28 @@ def summary_for(user_id: str, context: dict, tx_rows=None) -> dict:
     account_ids = context["account_ids"]
     txs = build_transactions(rows, account_meta, rules, account_ids or None, decisions)
     progress = []
+    past_progress = None
     if not context["all_year"]:
         # Budgets cover every linked account, whichever one is selected (as in the app).
+        kinds = classify_rows(rows, rules, decisions=decisions)
         progress = build_budget_progress(
             fetch_budget_rows(user_id, context["month"]),
             names,
             rows,
             rules,
             context["month"],
-            decisions=decisions,
+            kinds=kinds,
         )
+        earlier = previous_months(context["month"], BUDGET_HISTORY_MONTHS)
+        past_rows = fetch_budget_rows_by_month(user_id, earlier[0], earlier[-1])
+        if past_rows is not None:
+            # Every month read, with no items when it had no budget.
+            past_progress = {
+                month: build_budget_progress(
+                    past_rows.get(month, []), names, rows, rules, month, kinds=kinds
+                )
+                for month in earlier
+            }
     types = {tx.account_type.lower().strip() for tx in txs if tx.account_type.strip()}
     summary = build_summary(
         txs,
@@ -836,6 +848,20 @@ def summary_for(user_id: str, context: dict, tx_rows=None) -> dict:
         account_type=types.pop() if account_ids and len(types) == 1 else "",
         tz_name=context["tz"],
     )
+    if past_progress is not None:
+        # Each earlier month's budgets as the Budget tab shows them, for "the last 3
+        # months". Server only, like alert_history: the app's summary has no past budgets.
+        summary["budget_history"] = {
+            month: {
+                "month": month,
+                "items": [
+                    {"category": b["category"], "spent": b["spent"], "limit": b["limit"]}
+                    for b in month_progress
+                    if float(b["limit"]) > 0
+                ],
+            }
+            for month, month_progress in past_progress.items()
+        }
     if not account_ids:
         # Alerts are per user (all accounts), so only the all-accounts view gets them.
         summary["alert_history"] = fetch_alert_history(user_id, context["month"])
@@ -849,6 +875,7 @@ def summary_for(user_id: str, context: dict, tx_rows=None) -> dict:
 
 
 ALERT_HISTORY_MONTHS = 6
+BUDGET_HISTORY_MONTHS = 12
 
 
 def fetch_alert_history(user_id: str, month: str) -> list[dict]:

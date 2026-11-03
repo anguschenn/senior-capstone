@@ -2519,14 +2519,36 @@ def parse_query_v2(message, summary, history=None):
 
 
 def _over_asked_months(spec, message, summary):
-    """The biggest purchases and the top category of several months ("the last 3
-    months", "since march", "between march and april") add those months up; the
-    rules above read them as a single month or a month-by-month comparison."""
+    """Budgets, the biggest purchases and the top category of several months ("the last
+    3 months", "since march", "between march and april") cover those months; the rules
+    above read them as a single month or a month-by-month comparison."""
     text = _normalize(message)
     asked = asked_period(text, summary)
-    if asked is None or not asked.months or asked.label == "for this year":
-        return spec  # this year has its own whole-year answers
+    if asked is None or not asked.months:
+        return spec
     months = ",".join(asked.months)
+    if _BUDGET_STATUS_RE.search(text) and (
+        spec.reason_mode == "budget_status"
+        or (
+            spec.task_type in {"compare_periods", "amount_lookup"}
+            and re.search(
+                r"\b(over|under|within|exceed[a-z]*|stay[a-z]*|kept|stuck)\b|"
+                r"\bon (my )?(budget|track)\b",
+                text,
+            )
+        )
+    ):
+        # "was I over budget between september and october": each month's budgets
+        return QuerySpec(
+            task_type="data_pointer",
+            reason_mode="budget_status",
+            period_type="month_range",
+            period_key=months,
+            scope=spec.scope,
+            category=_category_in(text, summary) or "",
+        )
+    if asked.label == "for this year":
+        return spec  # the biggest purchases and top category have whole-year answers
     if _BIGGEST_PURCHASE_RE.search(text) and (
         spec.reason_mode == "biggest_purchase"
         # "between march and april" reads as a comparison, but not "highest expense month"

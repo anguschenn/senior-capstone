@@ -173,5 +173,63 @@ class PastFewMonthsTests(PeriodRangeTestCase):
         self.assertIn("$400 in 2026-02, $620 in 2026-03, $900 in 2026-04", reply)
 
 
+def budget_summary():
+    summary = months_summary()
+    summary["budgets"] = {
+        "month": "2026-05",
+        "items": [{"category": "Food", "spent": 210.0, "limit": 300.0}],
+    }
+    summary["budget_history"] = {
+        "2026-02": {"month": "2026-02", "items": []},
+        "2026-03": {
+            "month": "2026-03",
+            "items": [
+                {"category": "Food", "spent": 200.0, "limit": 300.0},
+                {"category": "Shopping", "spent": 420.0, "limit": 400.0},
+            ],
+        },
+        "2026-04": {
+            "month": "2026-04",
+            "items": [
+                {"category": "Food", "spent": 300.0, "limit": 250.0},
+                {"category": "Shopping", "spent": 600.0, "limit": 400.0},
+            ],
+        },
+    }
+    return summary
+
+
+class BudgetOverMonthsTests(PeriodRangeTestCase):
+    def test_each_month_with_its_over_budget_categories(self):
+        reply = self.ask("Have I been on budget for the last 3 months?", budget_summary())["reply"]
+        self.assertEqual(
+            reply,
+            "You went over budget in every month that had one. 2026-03: over in Shopping ($420 "
+            "of $400); 2026-04: over in Food ($300 of $250) and Shopping ($600 of $400); no "
+            "budget set in 2026-02.",
+        )
+
+    def test_between_two_months_and_one_category(self):
+        reply = self.ask("Was I over my food budget between March and May?", budget_summary())[
+            "reply"
+        ]
+        self.assertIn("2026-03: within budget", reply)
+        self.assertIn("2026-04: over in Food ($300 of $250)", reply)
+        self.assertIn("2026-05: within budget", reply)
+
+    def test_months_before_the_history_are_not_called_unset(self):
+        summary = budget_summary()
+        del summary["budget_history"]["2026-02"]
+        reply = self.ask("Was I over budget since February?", summary)["reply"]
+        self.assertIn("chat can't see budgets before 2026-03, so 2026-02 isn't checked", reply)
+        self.assertNotIn("no budget set in 2026-02", reply)
+
+    def test_without_past_budgets_it_says_it_only_sees_one_month(self):
+        summary = budget_summary()
+        del summary["budget_history"]
+        reply = self.ask("Was I over budget in the past few months?", summary)["reply"]
+        self.assertIn("Chat only gets the budgets for the month picked in the app", reply)
+
+
 if __name__ == "__main__":
     unittest.main()
