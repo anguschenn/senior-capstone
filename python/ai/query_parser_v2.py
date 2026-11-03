@@ -6,6 +6,7 @@ import re
 from datetime import date as date_cls
 from datetime import timedelta
 
+from .asked_period import asked_period
 from .asked_period import months_back as _months_back
 from .asked_period import months_between as _months_between
 from .query_contracts import QuerySpec
@@ -4266,6 +4267,25 @@ def _amount_judgement_spec(text, summary, scope):
     )
 
 
+def _asked_days_spec(text, summary, scope, reason_mode):
+    """ "the past 2 weeks", "the last 10 days", "this week": that run of days, ending
+    today, from the daily totals. None when the question names no run of days."""
+    asked = asked_period(text, summary)
+    if asked is None or asked.kind != "days":
+        return None
+    today = date_cls.today()
+    return QuerySpec(
+        task_type="day_span",
+        metric="expenses",
+        period_type="days",
+        period_key=f"{(today - timedelta(days=asked.days - 1)).isoformat()},{today.isoformat()}",
+        scope=scope,
+        reason_mode=reason_mode,
+        # daily totals have no categories: the day-span answer says so
+        category=_category_in(text, summary) or "",
+    )
+
+
 def _derived_metric_spec(text, summary, scope):
     """Counts, rates and averages the summary can compute: transaction counts, savings
     rate, spend per day, biggest day, weekends."""
@@ -4287,18 +4307,9 @@ def _derived_metric_spec(text, summary, scope):
                 period_key=day,
                 scope=scope,
             )
-        recent = re.search(r"\b(last|past) (\d{1,2}) days\b", text)
-        if re.search(r"\b(last|past|this) week\b", text) or recent:
-            # daily totals carry counts, so a week's purchases can be counted
-            today = date_cls.today()
-            back = int(recent.group(2)) - 1 if recent else 6
-            return QuerySpec(
-                task_type="day_span",
-                metric="expenses",
-                period_type="days",
-                period_key=f"{(today - timedelta(days=back)).isoformat()},{today.isoformat()}",
-                scope=scope,
-            )
+        span = _asked_days_spec(text, summary, scope, "")
+        if span is not None:
+            return span  # daily totals carry counts, so a run of days can be counted
         if _category_in(text, summary):
             return QuerySpec(
                 task_type="data_pointer",
@@ -4382,6 +4393,10 @@ def _derived_metric_spec(text, summary, scope):
         )
     if not mode:
         return None
+    if mode == "per_day":
+        span = _asked_days_spec(text, summary, scope, "per_day")
+        if span is not None:
+            return span
     if mode in {"savings_rate", "per_day"} and re.search(
         r"\b(this year|so far this year|for the year)\b", text
     ):
@@ -4392,6 +4407,18 @@ def _derived_metric_spec(text, summary, scope):
             period_key=str(_selected_year(summary)),
             scope=scope,
             reason_mode=mode,
+        )
+    asked = asked_period(text, summary)
+    if mode in {"tx_count", "per_day", "per_tx"} and asked is not None and asked.months:
+        # "how many transactions in the last 3 months": those months added up
+        return QuerySpec(
+            task_type="derived_metric",
+            metric="expenses",
+            period_type="month_range",
+            period_key=",".join(asked.months),
+            scope=scope,
+            reason_mode=mode,
+            category=_category_in(text, summary) if mode in {"per_day", "per_tx"} else "",
         )
     if "last month" in text:
         month_key = previous_month_key(summary)
