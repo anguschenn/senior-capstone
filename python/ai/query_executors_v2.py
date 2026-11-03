@@ -2255,6 +2255,19 @@ def _exec_day_span(query_spec, summary, scope_label):
             f"Search Activity for {query_spec.category} to see those days.",
         )
     shown = f"${total:.2f}" if total < 10 else f"${total:.0f}"
+    if query_spec.reason_mode == "per_day":
+        days_in = (date_cls.fromisoformat(end) - date_cls.fromisoformat(start)).days + 1
+        return {
+            "reply": (
+                f"From {start} to {end}, that's about ${total / days_in:.0f} a day for "
+                f"{scope_label} ({shown} over {days_in} days)."
+            ),
+            "insights": ["Summed from the daily totals the app sends."],
+            "actions": ["Ask which of those days was biggest."],
+            "missing_fields": [],
+            "facts_used": ["day_index_recent.expenses"],
+            "period_resolved": f"{start} to {end}",
+        }
     return {
         "reply": (
             f"From {start} to {end}, you spent about {shown} for {scope_label} across "
@@ -2654,6 +2667,19 @@ def _exec_derived_metric(query_spec, summary, scope_label):
         target = f"{target} so far" if rows else target
     if mode == "per_day" and query_spec.period_type == "year":
         row = {}  # the year path adds its months up below
+    span_days = 0
+    if mode in {"tx_count", "per_day", "per_tx"} and query_spec.period_type == "month_range":
+        # "the last 3 months", "since march": the months added up
+        keys = [k for k in target.split(",") if k in month_index]
+        row = _merged_row(month_index, keys)
+        target = _span_label(month_index, keys)
+        running = bool(keys) and keys[-1] == today.strftime("%Y-%m")
+        span_days = sum(
+            today.day
+            if k == today.strftime("%Y-%m")
+            else calendar.monthrange(*map(int, k.split("-")))[1]
+            for k in keys
+        )
     if mode in {"tx_count", "savings_rate", "per_day", "per_tx"} and not isinstance(row, dict):
         return None
     if mode == "per_tx":
@@ -2662,8 +2688,9 @@ def _exec_derived_metric(query_spec, summary, scope_label):
         if count <= 0:
             return None
         reply = (
-            f"In {target}{' so far' if running else ''}, your average spending transaction was "
-            f"about ${expenses / count:.2f} (${expenses:.0f} over {count} purchases)."
+            f"{_in_period(target)}{' so far' if running else ''}, your average spending "
+            f"transaction was about ${expenses / count:.2f} (${expenses:.0f} over {count} "
+            "purchases)."
         )
         if query_spec.category:
             reply = (
@@ -2675,8 +2702,8 @@ def _exec_derived_metric(query_spec, summary, scope_label):
         count = int(row.get("tx_count", 0) or 0)
         spend_count = int(row.get("expense_tx_count", 0) or 0)
         reply = (
-            f"In {target}{' so far' if running else ''}, {scope_label} has {count} transactions, "
-            f"{spend_count} of them spending."
+            f"{_in_period(target)}{' so far' if running else ''}, {scope_label} has {count} "
+            f"transactions, {spend_count} of them spending."
         )
         facts = ["month_index.tx_count"]
     elif mode == "savings_rate":
@@ -2735,14 +2762,17 @@ def _exec_derived_metric(query_spec, summary, scope_label):
         )
         facts = ["month_index.expenses"]
     elif mode == "per_day":
-        days = today.day if running else calendar.monthrange(*map(int, target.split("-")))[1]
+        if span_days:
+            days = span_days
+        else:
+            days = today.day if running else calendar.monthrange(*map(int, target.split("-")))[1]
         category = (query_spec.category or "").strip()
         expenses = _month_amount(row, category) if category else float(row.get("expenses", 0) or 0)
         if expenses is None:
             return None
         on = f" on {category}" if category else ""
         reply = (
-            f"In {target}, that's about ${expenses / days:.0f} a day{on} "
+            f"{_in_period(target)}, that's about ${expenses / days:.0f} a day{on} "
             f"(${expenses:.0f} over {days} days)."
         )
         facts = ["month_index.categories" if category else "month_index.expenses"]
