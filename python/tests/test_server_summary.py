@@ -133,6 +133,7 @@ class ContextTests(unittest.TestCase):
         with (
             mock.patch.object(server_summary, "_load", side_effect=fake_load),
             mock.patch("user_model.fetch_budget_rows", return_value=[]),
+            mock.patch("user_model.fetch_budget_rows_by_month", return_value={}),
             mock.patch.object(server_summary, "fetch_alert_history", return_value=[]),
         ):
             first = server_summary.summary_for("cache-user", context)
@@ -180,7 +181,9 @@ class HiddenAccountTests(unittest.TestCase):
         "card": {"plaid_account_id": "card", "account_type": "credit"},
     }
 
-    def _summary(self, **context):
+    PAST_BUDGETS = {"2026-09": [{"id": "s", "category_id": "c-food", "monthly_limit": 20}]}
+
+    def _summary(self, past_budgets=PAST_BUDGETS, **context):
         context = server_summary.parse_context(
             {"selected_month": "2026-10", "today": "2026-10-10", **context}
         )
@@ -195,6 +198,7 @@ class HiddenAccountTests(unittest.TestCase):
                 "user_model.fetch_budget_rows",
                 return_value=[{"id": "b", "category_id": "c-food", "monthly_limit": 100}],
             ),
+            mock.patch("user_model.fetch_budget_rows_by_month", return_value=past_budgets),
             mock.patch.object(server_summary, "fetch_alert_history", return_value=[]),
         ):
             return server_summary.summary_for("hidden-user", context)
@@ -205,6 +209,17 @@ class HiddenAccountTests(unittest.TestCase):
         hidden = self._summary(hidden_account_ids=["card"])
         # The card's lunch is gone and paying it from checking is now spending.
         self.assertEqual(hidden["month_index"]["2026-10"]["expenses"], 330)
+
+    def test_earlier_months_budgets_are_kept_for_the_last_months(self):
+        history = self._summary()["budget_history"]
+        # the 12 months before 2026-10, each read: an empty list means no budget
+        self.assertEqual((min(history), max(history), len(history)), ("2025-10", "2026-09", 12))
+        self.assertEqual(history["2026-09"]["items"][0]["category"], "Food")
+        self.assertEqual(history["2026-09"]["items"][0]["limit"], 20.0)
+        self.assertEqual(history["2026-08"]["items"], [])
+
+    def test_a_failed_read_of_past_budgets_leaves_them_out(self):
+        self.assertNotIn("budget_history", self._summary(past_budgets=None))
 
     def test_budgets_cover_all_accounts_when_one_is_selected(self):
         summary = self._summary(account_ids=["checking"])
