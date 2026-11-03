@@ -4,6 +4,7 @@ from datetime import date as date_cls
 
 from config import AI_REWRITE_ENABLED, AI_ROUTER_V2_ENABLED
 
+from .asked_period import asked_period, covers, shows_other_period
 from .explainers import build_chat_prompt
 from .intent_router import IntentRouter
 from .parsers import extract_json_object
@@ -2093,6 +2094,12 @@ class ChatService:
             result = validate_v2_response(plan, parsed, result)
             if not isinstance(result, dict) or not result.get("reply"):
                 return None
+            result = (
+                self._other_period_answer(
+                    part, {**result, "answer_source": "deterministic"}, summary
+                )
+                or result
+            )
             results.append(result)
         totals = summary.get("totals") if isinstance(summary.get("totals"), dict) else {}
         return build_chat_response(
@@ -2185,18 +2192,22 @@ class ChatService:
         account an answer covers when the question names one."""
         payload = dict(payload or {})
         original = clamp_str(payload.get("prompt", ""), 4000)
-        stripped, scope_note = self._account_scope_note(
-            original, sanitize_spending_summary(payload.get("spending_summary"))
-        )
+        summary = sanitize_spending_summary(payload.get("spending_summary"))
+        stripped, scope_note = self._account_scope_note(original, summary)
         if scope_note or stripped != original:
             payload["prompt"] = stripped or original
-        response = self._multi_question_response(payload) or self._handle_chat(
-            payload, user_id=user_id
+        multi = self._multi_question_response(payload)
+        response = multi or self._handle_chat(payload, user_id=user_id)
+        # A multi-question answer was checked part by part.
+        unanswered = (
+            None
+            if multi or not isinstance(response, dict)
+            else self._other_period_answer(original, response, summary)
         )
-        if isinstance(response, dict):
-            note = self._coverage_note(
-                original, response, sanitize_spending_summary(payload.get("spending_summary"))
-            )
+        if unanswered:
+            response = unanswered
+        elif isinstance(response, dict):
+            note = self._coverage_note(original, response, summary)
             if note:
                 reply = str(response.get("reply", "") or "")
                 response["reply"] = clamp_str(f"{reply} {note}".strip(), 2500)
@@ -2280,6 +2291,47 @@ class ChatService:
         "budget_suggestion",
         "month_outlook",
     }
+
+    # Replies that say what chat can't do (for the period asked or at all).
+    _LIMIT_SAID_RE = re.compile(
+        r"\bchat (only|doesn't)\b|\bcan't\b|\bcannot\b|isn't tracked|data starts|"
+        r"haven't set any budget",
+        re.IGNORECASE,
+    )
+
+    def _other_period_answer(self, prompt, response, summary):
+        """When a computed answer is about a different period than the several months or
+        days the question asked about, say chat can't answer for that period instead of
+        showing the other period's numbers. None when the answer is fine as it is."""
+        if response.get("answer_source") != "deterministic":
+            return None
+        if response.get("intent") in self._PLANNING_INTENTS:
+            return None
+        reply = str(response.get("reply", "") or "")
+        asked = asked_period(_normalize(prompt), summary) if reply else None
+        if asked is None or covers(asked, response, summary):
+            return None
+        if self._LIMIT_SAID_RE.search(reply) and not shows_other_period(asked, response, summary):
+            return None  # it already says what it can't do, without another period's numbers
+        month = resolve_previous_month_key(summary)
+        name = date_cls.fromisoformat(f"{month}-01").strftime("%B")
+        return {
+            **response,
+            "reply": (
+                f"I can't answer that {asked.label} yet. Ask about a single month instead, "
+                f'like "this month" or "in {name}".'
+            ),
+            "insights": [],
+            "actions": [f'Ask about one month, like "in {name}".'],
+            "period_resolved": "",
+            "facts_used": [],
+            "citations": [],
+            "resolved_query": {
+                **(response.get("resolved_query") or {}),
+                "period_type": "unsupported",
+                "period_key": "",
+            },
+        }
 
     def _coverage_note(self, prompt, response, summary):
         """When a computed answer leaves out a month, category or measure the question

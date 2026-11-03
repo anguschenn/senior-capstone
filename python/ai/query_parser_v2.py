@@ -6,6 +6,8 @@ import re
 from datetime import date as date_cls
 from datetime import timedelta
 
+from .asked_period import months_back as _months_back
+from .asked_period import months_between as _months_between
 from .query_contracts import QuerySpec
 from .time_parsing import MONTH_NAME_TO_NUM, extract_specific_month_key, month_mentions
 from .time_scope_resolver import previous_month_key, selected_month_key
@@ -62,18 +64,6 @@ def _amount_metric(text):
     if has_spend:
         return "expenses"
     return ""
-
-
-def _months_back(month_key, count):
-    year, month = (int(part) for part in month_key.split("-"))
-    month -= count
-    while month <= 0:
-        month += 12
-        year -= 1
-    while month > 12:
-        month -= 12
-        year += 1
-    return f"{year}-{month:02d}"
 
 
 _MONTH_DAY_RE = re.compile(
@@ -3745,17 +3735,6 @@ def _hotspot_spec(text, summary, scope):
 
 
 # ── Years, spans, category vs last month, affordability, budgets ─────────
-
-
-def _months_between(start, end):
-    keys = []
-    year, month = (int(x) for x in start.split("-"))
-    while f"{year}-{month:02d}" <= end and len(keys) < 24:
-        keys.append(f"{year}-{month:02d}")
-        month += 1
-        if month > 12:
-            month, year = 1, year + 1
-    return keys
 
 
 def _year_amount_spec(text, summary, scope, metric, categories):
