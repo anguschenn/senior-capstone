@@ -979,7 +979,8 @@ _BIGGEST_PURCHASE_RE = re.compile(
     r"\b(biggest|largest|most expensive|highest|top|priciest|costliest)\s+(?:single )?"
     r"(thing|item)s? i (bought|purchased|got|paid for|spent (?:money )?on)\b()|"
     r"\b(biggest|largest|most expensive|highest|top|priciest|costliest)\s+([a-z]+\s+)?"
-    r"(purchase|transaction|expense|charge|buy)s?\b(?!\s+(categor|types?|areas?))|"
+    r"(purchase|transaction|expense|charge|buy)s?\b(?!\s+(categor|types?|areas?|months?|weeks?|days?|"
+    r"quarters?))|"
     # "did I have any big purchases last week"
     r"\bany (big|large|huge|major|expensive)\s+()()(purchase|transaction|expense|charge)s\b"
 )
@@ -2514,6 +2515,41 @@ def _canonical_wording(message, summary):
 
 
 def parse_query_v2(message, summary, history=None):
+    return _over_asked_months(_parse_query_v2(message, summary, history), message, summary)
+
+
+def _over_asked_months(spec, message, summary):
+    """The biggest purchases and the top category of several months ("the last 3
+    months", "since march", "between march and april") add those months up; the
+    rules above read them as a single month or a month-by-month comparison."""
+    text = _normalize(message)
+    asked = asked_period(text, summary)
+    if asked is None or not asked.months or asked.label == "for this year":
+        return spec  # this year has its own whole-year answers
+    months = ",".join(asked.months)
+    if _BIGGEST_PURCHASE_RE.search(text) and (
+        spec.reason_mode == "biggest_purchase"
+        # "between march and april" reads as a comparison, but not "highest expense month"
+        or (
+            spec.task_type in {"compare_periods", "amount_lookup"}
+            and not re.search(r"\b(month|week|day|quarter)s?\b", text)
+        )
+    ):
+        biggest = _outside_summary_spec(text, summary, spec.scope)
+        if biggest is not None and biggest.reason_mode == "biggest_purchase":
+            return dataclasses.replace(biggest, period_type="month_range", period_key=months)
+    mode = spec.reason_mode or ""
+    if (
+        spec.task_type == "top_category_lookup"
+        and spec.period_type in {"month", "unknown", ""}
+        and (not mode or mode == "avg" or mode.startswith(("top:", "rank:")))
+        and not spec.category
+    ):
+        return dataclasses.replace(spec, period_type="month_range", period_key=months)
+    return spec
+
+
+def _parse_query_v2(message, summary, history=None):
     message = _canonical_wording(message, summary)
     when = _WHEN_EXTREME_RE.match(_normalize(message))
     if when:
@@ -3358,19 +3394,14 @@ def _slot_fallback(text, summary, scope):
             period_key=",".join(_months_between(since_keys[0], selected_month_key(summary))),
             scope=scope,
         )
-    last_n = re.search(
-        r"\b(?:last|past|previous)\s+(\d{1,2}|two|three|four|five|six)\s+months\b", text
-    )
-    if last_n:
-        raw = last_n.group(1)
-        count = max(2, min(12, int(raw) if raw.isdigit() else _NUMBER_WORDS[raw]))
-        start = _months_back(selected_month_key(summary), count)
-        end = _months_back(selected_month_key(summary), 1)
+    last_n = asked_period(text, summary)
+    if last_n is not None and last_n.alt_months:
+        # "the last 3 months", "the past few months": the full months before this one
         return QuerySpec(
             task_type="compare_periods",
             metric=metric if metric in {"income", "net"} else "expenses",
             period_type="month_range",
-            period_key=",".join(_months_between(start, end)),
+            period_key=",".join(last_n.months[-12:]),
             scope=scope,
             category=",".join(categories),
             reason_mode="series",

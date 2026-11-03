@@ -3445,8 +3445,31 @@ def _exec_data_pointer(query_spec, summary, scope_label):
         category = (query_spec.category or "").strip()
         period = query_spec.period_key or _selected_month(summary)
         index = summary.get("year_index" if len(period or "") == 4 else "month_index")
-        entry = index.get(period) if isinstance(index, dict) and period else None
-        largest = entry.get("largest") if isinstance(entry, dict) else None
+        if query_spec.period_type == "month_range" and isinstance(index, dict):
+            # Each month's top three hold the top three of the months together.
+            asked = [k for k in period.split(",") if k]
+            keys = [k for k in asked if isinstance(index.get(k), dict)]
+            tops = [[i for i in index[k].get("largest") or [] if isinstance(i, dict)] for k in keys]
+            largest = sorted(
+                (item for top in tops for item in top),
+                key=lambda item: -float(item.get("amount", 0) or 0),
+            )
+            if category:
+                # A month's purchases past its top three are no bigger than its third, so
+                # only category picks at least that big are surely the category's biggest.
+                floor = max(
+                    (
+                        min(float(i.get("amount", 0) or 0) for i in top)
+                        for top in tops
+                        if len(top) >= 3
+                    ),
+                    default=0.0,
+                )
+                largest = [i for i in largest if float(i.get("amount", 0) or 0) >= floor]
+            period = _span_label(index, keys) if keys else f"{asked[0]} to {asked[-1]}"
+        else:
+            entry = index.get(period) if isinstance(index, dict) and period else None
+            largest = entry.get("largest") if isinstance(entry, dict) else None
         if isinstance(largest, list):
             picks = [
                 item
@@ -3455,7 +3478,7 @@ def _exec_data_pointer(query_spec, summary, scope_label):
                 and (not category or str(item.get("category", "")).lower() == category.lower())
             ]
             if picks or not category:
-                return _biggest_purchases(picks, period, category, query_spec)
+                return _biggest_purchases(picks[:3], period, category, query_spec)
         recent = summary.get("recent_transactions")
         rows = [
             item
@@ -3613,9 +3636,10 @@ def _budget_vs_usual(items, asked, month, summary, answer):
 def _biggest_purchases(picks, period, category, query_spec):
     """The biggest purchases of a month or year, from the summary's per-period top three."""
     what = f"{category} expense" if category else "expense"
+    within = f"from {period}" if " to " in period else f"in {period}"
     if not picks:
         return _pointer(
-            f"I don't see any spending in {period}.",
+            f"I don't see any spending {within}.",
             "Pick another month or year in the app.",
         )
 
@@ -3626,9 +3650,9 @@ def _biggest_purchases(picks, period, category, query_spec):
         )
 
     if query_spec.compare_to == "several" and len(picks) > 1:
-        reply = f"Your biggest {what}s in {period}: " + "; ".join(line(p) for p in picks) + "."
+        reply = f"Your biggest {what}s {within}: " + "; ".join(line(p) for p in picks) + "."
     else:
-        reply = f"Your biggest {what} in {period} was {line(picks[0])}."
+        reply = f"Your biggest {what} {within} was {line(picks[0])}."
         if len(picks) > 1:
             reply += " Next: " + "; ".join(line(p) for p in picks[1:]) + "."
     return {
