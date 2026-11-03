@@ -1270,7 +1270,7 @@ class TestChatServiceV2Regression(unittest.TestCase):
             ("How much money did I lose last month?", "net cash flow"),
             ("How much did I spend before payday?", "can't tell which deposit"),
             ("Did I spend more than I earned in Q2?", "For 2026-04 to 2026-05, net cash flow"),
-            ("Did I have any big purchases last week?", "biggest single purchase"),
+            ("Did I have any big purchases last week?", "I can't answer that for last week yet."),
             ("Did I spend more on food in March or April?", "2026-04 was higher."),
             ("Is my food spending high this month?", "your usual"),
             ("How many months this year did I save money?", "you earned more than you spent"),

@@ -1019,7 +1019,7 @@ class TestChatServiceContract(unittest.TestCase):
             "clarification_question": "",
         }
         payload = {
-            "prompt": "How much did I spend this year?",
+            "prompt": "How much did I spend?",
             "history": [],
             "spending_summary": self._summary_fixture(),
         }
