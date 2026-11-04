@@ -73,8 +73,9 @@ class ChatServerSummaryTests(unittest.TestCase):
             seen.append((user_id, context["month"]))
             return self.SERVER_SUMMARY
 
+        # October by name: "this month" follows the real date, which moves on
         response = self._post(
-            {"prompt": "How much did I spend this month?", "context": self.CONTEXT},
+            {"prompt": "How much did I spend in October 2026?", "context": self.CONTEXT},
             summary_for,
         )
         body = response.get_json()
