@@ -134,6 +134,7 @@ class ContextTests(unittest.TestCase):
             mock.patch.object(server_summary, "_load", side_effect=fake_load),
             mock.patch("user_model.fetch_budget_rows", return_value=[]),
             mock.patch("user_model.fetch_budget_rows_by_month", return_value={}),
+            mock.patch.object(server_summary, "fetch_subscriptions", return_value=[]),
             mock.patch.object(server_summary, "fetch_alert_history", return_value=[]),
         ):
             first = server_summary.summary_for("cache-user", context)
@@ -199,6 +200,7 @@ class HiddenAccountTests(unittest.TestCase):
                 return_value=[{"id": "b", "category_id": "c-food", "monthly_limit": 100}],
             ),
             mock.patch("user_model.fetch_budget_rows_by_month", return_value=past_budgets),
+            mock.patch.object(server_summary, "fetch_subscriptions", return_value=[]),
             mock.patch.object(server_summary, "fetch_alert_history", return_value=[]),
         ):
             return server_summary.summary_for("hidden-user", context)
