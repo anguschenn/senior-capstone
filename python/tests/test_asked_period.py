@@ -5,6 +5,7 @@ from unittest import mock
 
 from ai.asked_period import asked_period, covers, shows_other_period
 from ai.chat_service import ChatService
+from ai.query_parser_v2 import _normalize
 
 SUMMARY = {
     "scope": "all_accounts",
@@ -45,6 +46,29 @@ class AskedPeriodTests(unittest.TestCase):
                     self.assertEqual(asked.days, expected)
                 else:
                     self.assertEqual((asked.months[0], asked.months[-1]), expected)
+
+    def test_other_wordings_read_as_runs_of_months(self):
+        cases = [
+            ("have i been on budget for the last half year", ("2025-11", "2026-04")),
+            ("spending in the past half-year", ("2025-11", "2026-04")),
+            ("spending in the past year", ("2025-05", "2026-04")),
+            ("food in the past 6 month", ("2025-11", "2026-04")),
+            ("since the start of the year", ("2026-01", "2026-05")),
+            ("over the last couple of quarters", ("2025-11", "2026-04")),
+        ]
+        for text, expected in cases:
+            with self.subTest(text=text):
+                asked = asked_period(_normalize(text), SUMMARY)
+                self.assertEqual((asked.months[0], asked.months[-1]), expected)
+        # these keep their own meanings
+        for text in [
+            "spending last year",
+            "the first half of the year",
+            "second half of the year",
+            "how much will i have saved in half a year",
+        ]:
+            with self.subTest(text=text):
+                self.assertIsNone(asked_period(_normalize(text), SUMMARY))
 
     def test_single_months_and_no_period_are_not_runs(self):
         for text in ["this month", "in april", "last month", "how much did i spend", "since may"]:

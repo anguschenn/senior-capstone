@@ -32,7 +32,7 @@ ASKS = {
 MONTHS_ANSWERED = set(ASKS) - {"merchant"}
 DAYS_ANSWERED = {"spend", "count", "daily_average"}
 # "Is my spending going up since September" compares the running month's pace with
-# September, which doesn't cover the months between, so chat says it can't.
+# September and leaves the months between out, so chat says it can't.
 NOT_ANSWERED = {("trend", "since")}
 
 
@@ -41,7 +41,8 @@ def month_name(month_key):
 
 
 def ranges(today):
-    """(kind, label, wording) for each period asked. "This year" needs two months."""
+    """(kind, label, wording) for each period asked, in the words people use. "This
+    year" needs two months."""
 
     def back(n):
         year, month = today.year, today.month - n
@@ -58,6 +59,11 @@ def ranges(today):
         ("days", "ten_days", "in the last 10 days"),
         ("days", "this_week", "this week"),
         ("days", "last_week", "last week"),
+        ("months", "half_year", "for the last half year"),
+        ("months", "past_year", "over the past year"),
+        ("months", "singular", "in the past 6 month"),
+        ("days", "couple_weeks", "over the past couple of weeks"),
+        ("days", "few_days", "in the past few days"),
     ]
     if today.month >= 2:
         asked.append(("months", "year", "this year"))
@@ -65,10 +71,10 @@ def ranges(today):
 
 
 def build_summary(today):
-    """Ten months of transactions up to today: pay on the 1st, food every other day,
+    """Thirteen months of transactions up to today: pay on the 1st, food every other day,
     a ride every 5 days, shopping weekly, a subscription monthly."""
     rows = []
-    start = today - dt.timedelta(days=300)
+    start = today - dt.timedelta(days=400)
     day = start
     n = 0
     while day <= today:
