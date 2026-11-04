@@ -1317,6 +1317,18 @@ def _transaction_list_month(text, summary):
     return extract_specific_month_key(text, default_year)
 
 
+_QUARTER_COUNTS = {
+    "2": 2,
+    "two": 2,
+    "couple": 2,
+    "couple of": 2,
+    "3": 3,
+    "three": 3,
+    "4": 4,
+    "four": 4,
+}
+
+
 def _normalize(message):
     text = fix_typos(clamp_str(message or "", 4000))
     text = re.sub(r"\b(last|previous|prior|past)\s+mo\b", r"\1 month", text)
@@ -1353,6 +1365,21 @@ def _normalize(message):
     text = re.sub(r"\bcurrent\s+mo\b", "current month", text)
     text = re.sub(r"\bthis\s+yr\b", "this year", text)
     text = re.sub(r"\b(previous|prior)\s+year\b", "last year", text)
+    # Runs of months said other ways read as "last N months" in every rule below.
+    text = re.sub(r"\b(the )?(last|past) half[ -](a[ -])?year\b", "last 6 months", text)
+    text = re.sub(r"\b(the )?past (year|twelve months)\b", "last 12 months", text)
+    text = re.sub(
+        r"\b(last|past|previous) (2|two|couple|couple of|3|three|4|four) quarters\b",
+        lambda m: f"last {3 * _QUARTER_COUNTS[m.group(2)]} months",
+        text,
+    )
+    text = re.sub(
+        r"\b(last|past|previous|recent) (\d{1,2}|two|three|four|five|six|seven|eight|nine|ten|"
+        r"eleven|twelve|few|several|couple|couple of) (month|week|day)\b(?!s)",
+        r"\1 \2 \3s",
+        text,
+    )
+    text = re.sub(r"\bsince the (start|beginning) of (the|this) year\b", "so far this year", text)
     # Keep what "$" and "%" meant before punctuation goes: "$200" vs "20%".
     text = re.sub(
         r"\$\s?(\d[\d,]*(?:\.\d+)?)", lambda m: m.group(1).replace(",", "") + " dollars", text
@@ -2519,9 +2546,9 @@ def parse_query_v2(message, summary, history=None):
 
 
 def _over_asked_months(spec, message, summary):
-    """Budgets, the biggest purchases and the top category of several months ("the last
-    3 months", "since march", "between march and april") cover those months; the rules
-    above read them as a single month or a month-by-month comparison."""
+    """Budgets, trends, the biggest purchases and the top category of several months
+    ("the last 3 months", "since march", "between march and april") cover those months;
+    the rules above read them as a single month or a month-by-month comparison."""
     text = _normalize(message)
     asked = asked_period(text, summary)
     if asked is None or not asked.months:
@@ -2547,6 +2574,13 @@ def _over_asked_months(spec, message, summary):
             scope=spec.scope,
             category=_category_in(text, summary) or "",
         )
+    if (
+        spec.task_type == "spending_trend"
+        and spec.period_type in {"month", "unknown", ""}
+        and (spec.reason_mode or "trend") in {"trend", "average", "habits"}
+    ):
+        # "is my spending going up in the last 6 months": those months, not the usual 3
+        return dataclasses.replace(spec, period_type="month_range", period_key=months)
     if asked.label == "for this year":
         return spec  # the biggest purchases and top category have whole-year answers
     if _BIGGEST_PURCHASE_RE.search(text) and (
