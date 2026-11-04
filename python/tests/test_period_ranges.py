@@ -224,11 +224,35 @@ class BudgetOverMonthsTests(PeriodRangeTestCase):
         self.assertIn("chat can't see budgets before 2026-03, so 2026-02 isn't checked", reply)
         self.assertNotIn("no budget set in 2026-02", reply)
 
+    def test_one_earlier_month_comes_from_the_history(self):
+        reply = self.ask("Was I over my food budget last month?", budget_summary())["reply"]
+        self.assertEqual(
+            reply,
+            "For 2026-04, your Food budget was $250.00: you spent $300.00, so you went $50.00 over.",
+        )
+        march = self.ask("Did I stay within budget in March?", budget_summary())["reply"]
+        self.assertIn("For 2026-03: Over budget: Shopping ($420 of $400).", march)
+
     def test_without_past_budgets_it_says_it_only_sees_one_month(self):
         summary = budget_summary()
         del summary["budget_history"]
         reply = self.ask("Was I over budget in the past few months?", summary)["reply"]
         self.assertIn("Chat only gets the budgets for the month picked in the app", reply)
+
+
+class SavingsAndComparisonTests(PeriodRangeTestCase):
+    def test_did_i_save_over_several_months_says_yes_or_no(self):
+        reply = self.ask("Did I save money in the last 3 months?")["reply"]
+        self.assertTrue(reply.startswith("Yes, you earned more than you spent."), reply)
+        self.assertIn("For 2026-02 to 2026-04, net cash flow", reply)
+
+    def test_last_month_against_a_named_month(self):
+        reply = self.ask("Did I spend more last month than in February?")["reply"]
+        self.assertTrue(reply.startswith("Yes."), reply)
+        self.assertIn("$900 in 2026-04 vs $400 in 2026-02", reply)
+        food = self.ask("Did I spend less on food last month than in February?")["reply"]
+        self.assertTrue(food.startswith("No."), food)
+        self.assertIn("$300 in 2026-04 vs $250 in 2026-02", food)
 
 
 if __name__ == "__main__":

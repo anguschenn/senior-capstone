@@ -1182,7 +1182,8 @@ def _exec_amount_month_range(query_spec, summary, scope_label):
         lead = ""
         if query_spec.compare_to in {"positive", "negative"}:
             lead = "Yes. " if (net > 0) == (query_spec.compare_to == "positive") else "No. "
-        elif query_spec.compare_to == "judge":
+        elif query_spec.compare_to == "judge" or query_spec.reason_mode == "earn_vs_spend":
+            # "did I save money in the last 3 months": yes or no first
             lead = f"{_earn_vs_spend_verdict(query_spec, net)} "
         return {
             "reply": (
@@ -3746,16 +3747,23 @@ def _budget_months(query_spec, summary):
 
 
 def _budget_status(query_spec, summary):
-    """Budget asks answered from the limits the app sends for its selected month:
-    one category's limit and what's left, or which categories are over or on pace to go
-    over. None when the app sent no budget block (older app versions)."""
+    """Budget asks answered from the limits for the month asked (the selected month, or
+    an earlier one from budget_history): one category's limit and what's left, or which
+    categories are over or on pace to go over. None when there's no budget block (older
+    app versions)."""
     if query_spec.period_type == "month_range":
         return _budget_months(query_spec, summary)
     budgets = summary.get("budgets") if isinstance(summary, dict) else None
     if not isinstance(budgets, dict) or not isinstance(budgets.get("items"), list):
         return None
     month = budgets.get("month") or _selected_month(summary)
-    items = budgets["items"]
+    history = summary.get("budget_history")
+    asked_month = query_spec.period_key
+    if asked_month and asked_month != month and isinstance(history, dict):
+        if isinstance(history.get(asked_month), dict):
+            # "was I over my food budget last month": that month's budgets
+            budgets, month = history[asked_month], asked_month
+    items = budgets.get("items") or []
     factor, progress = _month_scale(month)
 
     def answer(reply, action):
@@ -3795,11 +3803,18 @@ def _budget_status(query_spec, summary):
             )
         spent, limit = float(item["spent"]), float(item["limit"])
         left = limit - spent
-        state = f"have ${left:.2f} left" if left >= 0 else f"are ${-left:.2f} over"
-        reply = (
-            f"For {month}, your {item['category']} budget is ${limit:.2f}: you've spent "
-            f"${spent:.2f}, so you {state}."
-        )
+        if month < _selected_month(summary):  # a finished month, from budget_history
+            state = f"had ${left:.2f} left" if left >= 0 else f"went ${-left:.2f} over"
+            reply = (
+                f"For {month}, your {item['category']} budget was ${limit:.2f}: you spent "
+                f"${spent:.2f}, so you {state}."
+            )
+        else:
+            state = f"have ${left:.2f} left" if left >= 0 else f"are ${-left:.2f} over"
+            reply = (
+                f"For {month}, your {item['category']} budget is ${limit:.2f}: you've spent "
+                f"${spent:.2f}, so you {state}."
+            )
         if progress and left >= 0 and pace(item) > limit:
             reply += (
                 f" At this pace you'd reach about ${pace(item):.0f} by month end, over the limit."

@@ -2542,7 +2542,28 @@ def _canonical_wording(message, summary):
 
 
 def parse_query_v2(message, summary, history=None):
+    message = _last_month_named(message, summary)
     return _over_asked_months(_parse_query_v2(message, summary, history), message, summary)
+
+
+def _last_month_named(message, summary):
+    """ "did I spend more last month than in february": last month by name, so it is
+    compared like two named months. Other questions are returned as they are."""
+    text = _normalize(message)
+    if not re.search(r"\blast month\b", text) or not re.search(
+        r"\b(than|compared?|vs|versus)\b", text
+    ):
+        return message
+    previous = previous_month_key(summary)
+    others = [
+        k for k in _named_month_keys(text.replace("last month", " "), summary) if k != previous
+    ]
+    if len(others) != 1:
+        return message
+    name = calendar.month_name[int(previous[5:])].lower()
+    if previous[:4] != selected_month_key(summary)[:4]:
+        name += f" {previous[:4]}"
+    return re.sub(r"\blast month\b", name, text)
 
 
 def _over_asked_months(spec, message, summary):
@@ -2574,6 +2595,13 @@ def _over_asked_months(spec, message, summary):
             scope=spec.scope,
             category=_category_in(text, summary) or "",
         )
+    if (
+        spec.task_type == "amount_lookup"
+        and spec.reason_mode == "earn_vs_spend"
+        and spec.period_type in {"month", "unknown", ""}
+    ):
+        # "did I save money in the last 3 months": income and spending of those months
+        return dataclasses.replace(spec, period_type="month_range", period_key=months)
     if (
         spec.task_type == "spending_trend"
         and spec.period_type in {"month", "unknown", ""}
