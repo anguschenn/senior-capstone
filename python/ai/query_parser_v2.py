@@ -2543,7 +2543,183 @@ def _canonical_wording(message, summary):
 
 def parse_query_v2(message, summary, history=None):
     message = _last_month_named(message, summary)
-    return _over_asked_months(_parse_query_v2(message, summary, history), message, summary)
+    spec = _parse_query_v2(message, summary, history)
+    spec = _subscriptions_asked(spec, message, summary) or _merchant_asked(spec, message, summary)
+    return _over_asked_months(spec, message, summary)
+
+
+_PAST_PERIOD_RE = re.compile(
+    r"\b(last|past|previous|since|in (jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*|"
+    r"this year|20\d{2})\b"
+)
+
+
+def _subscriptions_asked(spec, message, summary):
+    """Questions about the Subs tab's recurring charges, when the summary has them:
+    the list, the monthly total, or when one renews. None otherwise."""
+    subs = summary.get("subscriptions") if isinstance(summary, dict) else None
+    if not isinstance(subs, list):
+        return None
+    text = _normalize(message)
+    named = next(
+        (
+            sub["name"]
+            for sub in subs
+            if isinstance(sub, dict)
+            and len(_normalize(sub.get("name", ""))) >= 3
+            and re.search(rf"\b{re.escape(_normalize(sub.get('name', '')))}\b", text)
+        ),
+        "",
+    )
+    renew = re.search(
+        r"\b(when|what day|what date)\b.*\b(renew|renews|bill|bills|billed|charge|charges|"
+        r"charged|due|next)\b|\bnext (subscription|recurring) (charge|payment|bill)\b",
+        text,
+    ) and not re.search(r"\blast\b", text)  # "when was it charged last" is a past charge
+    if renew and not named:
+        # "when does netflix renew": a name that isn't on the Subs tab
+        asked = re.search(
+            r"\bwhen (?:does|do|will|is|are) (?:my )?([a-z0-9][a-z0-9 .&-]{1,25}?) "
+            r"(?:renew|bill|charge|come due|due)\b",
+            text,
+        )
+        if asked and not re.search(
+            r"\b(subscription|subscriptions|it|that|this|next)\b", asked.group(1)
+        ):
+            named = asked.group(1)
+    if renew and (named or re.search(r"\bsubscriptions?\b|\brecurring\b", text)):
+        return QuerySpec(
+            task_type="data_pointer",
+            scope=spec.scope,
+            reason_mode="subscriptions",
+            category=named,
+            compare_to="when",
+        )
+    if not re.search(r"\bsubscriptions?\b|\brecurring (charges|payments|bills)\b", text):
+        return None
+    if _PAST_PERIOD_RE.search(text):
+        if re.search(r"\b(what|which|list|show|any)\b.*\bsubscriptions\b", text):
+            # "what subscriptions did I have in april": that period's Subscriptions charges
+            period_type, period_key = _asked_months_or_all(text, summary)
+            return QuerySpec(
+                task_type="data_pointer",
+                scope=spec.scope,
+                reason_mode="subscriptions",
+                compare_to="past",
+                period_type=period_type,
+                period_key=period_key,
+            )
+        return None  # "what did subscriptions cost in august": that month's spending
+    if re.search(r"\b(what|which|list|show|any)\b.*\bsubscriptions\b|\bsubscriptions do i\b", text):
+        return QuerySpec(
+            task_type="data_pointer",
+            scope=spec.scope,
+            reason_mode="subscriptions",
+            compare_to="list",
+        )
+    if re.search(r"\b(cost|costs|costing|per month|a month|monthly|total|add up)\b", text):
+        return QuerySpec(
+            task_type="data_pointer",
+            scope=spec.scope,
+            reason_mode="subscriptions",
+            compare_to="total",
+        )
+    return None
+
+
+# Words for a period after a merchant's name: "costco since september" is Costco.
+_AFTER_NAME_RE = re.compile(
+    r"\s+(?:this|last|in|since|over|during|between|for|on|from|so far|past|the|recently|"
+    r"lately|so)\b.*$"
+)
+# Names people ask about that are a merchant when the user has one by that name, else a
+# part of a category ("uber" is Transport).
+_MERCHANT_TERMS = ("uber eats", "ubereats", "uber", "lyft", "starbucks", "doordash", "grubhub")
+_MERCHANT_TERMS += ("whole foods", "amazon", "netflix", "spotify")
+
+
+def _has_merchant(name, summary):
+    from .query_executors_v2 import matching_merchants  # the executor owns name matching
+
+    index = summary.get("merchant_index") if isinstance(summary, dict) else None
+    return isinstance(index, dict) and bool(matching_merchants(name, index))
+
+
+def _merchant_asked(spec, message, summary):
+    """A merchant question with the period it names (several months, a month, a year,
+    or all the data when it names none), so per-merchant totals can answer it."""
+    text = _normalize(message)
+    if spec.reason_mode != "merchant":
+        # "spent at costco over the past 2 weeks", "how much on uber": a merchant the
+        # user has, though the rules above read the question another way
+        # "from" names a store only for spending ("bought from"), not money received
+        at = re.search(r"\bat ([a-z0-9][a-z0-9 .&*-]{1,30})", text) or re.search(
+            r"\b(?:spent|spend|buy|bought|order|ordered|purchase[sd]?) [a-z ]{0,20}?\bfrom "
+            r"([a-z0-9][a-z0-9 .&*-]{1,30})",
+            text,
+        )
+        named_at = _AFTER_NAME_RE.sub("", at.group(1)).strip() if at else ""
+        if spec.metric == "income" or re.search(
+            r"\b(receive|received|paid me|pay me|sent me|refund|refunded|earn|earned|income|"
+            r"deposit|deposited|came in)\b",
+            text,
+        ):
+            return spec  # money coming in, not spending at a merchant
+        term = (
+            named_at
+            if named_at and _has_merchant(named_at, summary)
+            else next(
+                (
+                    t
+                    for t in _MERCHANT_TERMS
+                    if re.search(rf"\b{t}\b", text) and _has_merchant(t, summary)
+                ),
+                "",
+            )
+        )
+        if not term or (
+            spec.task_type
+            not in {"category_spending", "amount_lookup", "compare_periods", "day_span"}
+            and spec.reason_mode not in {"find_purchase", "tx_count"}
+        ):
+            return spec
+        spec = QuerySpec(
+            task_type="data_pointer", scope=spec.scope, reason_mode="merchant", category=term
+        )
+    name = _AFTER_NAME_RE.sub("", spec.category or "").strip()
+    period_type, period_key = _asked_months_or_all(text, summary)
+    if re.search(r"\bwhen\b|\blast time\b", text):
+        asks = "when"  # "when did I last pay costco": the last month with a purchase
+    elif re.match(r"^(did|has|have|was|were|is|are|do|does)\b", text):
+        asks = "yes_no"  # "did spotify charge me this month"
+    else:
+        asks = ""
+    return dataclasses.replace(
+        spec, category=name, period_type=period_type, period_key=period_key, compare_to=asks
+    )
+
+
+def _asked_months_or_all(text, summary):
+    """(period_type, period_key) for the period normalized `text` names: several months,
+    a run of days, a month, a year, or ("all", "") when it names none."""
+    asked = asked_period(text, summary)
+    named = _named_month_keys(text, summary)
+    if asked is not None and asked.months:
+        return "month_range", ",".join(asked.months)
+    if asked is not None:
+        return "days", str(asked.days)
+    if re.search(r"\blast month\b", text):
+        return "month", previous_month_key(summary)
+    if re.search(r"\bthis month\b", text):
+        return "month", selected_month_key(summary)
+    if len(named) == 1:
+        return "month", named[0]
+    if re.search(r"\blast year\b", text):
+        return "year", str(_selected_year(summary) - 1)
+    year = re.search(r"\b(20\d{2})\b", text)
+    if year:
+        return "year", year.group(1)
+    return "all", ""
 
 
 def _last_month_named(message, summary):
@@ -4426,10 +4602,13 @@ def _derived_metric_spec(text, summary, scope):
         if span is not None:
             return span  # daily totals carry counts, so a run of days can be counted
         if _category_in(text, summary):
+            asked = asked_period(text, summary)
             return QuerySpec(
                 task_type="data_pointer",
-                period_type="month",
-                period_key=_period_for(text, summary),
+                period_type="month_range" if asked is not None and asked.months else "month",
+                period_key=",".join(asked.months)
+                if asked is not None and asked.months
+                else _period_for(text, summary),
                 scope=scope,
                 category=_category_in(text, summary),
                 reason_mode="category_count",

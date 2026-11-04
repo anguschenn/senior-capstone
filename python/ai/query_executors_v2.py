@@ -3230,6 +3230,9 @@ def _exec_data_pointer(query_spec, summary, scope_label):
             "Ask how this month is pacing against your usual.",
         )
     if mode == "category_count":
+        counts = summary.get("category_counts")
+        if isinstance(counts, dict):
+            return _category_count(query_spec, summary, counts, scope_label)
         row = (summary.get("month_index") or {}).get(query_spec.period_key)
         category = query_spec.category
         extra = ""
@@ -3531,6 +3534,8 @@ def _exec_data_pointer(query_spec, summary, scope_label):
         )
     if mode == "merchant":
         name = (query_spec.category or "").strip()
+        if isinstance(summary.get("merchant_index"), dict) and query_spec.period_type:
+            return _merchant_spending(query_spec, summary, scope_label)
         recent = summary.get("recent_transactions")
         for item in recent if isinstance(recent, list) else []:
             if not isinstance(item, dict):
@@ -3575,6 +3580,11 @@ def _exec_data_pointer(query_spec, summary, scope_label):
             "payday. Ask about dates instead, like how much you spent from Oct 1 to Oct 14.",
             "Ask about a date range.",
         )
+    if mode == "subscriptions" and query_spec.compare_to == "past":
+        if isinstance(summary.get("merchant_index"), dict):
+            return _past_subscriptions(query_spec, summary)
+    elif mode == "subscriptions" and isinstance(summary.get("subscriptions"), list):
+        return _subscription_answer(query_spec, summary["subscriptions"])
     if mode == "subscriptions":
         return _pointer(
             "Chat doesn't get your subscription list. The Subs tab shows each recurring "
@@ -3591,6 +3601,261 @@ def _exec_data_pointer(query_spec, summary, scope_label):
             "Open the Budget tab to see which categories are near or over their limit.",
         )
     return None
+
+
+def _past_subscriptions(query_spec, summary):
+    """ "what subscriptions did I have in april": the merchants charged under
+    Subscriptions in those months, from merchant_index (the Subs tab is today's list)."""
+    data = sorted(summary.get("month_index") or {})
+    key = query_spec.period_key
+    if query_spec.period_type == "month_range":
+        months = [k for k in key.split(",") if k]
+    elif query_spec.period_type == "month":
+        months = [key]
+    elif query_spec.period_type == "year":
+        months = [k for k in data if k.startswith(f"{key}-")]
+    else:
+        return None
+    if not months:
+        return None
+    span = months[0] if len(months) == 1 else f"{months[0]} to {months[-1]}"
+    charged = []
+    for name, entry in summary["merchant_index"].items():
+        if entry.get("category") != "Subscriptions":
+            continue
+        spent = sum(float(c["spent"]) for m, c in entry["months"].items() if m in months)
+        if spent >= 0.5:
+            charged.append((name, spent))
+    charged.sort(key=lambda kv: -kv[1])
+    if not charged:
+        reply = f"{_in_period(span)}, nothing was charged under Subscriptions."
+    else:
+        reply = (
+            f"{_in_period(span)}, your Subscriptions charges were: "
+            + ", ".join(f"{name} ${spent:,.2f}" for name, spent in charged)
+            + "."
+        )
+    return {
+        "reply": reply,
+        "insights": ["Merchants whose charges count under Subscriptions in those months."],
+        "actions": ["Open the Subs tab for the ones still active."],
+        "missing_fields": [],
+        "facts_used": ["merchant_index"],
+        "period_resolved": span,
+    }
+
+
+_PER_MONTH = {"weekly": 52 / 12, "biweekly": 26 / 12, "monthly": 1.0, "quarterly": 1 / 3}
+_PER_MONTH.update({"yearly": 1 / 12, "annual": 1 / 12, "annually": 1 / 12})
+
+
+def _subscription_answer(query_spec, subs):
+    """The Subs tab's recurring charges: the list with each next charge, the monthly
+    total, or when one renews."""
+
+    def when(sub):
+        if not sub["next_charge"]:
+            return "next charge unknown"
+        day = date_cls.fromisoformat(sub["next_charge"])
+        return f"next {day.strftime('%b')} {day.day}"
+
+    def line(sub):
+        note = ", not confirmed yet" if sub["unconfirmed"] else ""
+        return f"{sub['name']} ${sub['amount']:.2f} {sub['frequency']} ({when(sub)}{note})"
+
+    def answer(reply, action):
+        return {
+            "reply": reply,
+            "insights": ["From the Subs tab's recurring charges."],
+            "actions": [action],
+            "missing_fields": [],
+            "facts_used": ["subscriptions"],
+            "period_resolved": "",
+        }
+
+    if not subs:
+        return answer(
+            "The Subs tab doesn't show any active recurring charges.",
+            "Open the Subs tab after your next bank sync.",
+        )
+    monthly = sum(s["amount"] * _PER_MONTH.get(s["frequency"].lower(), 1.0) for s in subs)
+    if query_spec.compare_to == "when":
+        asked = (query_spec.category or "").lower()
+        chosen = [s for s in subs if s["name"].lower() == asked] if asked else subs[:1]
+        if not chosen:
+            name = query_spec.category.title()
+            return answer(
+                f"{name} isn't among the active recurring charges on the Subs tab.",
+                "Open the Subs tab to see every recurring charge.",
+            )
+        sub = chosen[0]
+        lead = (
+            f"{sub['name']} renews"
+            if asked
+            else f"Next up among your subscriptions: {sub['name']},"
+        )
+        return answer(
+            f"{lead} on {sub['next_charge']} for ${sub['amount']:.2f} ({sub['frequency']}).",
+            "Open the Subs tab to see every recurring charge.",
+        )
+    if query_spec.compare_to == "total":
+        return answer(
+            f"Your {len(subs)} active subscription{'' if len(subs) == 1 else 's'} come to about "
+            f"${monthly:,.2f} a month: " + "; ".join(line(s) for s in subs) + ".",
+            "Open the Subs tab to cancel or confirm one.",
+        )
+    return answer(
+        f"You have {len(subs)} active subscription{'' if len(subs) == 1 else 's'}, about "
+        f"${monthly:,.2f} a month: " + "; ".join(line(s) for s in subs) + ".",
+        "Open the Subs tab to cancel or confirm one.",
+    )
+
+
+def _category_count(query_spec, summary, counts, scope_label):
+    """ "how many times did I buy food last month": purchases in a category over the
+    month or months asked, from category_counts."""
+    category = query_spec.category
+    months = [k for k in (query_spec.period_key or "").split(",") if k]
+    month_index = summary.get("month_index") if isinstance(summary.get("month_index"), dict) else {}
+    number = sum(int((counts.get(m) or {}).get(category, 0)) for m in months)
+    spent = sum(_month_amount(month_index.get(m) or {}, category) or 0.0 for m in months)
+    span = months[0] if len(months) == 1 else f"{months[0]} to {months[-1]}"
+    so_far = " so far" if months and months[-1] == date_cls.today().strftime("%Y-%m") else ""
+    reply = (
+        f"{_in_period(span)}{so_far}, {scope_label} made {number} {category} "
+        f"purchase{'' if number == 1 else 's'}"
+        + (f", about ${spent:,.0f} in total." if spent >= 0.5 else ".")
+    )
+    return {
+        "reply": reply,
+        "insights": ["Counted from each purchase's category."],
+        "actions": [f"Search Activity for {category} to see them."],
+        "missing_fields": [],
+        "facts_used": ["category_counts"],
+        "period_resolved": span,
+    }
+
+
+def _name_tokens(text):
+    return re.findall(r"[a-z0-9]+", str(text).lower().replace("'", ""))
+
+
+def matching_merchants(name, index):
+    """The merchants in `index` whose name has `name` at a word start, ignoring case,
+    spaces and punctuation: "mcdonalds" finds "McDonald's", "paris baguette" finds
+    "TST* PARIS BAGUETTE - BRO", "uber" finds "Uber" and "Uber Eats"."""
+    asked = "".join(_name_tokens(name))
+    if len(asked) < 3:
+        return []
+    found = []
+    for merchant in index:
+        words = _name_tokens(merchant)
+        if any("".join(words[i:]).startswith(asked) for i in range(len(words))):
+            found.append(merchant)
+    return found
+
+
+def _merchant_spending(query_spec, summary, scope_label):
+    """ "how much did I spend at costco since september": what the merchant cost, and
+    how many purchases, over the months asked (or all the data), from merchant_index."""
+    index = summary["merchant_index"]
+    asked = (query_spec.category or "").strip()
+    label = re.sub(r"\bMc([a-z])", lambda m: "Mc" + m.group(1).upper(), asked.title())
+    label = re.sub(r" S\b", "'s", label)
+    month_index = summary.get("month_index") if isinstance(summary.get("month_index"), dict) else {}
+    data = sorted(month_index)
+    period_type, key = query_spec.period_type, query_spec.period_key
+    if period_type == "days":
+        return _pointer(
+            f"Chat has each merchant's spending by month, not by day, so it can't add up "
+            f"{label} for the last {key} days. Ask about this month or a month by name.",
+            f"Search Activity for {label} to see those days.",
+        )
+    if period_type == "month_range":
+        months = [k for k in key.split(",") if k]
+    elif period_type == "month":
+        months = [key]
+    elif period_type == "year":
+        months = [k for k in data if k.startswith(f"{key}-")] or [f"{key}-01"]
+    else:
+        months = data
+    if data and len(months) > 1:
+        # "this year" when the data starts in February: from February
+        months = [m for m in months if m >= data[0]] or months
+    if not months:
+        return None
+    span = months[0] if len(months) == 1 else f"{months[0]} to {months[-1]}"
+    within = f"in {span}" if len(months) == 1 else f"from {span}"
+    names = matching_merchants(asked, index)
+    if not names:
+        where = f" (your data runs {data[0]} to {data[-1]})" if data else ""
+        return _pointer(
+            f"I don't see any charges from {label} for {scope_label}{where}.",
+            f"Search Activity for {label} to check the name it shows under.",
+            ("merchant_index",),
+        )
+    if query_spec.compare_to == "when":
+        bought = sorted(
+            (m, int(cell["count"]))
+            for name in names
+            for m, cell in index[name]["months"].items()
+            if int(cell["count"]) > 0
+        )
+        last, times = bought[-1]
+        return {
+            "reply": (
+                f"Your last purchase at {label} was in {last} ({times} that month). Chat has "
+                "merchant totals by month, so Activity shows the exact day."
+            ),
+            "insights": [],
+            "actions": [f"Search Activity for {label} to see the date."],
+            "missing_fields": [],
+            "facts_used": ["merchant_index"],
+            "period_resolved": last,
+        }
+    spent, count, by_month = 0.0, 0, {}
+    for name in names:
+        for month, cell in index[name]["months"].items():
+            if month in months:
+                spent += float(cell["spent"])
+                count += int(cell["count"])
+                by_month[month] = by_month.get(month, 0.0) + float(cell["spent"])
+    if len(names) == 1:
+        who = names[0]  # the merchant's own spelling: "McDonald's", "PureGym US"
+    else:
+        who = f"{label} ({', '.join(names[:-1])} and {names[-1]})"
+    lead = "No. " if query_spec.compare_to == "yes_no" else ""
+    if count == 0 and spent < 0.5:
+        last = max(m for name in names for m in index[name]["months"])
+        return _pointer(
+            f"{lead}You didn't spend anything at {who} {within}. Your last purchase there was "
+            f"in {last}.",
+            f"Ask how much you spent at {label} in {last}.",
+            ("merchant_index",),
+        )
+    reply = (
+        f"{'Yes. ' if query_spec.compare_to == 'yes_no' else ''}You spent ${spent:,.2f} at "
+        f"{who} {within}, across {count} purchase{'' if count == 1 else 's'}."
+    )
+    if len(months) > 1:
+        listed = [(m, v) for m, v in sorted(by_month.items()) if abs(v) >= 0.5]
+        if 1 < len(listed) <= 6:
+            reply += " By month: " + ", ".join(f"{m} ${v:,.0f}" for m, v in listed) + "."
+        elif len(listed) > 6:
+            top, amount = max(listed, key=lambda kv: kv[1])
+            if amount - min(v for _, v in listed) < 1:
+                reply += f" About ${amount:,.0f} each month it was charged."
+            else:
+                reply += f" The most was {top} (${amount:,.0f})."
+    category = index[names[0]].get("category")
+    return {
+        "reply": reply,
+        "insights": [f"{label} counts under {category}." if category else "Summed per merchant."],
+        "actions": [f"Search Activity for {label} to see every charge."],
+        "missing_fields": [],
+        "facts_used": ["merchant_index"],
+        "period_resolved": span,
+    }
 
 
 def _budget_vs_usual(items, asked, month, summary, answer):

@@ -400,6 +400,51 @@ def sanitize_spending_summary(summary):
             and isinstance(block.get("items"), list)
         }
 
+    merchants = summary.get("merchant_index")
+    if isinstance(merchants, dict):
+        cleaned["merchant_index"] = {}
+        for name, entry in list(merchants.items())[:300]:
+            if not isinstance(entry, dict) or not isinstance(entry.get("months"), dict):
+                continue
+            months = {
+                month: {
+                    "spent": to_float(cell.get("spent", 0)),
+                    "count": max(0, int(to_float(cell.get("count", 0)))),
+                }
+                for month, cell in list(entry["months"].items())[-36:]
+                if re.match(r"^20\d{2}-\d{2}$", str(month)) and isinstance(cell, dict)
+            }
+            if clamp_str(name, 80) and months:
+                cleaned["merchant_index"][clamp_str(name, 80)] = {
+                    "category": clamp_str(entry.get("category", ""), 64),
+                    "months": months,
+                }
+    counts = summary.get("category_counts")
+    if isinstance(counts, dict):
+        cleaned["category_counts"] = {
+            month: {
+                clamp_str(name, 64): max(0, int(to_float(n)))
+                for name, n in list(per.items())[:40]
+                if clamp_str(name, 64)
+            }
+            for month, per in list(counts.items())[-36:]
+            if re.match(r"^20\d{2}-\d{2}$", str(month)) and isinstance(per, dict)
+        }
+
+    subscriptions = summary.get("subscriptions")
+    if isinstance(subscriptions, list):
+        cleaned["subscriptions"] = [
+            {
+                "name": clamp_str(sub.get("name", ""), 80),
+                "amount": max(0.0, to_float(sub.get("amount", 0))),
+                "frequency": clamp_str(sub.get("frequency", ""), 16) or "monthly",
+                "next_charge": clamp_str(sub.get("next_charge", ""), 10),
+                "unconfirmed": bool(sub.get("unconfirmed")),
+            }
+            for sub in subscriptions[:50]
+            if isinstance(sub, dict) and clamp_str(sub.get("name", ""), 80)
+        ]
+
     alert_history = summary.get("alert_history")
     if isinstance(alert_history, list):
         cleaned["alert_history"] = [
