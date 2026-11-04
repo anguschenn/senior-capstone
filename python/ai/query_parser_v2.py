@@ -1079,6 +1079,16 @@ def _outside_summary_spec(text, summary, scope):
             if re.search(r"\b(left|remaining|remain)\b", text)
             else "yes_no"
             if re.match(r"^(am|is|are|was|were|did|do|have|has)\b.*\bover\b", text)
+            # "am I on track": yes means nothing is over or on pace to go over
+            else "yes_on_track"
+            if re.match(r"^(am|is|are|was|were|did|do|have|has)\b.*\bon track\b", text)
+            # "did I stay within budget": yes means nothing went over
+            else "yes_within"
+            if re.match(
+                r"^(am|is|are|was|were|did|do|have|has)\b.*\b(within|under|stay|stayed|kept|"
+                r"keep|on budget)\b",
+                text,
+            )
             else "",
         )
     return None
@@ -2686,7 +2696,7 @@ def _merchant_asked(spec, message, summary):
         spec = QuerySpec(
             task_type="data_pointer", scope=spec.scope, reason_mode="merchant", category=term
         )
-    name = _AFTER_NAME_RE.sub("", spec.category or "").strip()
+    name = re.sub(r"^the ", "", _AFTER_NAME_RE.sub("", spec.category or "").strip())
     period_type, period_key = _asked_months_or_all(text, summary)
     if re.search(r"\bwhen\b|\blast time\b", text):
         asks = "when"  # "when did I last pay costco": the last month with a purchase
@@ -2739,7 +2749,7 @@ def _last_month_named(message, summary):
     name = calendar.month_name[int(previous[5:])].lower()
     if previous[:4] != selected_month_key(summary)[:4]:
         name += f" {previous[:4]}"
-    return re.sub(r"\blast month\b", name, text)
+    return re.sub(r"\b(in )?last month\b", f"in {name}", text)
 
 
 def _over_asked_months(spec, message, summary):
