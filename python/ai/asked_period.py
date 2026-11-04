@@ -155,7 +155,7 @@ _YEAR_ONLY_RE = re.compile(r"^(20\d{2})$")
 _IN_YEAR_RE = re.compile(r"\b(?:In|For) (20\d{2})\b(?!-)")
 
 
-def _shown(response, summary):
+def shown_period(response, summary):
     """(months, day runs) an answer is about: month keys and spans, whole years, and
     runs of days as (length, last day). None for an answer about all months."""
     period = str(response.get("period_resolved") or "").strip()
@@ -185,7 +185,7 @@ def _shown(response, summary):
 
 def covers(asked, response, summary, today=None):
     """Whether `response` (a chat answer) is about the period `asked`."""
-    shown = _shown(response, summary)
+    shown = shown_period(response, summary)
     if shown is None:
         return True
     months, runs = shown
@@ -220,10 +220,25 @@ def covers(asked, response, summary, today=None):
 
 def shows_other_period(asked, response, summary):
     """Whether `response` shows a month or run of days outside the period `asked`."""
-    shown = _shown(response, summary)
+    shown = shown_period(response, summary)
     if shown is None:
         return False
     months, runs = shown
     if asked.kind == "days":
         return bool(months) or any(abs(length - asked.days) > 1 for length, _ in runs)
     return bool(months - set(asked.months) - set(asked.alt_months))
+
+
+# Several months, weeks, days, years or quarters named in a way asked_period can't read
+# ("the last couple of quarters", "over the last few years").
+_UNREAD_RUN_RE = re.compile(
+    r"\b(last|past|previous|recent)\b[a-z0-9 ]{0,20}?\b(months|weeks|days|years|quarters)\b|"
+    r"\bover the (months|weeks|years)\b"
+)
+
+
+def unread_run(text):
+    """The words of a run of periods in lowercased `text` that asked_period couldn't
+    read, else ""."""
+    match = _UNREAD_RUN_RE.search(text)
+    return re.sub(r"^over the ", "", match.group(0)) if match else ""
