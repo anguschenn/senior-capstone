@@ -4,7 +4,7 @@ from datetime import date as date_cls
 
 from config import AI_REWRITE_ENABLED, AI_ROUTER_V2_ENABLED
 
-from .asked_period import asked_period, covers, shows_other_period
+from .asked_period import asked_period, covers, shown_period, shows_other_period, unread_run
 from .explainers import build_chat_prompt
 from .intent_router import IntentRouter
 from .parsers import extract_json_object
@@ -2308,8 +2308,11 @@ class ChatService:
         if response.get("intent") in self._PLANNING_INTENTS:
             return None
         reply = str(response.get("reply", "") or "")
-        asked = asked_period(_normalize(prompt), summary) if reply else None
-        if asked is None or covers(asked, response, summary):
+        text = _normalize(prompt)
+        asked = asked_period(text, summary) if reply else None
+        if asked is None:
+            return self._unread_period_answer(text, response, summary) if reply else None
+        if covers(asked, response, summary):
             return None
         if self._LIMIT_SAID_RE.search(reply) and not shows_other_period(asked, response, summary):
             return None  # it already says what it can't do, without another period's numbers
@@ -2323,6 +2326,43 @@ class ChatService:
             ),
             "insights": [],
             "actions": [f'Ask about one month, like "in {name}".'],
+            "period_resolved": "",
+            "facts_used": [],
+            "citations": [],
+            "resolved_query": {
+                **(response.get("resolved_query") or {}),
+                "period_type": "unsupported",
+                "period_key": "",
+            },
+        }
+
+    def _unread_period_answer(self, text, response, summary):
+        """The question names several months, weeks or days in words chat can't read: say
+        so instead of guessing a period, unless the answer covers every month of data."""
+        words = unread_run(text)
+        shown = shown_period(response, summary)
+        if not words or shown is None:
+            return None
+        if self._LIMIT_SAID_RE.search(str(response.get("reply") or "")) and not (
+            shown[0] or shown[1]
+        ):
+            return None  # it already says what it can't do, for no period in particular
+        # An answer over every full month of data covers any run asked about.
+        month_index = summary.get("month_index") if isinstance(summary, dict) else None
+        current = resolve_selected_month_key(summary)
+        every = {k for k in month_index or {} if k != current}
+        if every and every <= shown[0]:
+            return None
+        month = resolve_previous_month_key(summary)
+        name = date_cls.fromisoformat(f"{month}-01").strftime("%B")
+        return {
+            **response,
+            "reply": (
+                f'I\'m not sure which period "{words}" covers. Ask about a run of months, like '
+                f'"the last 3 months", or a single month, like "in {name}".'
+            ),
+            "insights": [],
+            "actions": ['Ask about "the last 3 months" or one month.'],
             "period_resolved": "",
             "facts_used": [],
             "citations": [],

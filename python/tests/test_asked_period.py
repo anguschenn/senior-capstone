@@ -163,6 +163,21 @@ class OtherPeriodAnswerTests(unittest.TestCase):
         self.assertIn("2026-04", response["reply"])
         self.assertIn("I can't answer that for the past 2 weeks yet.", response["reply"])
 
+    def test_period_words_it_cant_read_are_not_answered_as_one_month(self):
+        response = self._ask("Was I over budget over the last few years?")
+        self.assertTrue(
+            response["reply"].startswith('I\'m not sure which period "last few years" covers.'),
+            response["reply"],
+        )
+
+    def test_unread_period_keeps_a_reason_already_given(self):
+        response = self._ask("How much tax did I pay over the last few years?")
+        self.assertIn("can't total the tax", response["reply"])
+
+    def test_days_of_a_named_month_are_not_an_unread_run(self):
+        response = self._ask("How much did I spend in the first days of April?")
+        self.assertNotIn("I'm not sure which period", response["reply"])
+
     def test_single_month_questions_are_untouched(self):
         response = self._ask("Am I over budget this month?")
         self.assertIn("Food", response["reply"])
