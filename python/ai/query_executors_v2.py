@@ -4084,6 +4084,14 @@ def _budget_status(query_spec, summary):
             reply += (
                 f" At this pace you'd reach about ${pace(item):.0f} by month end, over the limit."
             )
+        if query_spec.compare_to in {"yes_no", "yes_within", "yes_on_track"}:
+            # "was I over my food budget": Yes when over; "did I stay within it": the
+            # reverse; "am I on track": no when over or on pace to go over
+            if query_spec.compare_to == "yes_on_track":
+                said = left >= 0 and not (progress and pace(item) > limit)
+            else:
+                said = (left < 0) == (query_spec.compare_to == "yes_no")
+            reply = f"{'Yes' if said else 'No'}. {reply}"
         return answer(reply, f"Open the Budget tab for {item['category']}'s transactions.")
 
     if query_spec.compare_to == "share":
@@ -4140,7 +4148,9 @@ def _budget_status(query_spec, summary):
         )
     if not parts:
         return answer(
-            f"No. In {month}, every category with a budget is within its limit.",
+            f"{'Yes' if query_spec.compare_to in {'yes_within', 'yes_on_track'} else 'No'}. In "
+            f"{month}, every "
+            "category with a budget is within its limit.",
             "Ask how much is left of a category's budget.",
         )
     within = len(items) - len(over) - len(heading)
@@ -4151,7 +4161,13 @@ def _budget_status(query_spec, summary):
             if within == 1
             else f" The other {within} categories with a budget are within their limits."
         )
-    lead = "Yes. " if over and query_spec.compare_to == "yes_no" else ""
+    lead = ""
+    if query_spec.compare_to == "yes_no":
+        lead = "Yes. " if over else "No. "  # "No. On pace to go over: ..."
+    elif query_spec.compare_to == "yes_within":
+        lead = "No. " if over else "Yes, so far. "
+    elif query_spec.compare_to == "yes_on_track":
+        lead = "No. "  # something is over, or on pace to go over
     return answer(
         f"{lead}For {month}: " + " ".join(parts) + tail, "Open the Budget tab to adjust a limit."
     )

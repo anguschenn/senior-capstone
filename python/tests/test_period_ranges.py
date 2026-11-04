@@ -228,10 +228,30 @@ class BudgetOverMonthsTests(PeriodRangeTestCase):
         reply = self.ask("Was I over my food budget last month?", budget_summary())["reply"]
         self.assertEqual(
             reply,
-            "For 2026-04, your Food budget was $250.00: you spent $300.00, so you went $50.00 over.",
+            "Yes. For 2026-04, your Food budget was $250.00: you spent $300.00, so you went "
+            "$50.00 over.",
         )
         march = self.ask("Did I stay within budget in March?", budget_summary())["reply"]
         self.assertIn("For 2026-03: Over budget: Shopping ($420 of $400).", march)
+
+    def test_yes_or_no_follows_the_way_the_question_is_asked(self):
+        summary = budget_summary()
+        # March went over on Shopping
+        self.assertTrue(
+            self.ask("Did I stay within budget in March?", summary)["reply"].startswith("No.")
+        )
+        self.assertTrue(
+            self.ask("Was I over budget in March?", summary)["reply"].startswith("Yes.")
+        )
+        # May (the selected month, already over) has Food within its limit
+        self.assertTrue(
+            self.ask("Am I on track with my budget?", summary)["reply"].startswith("Yes.")
+        )
+        self.assertTrue(
+            self.ask("Did I stay within my food budget last month?", summary)["reply"].startswith(
+                "No."
+            )
+        )
 
     def test_without_past_budgets_it_says_it_only_sees_one_month(self):
         summary = budget_summary()
