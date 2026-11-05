@@ -351,6 +351,27 @@ def fetch_budget_rows(user_id: str, month: str) -> list[dict]:
         return [{**r, "limit_source": "user"} for r in rows]
 
 
+def fetch_budget_rows_by_month(user_id: str, first: str, last: str) -> dict[str, list[dict]] | None:
+    """{month: budget rows} for the months from `first` to `last` ('YYYY-MM'), in one
+    query. None on any error, so a failed read isn't taken for months with no budget."""
+    try:
+        rows = (
+            supabase.table("budgets")
+            .select("id,category_id,monthly_limit,limit_source,month_year")
+            .eq("user_id", user_id)
+            .gte("month_year", first)
+            .lte("month_year", last)
+            .execute()
+        ).data or []
+    except Exception as error:
+        print(f"past budgets skipped for user {user_id}: {type(error).__name__}")
+        return None
+    by_month: dict[str, list[dict]] = {}
+    for row in rows:
+        by_month.setdefault(str(row.get("month_year") or "")[:7], []).append(row)
+    return by_month
+
+
 def _now_iso() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat()
 

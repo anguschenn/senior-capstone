@@ -6,6 +6,9 @@ import re
 from datetime import date as date_cls
 from datetime import timedelta
 
+from .asked_period import asked_period
+from .asked_period import months_back as _months_back
+from .asked_period import months_between as _months_between
 from .query_contracts import QuerySpec
 from .time_parsing import MONTH_NAME_TO_NUM, extract_specific_month_key, month_mentions
 from .time_scope_resolver import previous_month_key, selected_month_key
@@ -62,18 +65,6 @@ def _amount_metric(text):
     if has_spend:
         return "expenses"
     return ""
-
-
-def _months_back(month_key, count):
-    year, month = (int(part) for part in month_key.split("-"))
-    month -= count
-    while month <= 0:
-        month += 12
-        year -= 1
-    while month > 12:
-        month -= 12
-        year += 1
-    return f"{year}-{month:02d}"
 
 
 _MONTH_DAY_RE = re.compile(
@@ -988,7 +979,8 @@ _BIGGEST_PURCHASE_RE = re.compile(
     r"\b(biggest|largest|most expensive|highest|top|priciest|costliest)\s+(?:single )?"
     r"(thing|item)s? i (bought|purchased|got|paid for|spent (?:money )?on)\b()|"
     r"\b(biggest|largest|most expensive|highest|top|priciest|costliest)\s+([a-z]+\s+)?"
-    r"(purchase|transaction|expense|charge|buy)s?\b(?!\s+(categor|types?|areas?))|"
+    r"(purchase|transaction|expense|charge|buy)s?\b(?!\s+(categor|types?|areas?|months?|weeks?|days?|"
+    r"quarters?))|"
     # "did I have any big purchases last week"
     r"\bany (big|large|huge|major|expensive)\s+()()(purchase|transaction|expense|charge)s\b"
 )
@@ -1087,6 +1079,16 @@ def _outside_summary_spec(text, summary, scope):
             if re.search(r"\b(left|remaining|remain)\b", text)
             else "yes_no"
             if re.match(r"^(am|is|are|was|were|did|do|have|has)\b.*\bover\b", text)
+            # "am I on track": yes means nothing is over or on pace to go over
+            else "yes_on_track"
+            if re.match(r"^(am|is|are|was|were|did|do|have|has)\b.*\bon track\b", text)
+            # "did I stay within budget": yes means nothing went over
+            else "yes_within"
+            if re.match(
+                r"^(am|is|are|was|were|did|do|have|has)\b.*\b(within|under|stay|stayed|kept|"
+                r"keep|on budget)\b",
+                text,
+            )
             else "",
         )
     return None
@@ -1325,6 +1327,18 @@ def _transaction_list_month(text, summary):
     return extract_specific_month_key(text, default_year)
 
 
+_QUARTER_COUNTS = {
+    "2": 2,
+    "two": 2,
+    "couple": 2,
+    "couple of": 2,
+    "3": 3,
+    "three": 3,
+    "4": 4,
+    "four": 4,
+}
+
+
 def _normalize(message):
     text = fix_typos(clamp_str(message or "", 4000))
     text = re.sub(r"\b(last|previous|prior|past)\s+mo\b", r"\1 month", text)
@@ -1361,6 +1375,21 @@ def _normalize(message):
     text = re.sub(r"\bcurrent\s+mo\b", "current month", text)
     text = re.sub(r"\bthis\s+yr\b", "this year", text)
     text = re.sub(r"\b(previous|prior)\s+year\b", "last year", text)
+    # Runs of months said other ways read as "last N months" in every rule below.
+    text = re.sub(r"\b(the )?(last|past) half[ -](a[ -])?year\b", "last 6 months", text)
+    text = re.sub(r"\b(the )?past (year|twelve months)\b", "last 12 months", text)
+    text = re.sub(
+        r"\b(last|past|previous) (2|two|couple|couple of|3|three|4|four) quarters\b",
+        lambda m: f"last {3 * _QUARTER_COUNTS[m.group(2)]} months",
+        text,
+    )
+    text = re.sub(
+        r"\b(last|past|previous|recent) (\d{1,2}|two|three|four|five|six|seven|eight|nine|ten|"
+        r"eleven|twelve|few|several|couple|couple of) (month|week|day)\b(?!s)",
+        r"\1 \2 \3s",
+        text,
+    )
+    text = re.sub(r"\bsince the (start|beginning) of (the|this) year\b", "so far this year", text)
     # Keep what "$" and "%" meant before punctuation goes: "$200" vs "20%".
     text = re.sub(
         r"\$\s?(\d[\d,]*(?:\.\d+)?)", lambda m: m.group(1).replace(",", "") + " dollars", text
@@ -2523,6 +2552,274 @@ def _canonical_wording(message, summary):
 
 
 def parse_query_v2(message, summary, history=None):
+    message = _last_month_named(message, summary)
+    spec = _parse_query_v2(message, summary, history)
+    spec = _subscriptions_asked(spec, message, summary) or _merchant_asked(spec, message, summary)
+    return _over_asked_months(spec, message, summary)
+
+
+_PAST_PERIOD_RE = re.compile(
+    r"\b(last|past|previous|since|in (jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*|"
+    r"this year|20\d{2})\b"
+)
+
+
+def _subscriptions_asked(spec, message, summary):
+    """Questions about the Subs tab's recurring charges, when the summary has them:
+    the list, the monthly total, or when one renews. None otherwise."""
+    subs = summary.get("subscriptions") if isinstance(summary, dict) else None
+    if not isinstance(subs, list):
+        return None
+    text = _normalize(message)
+    named = next(
+        (
+            sub["name"]
+            for sub in subs
+            if isinstance(sub, dict)
+            and len(_normalize(sub.get("name", ""))) >= 3
+            and re.search(rf"\b{re.escape(_normalize(sub.get('name', '')))}\b", text)
+        ),
+        "",
+    )
+    renew = re.search(
+        r"\b(when|what day|what date)\b.*\b(renew|renews|bill|bills|billed|charge|charges|"
+        r"charged|due|next)\b|\bnext (subscription|recurring) (charge|payment|bill)\b",
+        text,
+    ) and not re.search(r"\blast\b", text)  # "when was it charged last" is a past charge
+    if renew and not named:
+        # "when does netflix renew": a name that isn't on the Subs tab
+        asked = re.search(
+            r"\bwhen (?:does|do|will|is|are) (?:my )?([a-z0-9][a-z0-9 .&-]{1,25}?) "
+            r"(?:renew|bill|charge|come due|due)\b",
+            text,
+        )
+        if asked and not re.search(
+            r"\b(subscription|subscriptions|it|that|this|next)\b", asked.group(1)
+        ):
+            named = asked.group(1)
+    if renew and (named or re.search(r"\bsubscriptions?\b|\brecurring\b", text)):
+        return QuerySpec(
+            task_type="data_pointer",
+            scope=spec.scope,
+            reason_mode="subscriptions",
+            category=named,
+            compare_to="when",
+        )
+    if not re.search(r"\bsubscriptions?\b|\brecurring (charges|payments|bills)\b", text):
+        return None
+    if _PAST_PERIOD_RE.search(text):
+        if re.search(r"\b(what|which|list|show|any)\b.*\bsubscriptions\b", text):
+            # "what subscriptions did I have in april": that period's Subscriptions charges
+            period_type, period_key = _asked_months_or_all(text, summary)
+            return QuerySpec(
+                task_type="data_pointer",
+                scope=spec.scope,
+                reason_mode="subscriptions",
+                compare_to="past",
+                period_type=period_type,
+                period_key=period_key,
+            )
+        return None  # "what did subscriptions cost in august": that month's spending
+    if re.search(r"\b(what|which|list|show|any)\b.*\bsubscriptions\b|\bsubscriptions do i\b", text):
+        return QuerySpec(
+            task_type="data_pointer",
+            scope=spec.scope,
+            reason_mode="subscriptions",
+            compare_to="list",
+        )
+    if re.search(r"\b(cost|costs|costing|per month|a month|monthly|total|add up)\b", text):
+        return QuerySpec(
+            task_type="data_pointer",
+            scope=spec.scope,
+            reason_mode="subscriptions",
+            compare_to="total",
+        )
+    return None
+
+
+# Words for a period after a merchant's name: "costco since september" is Costco.
+_AFTER_NAME_RE = re.compile(
+    r"\s+(?:this|last|in|since|over|during|between|for|on|from|so far|past|the|recently|"
+    r"lately|so)\b.*$"
+)
+# Names people ask about that are a merchant when the user has one by that name, else a
+# part of a category ("uber" is Transport).
+_MERCHANT_TERMS = ("uber eats", "ubereats", "uber", "lyft", "starbucks", "doordash", "grubhub")
+_MERCHANT_TERMS += ("whole foods", "amazon", "netflix", "spotify")
+
+
+def _has_merchant(name, summary):
+    from .query_executors_v2 import matching_merchants  # the executor owns name matching
+
+    index = summary.get("merchant_index") if isinstance(summary, dict) else None
+    return isinstance(index, dict) and bool(matching_merchants(name, index))
+
+
+def _merchant_asked(spec, message, summary):
+    """A merchant question with the period it names (several months, a month, a year,
+    or all the data when it names none), so per-merchant totals can answer it."""
+    text = _normalize(message)
+    if spec.reason_mode != "merchant":
+        # "spent at costco over the past 2 weeks", "how much on uber": a merchant the
+        # user has, though the rules above read the question another way
+        # "from" names a store only for spending ("bought from"), not money received
+        at = re.search(r"\bat ([a-z0-9][a-z0-9 .&*-]{1,30})", text) or re.search(
+            r"\b(?:spent|spend|buy|bought|order|ordered|purchase[sd]?) [a-z ]{0,20}?\bfrom "
+            r"([a-z0-9][a-z0-9 .&*-]{1,30})",
+            text,
+        )
+        named_at = _AFTER_NAME_RE.sub("", at.group(1)).strip() if at else ""
+        if spec.metric == "income" or re.search(
+            r"\b(receive|received|paid me|pay me|sent me|refund|refunded|earn|earned|income|"
+            r"deposit|deposited|came in)\b",
+            text,
+        ):
+            return spec  # money coming in, not spending at a merchant
+        term = (
+            named_at
+            if named_at and _has_merchant(named_at, summary)
+            else next(
+                (
+                    t
+                    for t in _MERCHANT_TERMS
+                    if re.search(rf"\b{t}\b", text) and _has_merchant(t, summary)
+                ),
+                "",
+            )
+        )
+        if not term or (
+            spec.task_type
+            not in {"category_spending", "amount_lookup", "compare_periods", "day_span"}
+            and spec.reason_mode not in {"find_purchase", "tx_count"}
+        ):
+            return spec
+        spec = QuerySpec(
+            task_type="data_pointer", scope=spec.scope, reason_mode="merchant", category=term
+        )
+    name = re.sub(r"^the ", "", _AFTER_NAME_RE.sub("", spec.category or "").strip())
+    period_type, period_key = _asked_months_or_all(text, summary)
+    if re.search(r"\bwhen\b|\blast time\b", text):
+        asks = "when"  # "when did I last pay costco": the last month with a purchase
+    elif re.match(r"^(did|has|have|was|were|is|are|do|does)\b", text):
+        asks = "yes_no"  # "did spotify charge me this month"
+    else:
+        asks = ""
+    return dataclasses.replace(
+        spec, category=name, period_type=period_type, period_key=period_key, compare_to=asks
+    )
+
+
+def _asked_months_or_all(text, summary):
+    """(period_type, period_key) for the period normalized `text` names: several months,
+    a run of days, a month, a year, or ("all", "") when it names none."""
+    asked = asked_period(text, summary)
+    named = _named_month_keys(text, summary)
+    if asked is not None and asked.months:
+        return "month_range", ",".join(asked.months)
+    if asked is not None:
+        return "days", str(asked.days)
+    if re.search(r"\blast month\b", text):
+        return "month", previous_month_key(summary)
+    if re.search(r"\bthis month\b", text):
+        return "month", selected_month_key(summary)
+    if len(named) == 1:
+        return "month", named[0]
+    if re.search(r"\blast year\b", text):
+        return "year", str(_selected_year(summary) - 1)
+    year = re.search(r"\b(20\d{2})\b", text)
+    if year:
+        return "year", year.group(1)
+    return "all", ""
+
+
+def _last_month_named(message, summary):
+    """ "did I spend more last month than in february": last month by name, so it is
+    compared like two named months. Other questions are returned as they are."""
+    text = _normalize(message)
+    if not re.search(r"\blast month\b", text) or not re.search(
+        r"\b(than|compared?|vs|versus)\b", text
+    ):
+        return message
+    previous = previous_month_key(summary)
+    others = [
+        k for k in _named_month_keys(text.replace("last month", " "), summary) if k != previous
+    ]
+    if len(others) != 1:
+        return message
+    name = calendar.month_name[int(previous[5:])].lower()
+    if previous[:4] != selected_month_key(summary)[:4]:
+        name += f" {previous[:4]}"
+    return re.sub(r"\b(in )?last month\b", f"in {name}", text)
+
+
+def _over_asked_months(spec, message, summary):
+    """Budgets, trends, the biggest purchases and the top category of several months
+    ("the last 3 months", "since march", "between march and april") cover those months;
+    the rules above read them as a single month or a month-by-month comparison."""
+    text = _normalize(message)
+    asked = asked_period(text, summary)
+    if asked is None or not asked.months:
+        return spec
+    months = ",".join(asked.months)
+    if _BUDGET_STATUS_RE.search(text) and (
+        spec.reason_mode == "budget_status"
+        or (
+            spec.task_type in {"compare_periods", "amount_lookup"}
+            and re.search(
+                r"\b(over|under|within|exceed[a-z]*|stay[a-z]*|kept|stuck)\b|"
+                r"\bon (my )?(budget|track)\b",
+                text,
+            )
+        )
+    ):
+        # "was I over budget between september and october": each month's budgets
+        return QuerySpec(
+            task_type="data_pointer",
+            reason_mode="budget_status",
+            period_type="month_range",
+            period_key=months,
+            scope=spec.scope,
+            category=_category_in(text, summary) or "",
+        )
+    if (
+        spec.task_type == "amount_lookup"
+        and spec.reason_mode == "earn_vs_spend"
+        and spec.period_type in {"month", "unknown", ""}
+    ):
+        # "did I save money in the last 3 months": income and spending of those months
+        return dataclasses.replace(spec, period_type="month_range", period_key=months)
+    if (
+        spec.task_type == "spending_trend"
+        and spec.period_type in {"month", "unknown", ""}
+        and (spec.reason_mode or "trend") in {"trend", "average", "habits"}
+    ):
+        # "is my spending going up in the last 6 months": those months, not the usual 3
+        return dataclasses.replace(spec, period_type="month_range", period_key=months)
+    if asked.label == "for this year":
+        return spec  # the biggest purchases and top category have whole-year answers
+    if _BIGGEST_PURCHASE_RE.search(text) and (
+        spec.reason_mode == "biggest_purchase"
+        # "between march and april" reads as a comparison, but not "highest expense month"
+        or (
+            spec.task_type in {"compare_periods", "amount_lookup"}
+            and not re.search(r"\b(month|week|day|quarter)s?\b", text)
+        )
+    ):
+        biggest = _outside_summary_spec(text, summary, spec.scope)
+        if biggest is not None and biggest.reason_mode == "biggest_purchase":
+            return dataclasses.replace(biggest, period_type="month_range", period_key=months)
+    mode = spec.reason_mode or ""
+    if (
+        spec.task_type == "top_category_lookup"
+        and spec.period_type in {"month", "unknown", ""}
+        and (not mode or mode == "avg" or mode.startswith(("top:", "rank:")))
+        and not spec.category
+    ):
+        return dataclasses.replace(spec, period_type="month_range", period_key=months)
+    return spec
+
+
+def _parse_query_v2(message, summary, history=None):
     message = _canonical_wording(message, summary)
     when = _WHEN_EXTREME_RE.match(_normalize(message))
     if when:
@@ -3367,19 +3664,14 @@ def _slot_fallback(text, summary, scope):
             period_key=",".join(_months_between(since_keys[0], selected_month_key(summary))),
             scope=scope,
         )
-    last_n = re.search(
-        r"\b(?:last|past|previous)\s+(\d{1,2}|two|three|four|five|six)\s+months\b", text
-    )
-    if last_n:
-        raw = last_n.group(1)
-        count = max(2, min(12, int(raw) if raw.isdigit() else _NUMBER_WORDS[raw]))
-        start = _months_back(selected_month_key(summary), count)
-        end = _months_back(selected_month_key(summary), 1)
+    last_n = asked_period(text, summary)
+    if last_n is not None and last_n.alt_months:
+        # "the last 3 months", "the past few months": the full months before this one
         return QuerySpec(
             task_type="compare_periods",
             metric=metric if metric in {"income", "net"} else "expenses",
             period_type="month_range",
-            period_key=",".join(_months_between(start, end)),
+            period_key=",".join(last_n.months[-12:]),
             scope=scope,
             category=",".join(categories),
             reason_mode="series",
@@ -3745,17 +4037,6 @@ def _hotspot_spec(text, summary, scope):
 
 
 # ── Years, spans, category vs last month, affordability, budgets ─────────
-
-
-def _months_between(start, end):
-    keys = []
-    year, month = (int(x) for x in start.split("-"))
-    while f"{year}-{month:02d}" <= end and len(keys) < 24:
-        keys.append(f"{year}-{month:02d}")
-        month += 1
-        if month > 12:
-            month, year = 1, year + 1
-    return keys
 
 
 def _year_amount_spec(text, summary, scope, metric, categories):
@@ -4287,6 +4568,25 @@ def _amount_judgement_spec(text, summary, scope):
     )
 
 
+def _asked_days_spec(text, summary, scope, reason_mode):
+    """ "the past 2 weeks", "the last 10 days", "this week": that run of days, ending
+    today, from the daily totals. None when the question names no run of days."""
+    asked = asked_period(text, summary)
+    if asked is None or asked.kind != "days":
+        return None
+    today = date_cls.today()
+    return QuerySpec(
+        task_type="day_span",
+        metric="expenses",
+        period_type="days",
+        period_key=f"{(today - timedelta(days=asked.days - 1)).isoformat()},{today.isoformat()}",
+        scope=scope,
+        reason_mode=reason_mode,
+        # daily totals have no categories: the day-span answer says so
+        category=_category_in(text, summary) or "",
+    )
+
+
 def _derived_metric_spec(text, summary, scope):
     """Counts, rates and averages the summary can compute: transaction counts, savings
     rate, spend per day, biggest day, weekends."""
@@ -4308,23 +4608,17 @@ def _derived_metric_spec(text, summary, scope):
                 period_key=day,
                 scope=scope,
             )
-        recent = re.search(r"\b(last|past) (\d{1,2}) days\b", text)
-        if re.search(r"\b(last|past|this) week\b", text) or recent:
-            # daily totals carry counts, so a week's purchases can be counted
-            today = date_cls.today()
-            back = int(recent.group(2)) - 1 if recent else 6
-            return QuerySpec(
-                task_type="day_span",
-                metric="expenses",
-                period_type="days",
-                period_key=f"{(today - timedelta(days=back)).isoformat()},{today.isoformat()}",
-                scope=scope,
-            )
+        span = _asked_days_spec(text, summary, scope, "")
+        if span is not None:
+            return span  # daily totals carry counts, so a run of days can be counted
         if _category_in(text, summary):
+            asked = asked_period(text, summary)
             return QuerySpec(
                 task_type="data_pointer",
-                period_type="month",
-                period_key=_period_for(text, summary),
+                period_type="month_range" if asked is not None and asked.months else "month",
+                period_key=",".join(asked.months)
+                if asked is not None and asked.months
+                else _period_for(text, summary),
                 scope=scope,
                 category=_category_in(text, summary),
                 reason_mode="category_count",
@@ -4403,6 +4697,10 @@ def _derived_metric_spec(text, summary, scope):
         )
     if not mode:
         return None
+    if mode == "per_day":
+        span = _asked_days_spec(text, summary, scope, "per_day")
+        if span is not None:
+            return span
     if mode in {"savings_rate", "per_day"} and re.search(
         r"\b(this year|so far this year|for the year)\b", text
     ):
@@ -4413,6 +4711,18 @@ def _derived_metric_spec(text, summary, scope):
             period_key=str(_selected_year(summary)),
             scope=scope,
             reason_mode=mode,
+        )
+    asked = asked_period(text, summary)
+    if mode in {"tx_count", "per_day", "per_tx"} and asked is not None and asked.months:
+        # "how many transactions in the last 3 months": those months added up
+        return QuerySpec(
+            task_type="derived_metric",
+            metric="expenses",
+            period_type="month_range",
+            period_key=",".join(asked.months),
+            scope=scope,
+            reason_mode=mode,
+            category=_category_in(text, summary) if mode in {"per_day", "per_tx"} else "",
         )
     if "last month" in text:
         month_key = previous_month_key(summary)

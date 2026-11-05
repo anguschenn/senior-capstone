@@ -1,3 +1,6 @@
+import re
+
+
 def clamp_str(value, max_len):
     if not isinstance(value, str):
         return ""
@@ -369,8 +372,7 @@ def sanitize_spending_summary(summary):
             )
     cleaned["recent_transactions"] = recent
 
-    budgets = summary.get("budgets")
-    if isinstance(budgets, dict) and isinstance(budgets.get("items"), list):
+    def budget_block(budgets):
         items = []
         for item in budgets["items"][:30]:
             if not isinstance(item, dict):
@@ -380,9 +382,68 @@ def sanitize_spending_summary(summary):
             if name and limit > 0:
                 spent = max(0.0, to_float(item.get("spent", 0)))
                 items.append({"category": name, "spent": spent, "limit": limit})
-        cleaned["budgets"] = {"month": clamp_str(budgets.get("month", ""), 16), "items": items}
+        block = {"month": clamp_str(budgets.get("month", ""), 16), "items": items}
         if isinstance(budgets.get("spent_total"), (int, float)):
-            cleaned["budgets"]["spent_total"] = to_float(budgets["spent_total"])
+            block["spent_total"] = to_float(budgets["spent_total"])
+        return block
+
+    budgets = summary.get("budgets")
+    if isinstance(budgets, dict) and isinstance(budgets.get("items"), list):
+        cleaned["budgets"] = budget_block(budgets)
+    history = summary.get("budget_history")
+    if isinstance(history, dict):
+        cleaned["budget_history"] = {
+            month: budget_block(block)
+            for month, block in sorted(history.items())[-12:]
+            if re.match(r"^20\d{2}-\d{2}$", str(month))
+            and isinstance(block, dict)
+            and isinstance(block.get("items"), list)
+        }
+
+    merchants = summary.get("merchant_index")
+    if isinstance(merchants, dict):
+        cleaned["merchant_index"] = {}
+        for name, entry in list(merchants.items())[:300]:
+            if not isinstance(entry, dict) or not isinstance(entry.get("months"), dict):
+                continue
+            months = {
+                month: {
+                    "spent": to_float(cell.get("spent", 0)),
+                    "count": max(0, int(to_float(cell.get("count", 0)))),
+                }
+                for month, cell in list(entry["months"].items())[-36:]
+                if re.match(r"^20\d{2}-\d{2}$", str(month)) and isinstance(cell, dict)
+            }
+            if clamp_str(name, 80) and months:
+                cleaned["merchant_index"][clamp_str(name, 80)] = {
+                    "category": clamp_str(entry.get("category", ""), 64),
+                    "months": months,
+                }
+    counts = summary.get("category_counts")
+    if isinstance(counts, dict):
+        cleaned["category_counts"] = {
+            month: {
+                clamp_str(name, 64): max(0, int(to_float(n)))
+                for name, n in list(per.items())[:40]
+                if clamp_str(name, 64)
+            }
+            for month, per in list(counts.items())[-36:]
+            if re.match(r"^20\d{2}-\d{2}$", str(month)) and isinstance(per, dict)
+        }
+
+    subscriptions = summary.get("subscriptions")
+    if isinstance(subscriptions, list):
+        cleaned["subscriptions"] = [
+            {
+                "name": clamp_str(sub.get("name", ""), 80),
+                "amount": max(0.0, to_float(sub.get("amount", 0))),
+                "frequency": clamp_str(sub.get("frequency", ""), 16) or "monthly",
+                "next_charge": clamp_str(sub.get("next_charge", ""), 10),
+                "unconfirmed": bool(sub.get("unconfirmed")),
+            }
+            for sub in subscriptions[:50]
+            if isinstance(sub, dict) and clamp_str(sub.get("name", ""), 80)
+        ]
 
     alert_history = summary.get("alert_history")
     if isinstance(alert_history, list):

@@ -1,0 +1,624 @@
+{
+ "version": 1,
+ "today": "2026-06-15",
+ "stop_rule": "No wrong number or yes/no; at most 3% of questions off target.",
+ "items": [
+  {
+   "id": 1,
+   "q": "How much did I spend last month?",
+   "numbers": [
+    "$637.48"
+   ],
+   "mentions": [
+    "2026-05"
+   ]
+  },
+  {
+   "id": 2,
+   "q": "What were my total expenses in March?",
+   "numbers": [
+    "$1,837.48"
+   ],
+   "mentions": [
+    "2026-03"
+   ]
+  },
+  {
+   "id": 3,
+   "q": "how much money went out in April",
+   "numbers": [
+    "$427.48"
+   ],
+   "mentions": [
+    "2026-04"
+   ]
+  },
+  {
+   "id": 4,
+   "q": "How much have I spent so far this month?",
+   "numbers": [
+    "$307.48"
+   ],
+   "mentions": [
+    "2026-06"
+   ]
+  },
+  {
+   "id": 5,
+   "q": "whats my spending in march",
+   "numbers": [
+    "$1,837.48"
+   ]
+  },
+  {
+   "id": 6,
+   "q": "How much did I spend in the last 3 months?",
+   "numbers": [
+    "$2,902.44"
+   ]
+  },
+  {
+   "id": 7,
+   "q": "How much did I spend since March?",
+   "numbers": [
+    "$3,209.92"
+   ]
+  },
+  {
+   "id": 8,
+   "q": "How much did I spend between February and April?",
+   "numbers": [
+    "$2,722.44"
+   ]
+  },
+  {
+   "id": 9,
+   "q": "How much did I spend this year?",
+   "numbers": [
+    "$4,304.88"
+   ]
+  },
+  {
+   "id": 10,
+   "q": "How much did I spend over the last half year?",
+   "numbers": [
+    "$4,484.88"
+   ]
+  },
+  {
+   "id": 11,
+   "q": "How much did I spend in the past 2 weeks?",
+   "numbers": [
+    "$297.48"
+   ]
+  },
+  {
+   "id": 12,
+   "q": "How much did I spend in the last 10 days?",
+   "numbers": [
+    "$225.49"
+   ]
+  },
+  {
+   "id": 13,
+   "q": "How much did I spend in the last 7 days?",
+   "numbers": [
+    "$180.00"
+   ]
+  },
+  {
+   "id": 14,
+   "q": "How much did I spend yesterday?",
+   "numbers": [
+    "$10.00"
+   ]
+  },
+  {
+   "id": 15,
+   "q": "How much did I spend on June 12?",
+   "numbers": [
+    "$40.00"
+   ]
+  },
+  {
+   "id": 16,
+   "q": "What was my income last month?",
+   "numbers": [
+    "$5,000.00"
+   ]
+  },
+  {
+   "id": 17,
+   "q": "How much did I earn in February?",
+   "numbers": [
+    "$2,500.00"
+   ]
+  },
+  {
+   "id": 18,
+   "q": "How much money came in this year?",
+   "numbers": [
+    "$27,500.00"
+   ]
+  },
+  {
+   "id": 19,
+   "q": "What was my income in the last 3 months?",
+   "numbers": [
+    "$15,000.00"
+   ]
+  },
+  {
+   "id": 20,
+   "q": "What was my net cash flow last month?",
+   "numbers": [
+    "$4,362.52"
+   ]
+  },
+  {
+   "id": 21,
+   "q": "Did I save money in March?",
+   "yes_no": "Yes",
+   "numbers": [
+    "$3,162.52"
+   ]
+  },
+  {
+   "id": 22,
+   "q": "Did I earn more than I spent in February?",
+   "yes_no": "Yes"
+  },
+  {
+   "id": 23,
+   "q": "Did I save money in the last 3 months?",
+   "yes_no": "Yes",
+   "numbers": [
+    "$12,097.56"
+   ]
+  },
+  {
+   "id": 24,
+   "q": "How much did I spend on food last month?",
+   "numbers": [
+    "$310.00"
+   ],
+   "mentions": [
+    "Food"
+   ]
+  },
+  {
+   "id": 25,
+   "q": "how much did i spend on food last mnth",
+   "numbers": [
+    "$310.00"
+   ]
+  },
+  {
+   "id": 26,
+   "q": "How much did I spend on dining out in April?",
+   "numbers": [
+    "$300.00"
+   ],
+   "mentions": [
+    "Food"
+   ]
+  },
+  {
+   "id": 27,
+   "q": "What did I spend on eating out this month?",
+   "numbers": [
+    "$150.00"
+   ]
+  },
+  {
+   "id": 28,
+   "q": "How much did I spend on transport in March?",
+   "numbers": [
+    "$60.00"
+   ]
+  },
+  {
+   "id": 29,
+   "q": "total spent on transportation in april?",
+   "numbers": [
+    "$60.00"
+   ]
+  },
+  {
+   "id": 30,
+   "q": "How much did I spend on shopping in March?",
+   "numbers": [
+    "$1,410.00"
+   ]
+  },
+  {
+   "id": 31,
+   "q": "How much did I spend on shopping in April?",
+   "numbers": [
+    "$10.00"
+   ]
+  },
+  {
+   "id": 32,
+   "q": "show me what I spent on shopping last month",
+   "numbers": [
+    "$210.00"
+   ]
+  },
+  {
+   "id": 33,
+   "q": "How much did I spend on entertainment this month?",
+   "numbers": [
+    "$30.00"
+   ]
+  },
+  {
+   "id": 34,
+   "q": "How much did I spend on subscriptions last month?",
+   "numbers": [
+    "$27.48"
+   ]
+  },
+  {
+   "id": 35,
+   "q": "How much did I spend on food in the last 3 months?",
+   "numbers": [
+    "$920.00"
+   ]
+  },
+  {
+   "id": 36,
+   "q": "How much did I spend on shopping this year?",
+   "numbers": [
+    "$1,960.00"
+   ]
+  },
+  {
+   "id": 37,
+   "q": "How much did I spend on food since March?",
+   "numbers": [
+    "$1,070.00"
+   ]
+  },
+  {
+   "id": 38,
+   "q": "How much did I spend at Costco?",
+   "numbers": [
+    "$850.00"
+   ],
+   "mentions": [
+    "Costco"
+   ]
+  },
+  {
+   "id": 39,
+   "q": "How much did I spend at Costco in March?",
+   "numbers": [
+    "$150.00"
+   ]
+  },
+  {
+   "id": 40,
+   "q": "How much did I spend at Uber last month?",
+   "numbers": [
+    "$60.00"
+   ]
+  },
+  {
+   "id": 41,
+   "q": "how much do i spend on uber",
+   "numbers": [
+    "$700.00"
+   ]
+  },
+  {
+   "id": 42,
+   "q": "How much did I spend at Target this year?",
+   "numbers": [
+    "$360.00"
+   ]
+  },
+  {
+   "id": 43,
+   "q": "How much did I spend at Corner Deli in February?",
+   "numbers": [
+    "$280.00"
+   ]
+  },
+  {
+   "id": 44,
+   "q": "How much did I spend at the Apple Store?",
+   "numbers": [
+    "$1,200.00"
+   ]
+  },
+  {
+   "id": 45,
+   "q": "How much did I spend on Netflix this year?",
+   "numbers": [
+    "$92.94"
+   ]
+  },
+  {
+   "id": 46,
+   "q": "When did I last pay Costco?",
+   "mentions": [
+    "2026-05"
+   ]
+  },
+  {
+   "id": 47,
+   "q": "Did Spotify charge me this month?",
+   "yes_no": "Yes",
+   "numbers": [
+    "$11.99"
+   ]
+  },
+  {
+   "id": 48,
+   "q": "Did I spend anything at Costco last month?",
+   "yes_no": "Yes",
+   "numbers": [
+    "$150.00"
+   ]
+  },
+  {
+   "id": 49,
+   "q": "Did I spend anything at Costco in April?",
+   "yes_no": "No"
+  },
+  {
+   "id": 50,
+   "q": "How many times did I go to Costco this year?",
+   "mentions": [
+    "3 purchases"
+   ]
+  },
+  {
+   "id": 51,
+   "q": "How much did I spend at Walmart?",
+   "refuse": true
+  },
+  {
+   "id": 52,
+   "q": "How many transactions did I make last month?",
+   "mentions": [
+    "41 transactions"
+   ]
+  },
+  {
+   "id": 53,
+   "q": "How many times did I buy food last month?",
+   "mentions": [
+    "31 Food purchases"
+   ]
+  },
+  {
+   "id": 54,
+   "q": "How many transactions did I make in the last 3 months?",
+   "mentions": [
+    "123 transactions"
+   ]
+  },
+  {
+   "id": 55,
+   "q": "How many transactions did I make over the past 2 weeks?",
+   "mentions": [
+    "21 transactions"
+   ]
+  },
+  {
+   "id": 56,
+   "q": "What was my top spending category last month?",
+   "mentions": [
+    "Food"
+   ],
+   "numbers": [
+    "$310.00"
+   ]
+  },
+  {
+   "id": 57,
+   "q": "What was my top spending category in March?",
+   "mentions": [
+    "Shopping"
+   ],
+   "numbers": [
+    "$1,410.00"
+   ]
+  },
+  {
+   "id": 58,
+   "q": "What did I spend the most on in the last 3 months?",
+   "mentions": [
+    "Shopping"
+   ],
+   "numbers": [
+    "$1,630.00"
+   ]
+  },
+  {
+   "id": 59,
+   "q": "What was my biggest purchase in March?",
+   "mentions": [
+    "Apple Store"
+   ],
+   "numbers": [
+    "$1,200.00"
+   ]
+  },
+  {
+   "id": 60,
+   "q": "What was my biggest purchase in the last 3 months?",
+   "mentions": [
+    "Apple Store"
+   ],
+   "numbers": [
+    "$1,200.00"
+   ]
+  },
+  {
+   "id": 61,
+   "q": "What was my biggest purchase last month?",
+   "mentions": [
+    "Costco"
+   ],
+   "numbers": [
+    "$150.00"
+   ]
+  },
+  {
+   "id": 62,
+   "q": "Did I spend more in March than in April?",
+   "yes_no": "Yes"
+  },
+  {
+   "id": 63,
+   "q": "Did I spend more last month than in February?",
+   "yes_no": "Yes"
+  },
+  {
+   "id": 64,
+   "q": "Did I spend less on food last month than in April?",
+   "yes_no": "No"
+  },
+  {
+   "id": 65,
+   "q": "Did I spend more on shopping in April than in March?",
+   "yes_no": "No"
+  },
+  {
+   "id": 66,
+   "q": "Which month did I spend the most?",
+   "mentions": [
+    "2026-03"
+   ]
+  },
+  {
+   "id": 67,
+   "q": "Which month did I spend the most on shopping?",
+   "mentions": [
+    "2026-03"
+   ]
+  },
+  {
+   "id": 68,
+   "q": "Which month did I earn the least?",
+   "mentions": [
+    "2026-02"
+   ]
+  },
+  {
+   "id": 69,
+   "q": "Did I spend more than $300 on food last month?",
+   "yes_no": "Yes"
+  },
+  {
+   "id": 70,
+   "q": "Did I spend more than $300 on food in April?",
+   "yes_no": "No"
+  },
+  {
+   "id": 71,
+   "q": "Did I spend more than $1000 in March?",
+   "yes_no": "Yes"
+  },
+  {
+   "id": 72,
+   "q": "Did I spend more than $500 in April?",
+   "yes_no": "No"
+  },
+  {
+   "id": 73,
+   "q": "Was I over my food budget last month?",
+   "yes_no": "Yes",
+   "numbers": [
+    "$5.00"
+   ]
+  },
+  {
+   "id": 74,
+   "q": "Did I stay within budget in April?",
+   "yes_no": "Yes"
+  },
+  {
+   "id": 75,
+   "q": "Was I over budget in February?",
+   "yes_no": "No"
+  },
+  {
+   "id": 76,
+   "q": "Have I been on budget for the last 3 months?",
+   "mentions": [
+    "2026-03",
+    "2026-04",
+    "2026-05"
+   ]
+  },
+  {
+   "id": 77,
+   "q": "How much is left of my food budget?",
+   "numbers": [
+    "$155.00"
+   ]
+  },
+  {
+   "id": 78,
+   "q": "What subscriptions do I have?",
+   "mentions": [
+    "Spotify",
+    "Netflix"
+   ],
+   "numbers": [
+    "$27.48"
+   ]
+  },
+  {
+   "id": 79,
+   "q": "How much do my subscriptions cost per month?",
+   "numbers": [
+    "$27.48"
+   ]
+  },
+  {
+   "id": 80,
+   "q": "When does Netflix renew?",
+   "mentions": [
+    "2026-07-08"
+   ]
+  },
+  {
+   "id": 81,
+   "q": "What subscriptions did I have in March?",
+   "mentions": [
+    "Spotify",
+    "Netflix"
+   ]
+  },
+  {
+   "id": 82,
+   "q": "What's my credit score?",
+   "refuse": true
+  },
+  {
+   "id": 83,
+   "q": "How much tax did I pay this year?",
+   "refuse": true
+  },
+  {
+   "id": 84,
+   "q": "Was I over budget over the last few years?",
+   "refuse": true
+  },
+  {
+   "id": 85,
+   "q": "How much did I spend at Corner Deli over the past 2 weeks?",
+   "refuse": true
+  },
+  {
+   "id": 86,
+   "q": "How much did I spend in July 2027?",
+   "refuse": true
+  }
+ ]
+}

@@ -88,6 +88,7 @@ class Tx:
         "kind",
         "paid_back",
         "extra_income",
+        "merchant",
     )
 
     def __init__(
@@ -106,6 +107,9 @@ class Tx:
             self.name = merchant
         else:
             self.name = description or "Unknown"
+        # Plaid's cleaned merchant name ("Costco"), else the bank's text, for chat's
+        # per-merchant totals.
+        self.merchant = merchant or self.name
         detailed = _text(row.get("pfc_detailed"))
         if detailed is None:
             detailed = _text(row.get("category"))
@@ -245,6 +249,56 @@ def build_transactions(
         if tx.id in decided:
             tx.kind, tx.bucket, tx.paid_back, tx.extra_income = decided[tx.id]
     return out
+
+
+MERCHANT_INDEX_LIMIT = 300
+
+
+def spending_detail(transactions: list[Tx]) -> tuple[dict, dict]:
+    """(merchant_index, category_counts): spending and purchases per merchant and month,
+    and purchases per category and month. Server only: the app's summary has neither.
+    Counted as build_summary counts category spending, so a merchant's months add up
+    the same way: refunds lower their merchant, moves between own accounts count 0."""
+    merchants: dict[str, dict] = {}
+    counts: dict[str, dict[str, int]] = {}
+    for tx in transactions:
+        if tx.is_income:
+            if tx.kind != "refund":
+                continue
+            amount = tx.expense_amount  # money back for a purchase: negative spending
+        elif tx.is_expense:
+            amount = tx.expense_amount
+        else:
+            continue
+        if not amount:
+            continue
+        month = _month_key(tx.date)
+        category = tx.bucket or tx.category
+        entry = merchants.setdefault(tx.merchant, {"categories": {}, "months": {}})
+        cell = entry["months"].setdefault(month, {"spent": 0.0, "count": 0})
+        cell["spent"] += amount
+        if amount > 0:
+            cell["count"] += 1
+            entry["categories"][category] = entry["categories"].get(category, 0) + 1
+            per_month = counts.setdefault(month, {})
+            per_month[category] = per_month.get(category, 0) + 1
+    totals = {
+        name: sum(c["spent"] for c in entry["months"].values()) for name, entry in merchants.items()
+    }
+    kept = sorted((n for n in merchants if totals[n] > 0.005), key=lambda n: -totals[n])
+    merchant_index = {
+        name: {
+            "category": max(merchants[name]["categories"].items(), key=lambda kv: kv[1])[0]
+            if merchants[name]["categories"]
+            else "",
+            "months": {
+                month: {"spent": round(cell["spent"], 2), "count": cell["count"]}
+                for month, cell in sorted(merchants[name]["months"].items())
+            },
+        }
+        for name in kept[:MERCHANT_INDEX_LIMIT]
+    }
+    return merchant_index, {month: dict(sorted(c.items())) for month, c in sorted(counts.items())}
 
 
 # ── AiSummaryService.build ──────────────────────────────────────────────
@@ -789,7 +843,7 @@ def _load(
 def summary_for(user_id: str, context: dict, tx_rows=None) -> dict:
     """Build (or reuse) the summary for a parsed context. Raises on database errors; the
     caller falls back to the app-sent summary."""
-    from user_model import fetch_budget_rows
+    from user_model import fetch_budget_rows, fetch_budget_rows_by_month, previous_months
 
     hidden = context.get("hidden_account_ids") or []
     key = (user_id, tuple(context["account_ids"]), tuple(hidden), context["month"])
@@ -808,16 +862,28 @@ def summary_for(user_id: str, context: dict, tx_rows=None) -> dict:
     account_ids = context["account_ids"]
     txs = build_transactions(rows, account_meta, rules, account_ids or None, decisions)
     progress = []
+    past_progress = None
     if not context["all_year"]:
         # Budgets cover every linked account, whichever one is selected (as in the app).
+        kinds = classify_rows(rows, rules, decisions=decisions)
         progress = build_budget_progress(
             fetch_budget_rows(user_id, context["month"]),
             names,
             rows,
             rules,
             context["month"],
-            decisions=decisions,
+            kinds=kinds,
         )
+        earlier = previous_months(context["month"], BUDGET_HISTORY_MONTHS)
+        past_rows = fetch_budget_rows_by_month(user_id, earlier[0], earlier[-1])
+        if past_rows is not None:
+            # Every month read, with no items when it had no budget.
+            past_progress = {
+                month: build_budget_progress(
+                    past_rows.get(month, []), names, rows, rules, month, kinds=kinds
+                )
+                for month in earlier
+            }
     types = {tx.account_type.lower().strip() for tx in txs if tx.account_type.strip()}
     summary = build_summary(
         txs,
@@ -836,6 +902,24 @@ def summary_for(user_id: str, context: dict, tx_rows=None) -> dict:
         account_type=types.pop() if account_ids and len(types) == 1 else "",
         tz_name=context["tz"],
     )
+    if past_progress is not None:
+        # Each earlier month's budgets as the Budget tab shows them, for "the last 3
+        # months". Server only, like alert_history: the app's summary has no past budgets.
+        summary["budget_history"] = {
+            month: {
+                "month": month,
+                "items": [
+                    {"category": b["category"], "spent": b["spent"], "limit": b["limit"]}
+                    for b in month_progress
+                    if float(b["limit"]) > 0
+                ],
+            }
+            for month, month_progress in past_progress.items()
+        }
+    summary["merchant_index"], summary["category_counts"] = spending_detail(txs)
+    subscriptions = fetch_subscriptions(user_id)
+    if subscriptions is not None:
+        summary["subscriptions"] = subscriptions
     if not account_ids:
         # Alerts are per user (all accounts), so only the all-accounts view gets them.
         summary["alert_history"] = fetch_alert_history(user_id, context["month"])
@@ -849,6 +933,7 @@ def summary_for(user_id: str, context: dict, tx_rows=None) -> dict:
 
 
 ALERT_HISTORY_MONTHS = 6
+BUDGET_HISTORY_MONTHS = 12
 
 
 def fetch_alert_history(user_id: str, month: str) -> list[dict]:
@@ -881,6 +966,41 @@ def fetch_alert_history(user_id: str, month: str) -> list[dict]:
         for r in sorted(rows, key=lambda r: (r["month"], r["category"]), reverse=True)
         if not r.get("resolved_at")
     ]
+
+
+def fetch_subscriptions(user_id: str) -> list[dict] | None:
+    """The Subs tab's active recurring charges (not ones the user dismissed), soonest
+    next charge first. None on any error, so chat says it can't see them."""
+    from supabase_repo import supabase
+
+    try:
+        rows = (
+            supabase.table("subscriptions")
+            .select(
+                "merchant_name,amount,frequency,next_charge_date,needs_confirmation,user_dismissed"
+            )
+            .eq("user_id", user_id)
+            .eq("is_active", True)
+            .execute()
+        ).data or []
+    except Exception as error:
+        print(f"subscriptions skipped for user {user_id}: {type(error).__name__}")
+        return None
+    return sorted(
+        (
+            {
+                "name": str(r.get("merchant_name") or "").strip(),
+                "amount": float(r.get("amount") or 0),
+                "frequency": str(r.get("frequency") or "monthly"),
+                "next_charge": str(r.get("next_charge_date") or "")[:10],
+                "unconfirmed": bool(r.get("needs_confirmation")),
+            }
+            for r in rows
+            # NULL user_dismissed is "not dismissed", which a SQL "<> true" would drop
+            if str(r.get("merchant_name") or "").strip() and r.get("user_dismissed") is not True
+        ),
+        key=lambda sub: sub["next_charge"] or "9999",
+    )
 
 
 def invalidate(user_id: str) -> None:
