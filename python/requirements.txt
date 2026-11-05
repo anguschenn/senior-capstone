@@ -6,3 +6,4 @@ supabase
 certifi
 gunicorn
 PyJWT[crypto]
+pywebpush>=2.0,<3.0

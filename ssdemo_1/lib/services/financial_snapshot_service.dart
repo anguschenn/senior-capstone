@@ -66,12 +66,20 @@ class FinancialSnapshotService {
         serverMonth != null &&
         serverMonth.year == focusMonth.year &&
         serverMonth.month == focusMonth.month;
-    // The server found no budget rows for this month (e.g. a month before
-    // budgets were set): show its spending with no limits, for any account,
-    // rather than this month's limits applied to it.
-    final noBudgetsThisMonth =
+    final focusMonthKey =
+        '${focusMonth.year}-${focusMonth.month.toString().padLeft(2, '0')}';
+    final hasLocalBudgetRowsForFocus = controller.liveBudgetLimitsByMonth
+        .containsKey(focusMonthKey);
+    // An empty server result must not hide a budget row read directly from
+    // Supabase; the backend may not have permission to read that row.
+    final serverFoundNoBudgetsForFocus =
         serverForFocus && controller.serverBudgetProgress!.isEmpty;
-    final useServerBudgetProgress = serverForFocus && !noBudgetsThisMonth;
+    // If neither source has a row for this month, don't borrow another
+    // month's limits.
+    final noBudgetsThisMonth =
+        serverFoundNoBudgetsForFocus && !hasLocalBudgetRowsForFocus;
+    final useServerBudgetProgress =
+        serverForFocus && !serverFoundNoBudgetsForFocus;
     // Every category card, with this month's spending and no limit: fills in
     // categories the month has no budget row for.
     List<BudgetCategoryProgress> spendOnly() => _rebaseProgressFromTemplate(

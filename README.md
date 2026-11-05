@@ -70,6 +70,27 @@ flutter run --dart-define=AUTO_LOGIN_EMAIL=you@example.com --dart-define=AUTO_LO
 
 Refer to each subdirectory's README for more detailed setup instructions.
 
+## Browser push notifications (Chrome)
+
+Browser notifications are opt-in. The user enables them from **Wallet → Settings → Browser notifications**; Chrome asks for permission only after that click. Push delivery requires the database migration, VAPID keys on the backend, a running/deployed HTTPS site, and the monthly scheduler described below.
+
+1. Apply `db/migrations/019_browser_push_notifications.sql` in the Supabase SQL Editor. It creates `push_subscriptions` (one private endpoint per browser/device) and `notification_deliveries` (a server-only queue that prevents duplicate notifications). These are tables, not columns on `users`, because a user can enable more than one browser/device.
+2. From the repository root, generate a VAPID key pair:
+
+   ```powershell
+   cd python
+   .\venv\windows\Scripts\python.exe scripts\generate_vapid_keys.py
+   ```
+
+   Copy the three printed settings into **`python/.env` only**. Replace the sample contact address with a real team contact. Never put the VAPID private key in `ssdemo_1/.env`, Flutter assets, source control, or a browser build. For production, configure these as backend-host environment variables instead.
+3. Restart the backend. `GET /api/push/config` returns the public VAPID key only to a signed-in app; the private key is used only by the backend.
+4. Run the web app at a stable local origin such as `http://localhost:53000`, sign in, and enable Browser notifications in Settings. `localhost` is treated as a secure context by Chrome. Allow notifications for that origin in Chrome.
+5. To send monthly reports in production, create a **Render Cron Job** using the same backend environment variables and Python dependencies. Use working directory `python`, command `python scripts/send_monthly_reports.py`, and schedule `0 * * * *` (hourly, UTC). The script sends the previous month’s report once at 9 AM America/New_York on the first of the month and also retries queued push deliveries. It does nothing if VAPID is not configured.
+
+Budget alerts are queued after the backend recomputes budget insights. Subscription review and low-confidence or uncategorized transaction review notifications are queued after transaction sync. Each event is deduplicated and sent once per browser subscription. Notification text intentionally avoids amounts, merchant names, and other financial details because browser notifications can appear on a lock screen. Clicking a notification opens the relevant app tab; monthly reports open Cash Flow at the report month.
+
+For production, serve the Flutter web build over HTTPS and configure the backend CORS origin to the exact deployed web origin. Push subscriptions and queued notifications are protected by database RLS and are accessible only to the backend’s Supabase service-role key. The frontend still uses the Supabase publishable key.
+
 ---
 
 > **Note:** This project is currently in Semester 1 of a two-semester capstone. Many features are still under active development and this README will be updated as the project progresses into Semester 2.

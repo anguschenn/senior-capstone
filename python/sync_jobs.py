@@ -7,6 +7,7 @@ import plaid
 
 from ai import server_summary
 from plaid_sync import _safe_api_exception_body, sync_transactions_to_supabase
+from push_notifications import process_user_notifications
 from subscription_detector import detect_and_upsert_subscriptions
 from supabase_repo import supabase
 from user_model import refresh_user_model
@@ -63,6 +64,10 @@ def run_post_sync(user_id: str, snapshot_service) -> None:
             f"User model for user {user_id}: stats={model['stats']} "
             f"alerts={model['alerts']} suggestions={model['suggestions']}"
         )
+    try:
+        process_user_notifications(user_id, model.get("notification_events", []))
+    except Exception as error:
+        print(f"push notifications skipped for user {user_id}: {type(error).__name__}")
     warm_chat_summary(user_id, model["tx_rows"])
 
 

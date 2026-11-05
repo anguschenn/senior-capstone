@@ -173,6 +173,30 @@ void main() {
     });
   }
 
+  test(
+    'an empty server result does not hide a budget loaded directly from Supabase',
+    () {
+      final controller =
+          _controllerWith(
+              selectedAccountId: kAllAccountsId,
+              selectedMonth: focusMonth,
+              serverBudgetProgress: const [],
+              serverBudgetProgressMonth: focusMonth,
+            )
+            ..liveCategoryOptions = const [
+              CategoryOption(id: 'c1', name: 'Food'),
+            ]
+            ..liveBudgetLimitsByMonth = const {
+              '2026-09': {'c1': 500},
+            };
+
+      final snapshot = FinancialSnapshotService.instance.build(controller);
+
+      expect(_food(snapshot).limit, 500);
+      expect(_food(snapshot).spent, 42);
+    },
+  );
+
   test('server rows for only some categories: the rest still show their '
       'spending', () {
     final controller = _controllerWith(

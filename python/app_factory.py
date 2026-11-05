@@ -17,6 +17,7 @@ from config import ALLOWED_ORIGINS
 from routes.ai_routes import ai_bp
 from routes.budget_routes import budget_bp
 from routes.plaid_routes import plaid_bp
+from routes.push_routes import push_bp
 from routes.system_routes import system_bp
 from routes.webhook_routes import webhook_bp
 
@@ -34,7 +35,7 @@ def create_app() -> Flask:
         app,
         resources={r"/api/*": {"origins": ALLOWED_ORIGINS}},
         allow_headers=["Content-Type", "Authorization", "x-api-key", "x-supabase-access-token"],
-        methods=["GET", "POST", "OPTIONS"],
+        methods=["DELETE", "GET", "POST", "OPTIONS"],
         max_age=600,
     )
     app.before_request(require_api_key)
@@ -50,6 +51,7 @@ def create_app() -> Flask:
     app.config["question_log"] = store_question
 
     app.register_blueprint(plaid_bp)
+    app.register_blueprint(push_bp)
     app.register_blueprint(ai_bp)
     app.register_blueprint(budget_bp)
     app.register_blueprint(system_bp)

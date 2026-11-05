@@ -418,7 +418,9 @@ def ensure_month_budget_rows(
     return fetch_budget_rows(user_id, month)
 
 
-def write_alerts(user_id: str, month: str, alerts: list[dict], historical: bool = False) -> None:
+def write_alerts(
+    user_id: str, month: str, alerts: list[dict], historical: bool = False
+) -> list[dict]:
     """historical: a finished month's results. They are history, not news, so they are
     marked as already notified and never reach a future push sender."""
     now = _now_iso()
@@ -433,6 +435,7 @@ def write_alerts(user_id: str, month: str, alerts: list[dict], historical: bool 
         ).data
         or []
     }
+    notification_events = []
     for alert in alerts:
         row = {"user_id": user_id, "month": month, "updated_at": now, "resolved_at": None, **alert}
         previous = existing.pop(str(alert["category_id"]), None)
@@ -441,6 +444,20 @@ def write_alerts(user_id: str, month: str, alerts: list[dict], historical: bool 
             row.update({"dismissed_at": None, "notified_at": now if historical else None})
             if previous is None or previous.get("resolved_at"):
                 row["first_detected_at"] = now
+            else:
+                row["first_detected_at"] = previous.get("first_detected_at") or now
+            if not historical:
+                notification_events.append(
+                    {
+                        "event_key": (
+                            "budget:"
+                            f"{month}:{alert['category_id']}:{alert['kind']}:"
+                            f"{row['first_detected_at']}"
+                        ),
+                        "kind": "budget_alert",
+                        "url": "/?notification=budget",
+                    }
+                )
         supabase.table("budget_alerts").upsert(
             row, on_conflict="user_id,month,category_id"
         ).execute()
@@ -449,6 +466,7 @@ def write_alerts(user_id: str, month: str, alerts: list[dict], historical: bool 
             supabase.table("budget_alerts").update({"resolved_at": now, "updated_at": now}).eq(
                 "id", previous["id"]
             ).execute()
+    return notification_events
 
 
 def finalize_month_alerts(
@@ -517,7 +535,14 @@ def refresh_user_model(user_id: str, today: dt.date | None = None, history_month
     transaction rows read (so the caller can reuse them) and what was written."""
     today = today or dt.date.today()
     month = _month_key(today)
-    result = {"tx_rows": [], "stats": None, "alerts": None, "suggestions": None, "history": None}
+    result = {
+        "tx_rows": [],
+        "stats": None,
+        "alerts": None,
+        "suggestions": None,
+        "history": None,
+        "notification_events": [],
+    }
     try:
         tx_rows = fetch_all_transactions(user_id)
         rules = fetch_rules(user_id)
@@ -560,7 +585,7 @@ def refresh_user_model(user_id: str, today: dt.date | None = None, history_month
     try:
         progress = build_budget_progress(budget_rows, names, tx_rows, rules, month, kinds=kinds)
         alerts = build_alerts(progress, today)
-        write_alerts(user_id, month, alerts)
+        result["notification_events"] = write_alerts(user_id, month, alerts)
         result["alerts"] = len(alerts)
     except Exception as error:
         print(f"budget_alerts skipped for user {user_id}: {type(error).__name__}")

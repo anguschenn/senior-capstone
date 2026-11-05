@@ -16,6 +16,7 @@ import '../pages/subscriptions_page.dart';
 import '../pages/transactions_page.dart';
 import '../services/auth_service.dart';
 import '../services/financial_snapshot_service.dart';
+import '../services/push_notification_service.dart';
 import '../utils/app_helpers.dart';
 import '../widgets/ai_assistant/ai_assistant_panel.dart';
 import '../widgets/common/shared_money_sheets.dart';
@@ -56,7 +57,32 @@ class _MainScreenState extends State<MainScreen> {
     _ctrl.addListener(_onControllerChange);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _ctrl.loadCachedThenRefresh();
+      _openNotificationDestination();
     });
+  }
+
+  void _openNotificationDestination() {
+    final query = Uri.base.queryParameters;
+    final notification = query['notification'];
+    switch (notification) {
+      case 'budget':
+        _ctrl.selectTab(2);
+      case 'transaction_review':
+        _ctrl.selectTab(1);
+      case 'subscription_review':
+        _ctrl.selectTab(3);
+      case 'monthly_report':
+        final month = query['month'];
+        final match = month == null
+            ? null
+            : RegExp(r'^(\d{4})-(0[1-9]|1[0-2])$').firstMatch(month);
+        if (match != null) {
+          _ctrl.selectMonth(
+            DateTime(int.parse(match[1]!), int.parse(match[2]!)),
+          );
+        }
+        _openFlow();
+    }
   }
 
   @override
@@ -227,6 +253,8 @@ class _MainScreenState extends State<MainScreen> {
         bankSyncBusy: c.refreshingInBackground,
         syncStatus: c.syncStatus,
         subscriptionCount: subs.where((s) => !s.needsConfirmation).length,
+        onEnableNotifications: PushNotificationService.instance.enable,
+        onDisableNotifications: PushNotificationService.instance.disable,
         onReconnect: c.reauthenticateBank,
         onAddBank: c.connectBankAndPullData,
         onRefresh: c.refreshLiveDataOnly,

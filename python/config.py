@@ -74,6 +74,11 @@ OPENROUTER_APP_TITLE = _empty_to_none("OPENROUTER_APP_TITLE")
 # ── Backend API auth ─────────────────────────────────────────────────
 INTERNAL_API_KEY = _empty_to_none("INTERNAL_API_KEY")
 
+# ── Browser push notifications ──────────────────────────────────────
+PUSH_VAPID_PUBLIC_KEY = _empty_to_none("PUSH_VAPID_PUBLIC_KEY")
+PUSH_VAPID_PRIVATE_KEY = _empty_to_none("PUSH_VAPID_PRIVATE_KEY")
+PUSH_VAPID_SUBJECT = _empty_to_none("PUSH_VAPID_SUBJECT") or "mailto:notifications@example.com"
+
 # ── CORS ─────────────────────────────────────────────────────────────
 _REGEX_CHARS = set("*\\]?$^[()")
 
