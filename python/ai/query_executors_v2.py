@@ -3684,6 +3684,8 @@ def _exec_data_pointer(query_spec, summary, scope_label):
             f"single purchase reliably.{hint} Activity lists every transaction for the month.",
             "Open Activity and pick the month to scan its largest charges.",
         )
+    if mode == "income_source" and isinstance(summary.get("income_index"), dict):
+        return _income_from(query_spec, summary, scope_label)
     if mode == "merchant":
         name = (query_spec.category or "").strip()
         if isinstance(summary.get("merchant_index"), dict) and query_spec.period_type:
@@ -3907,22 +3909,12 @@ def matching_merchants(name, index):
     return found
 
 
-def _merchant_spending(query_spec, summary, scope_label):
-    """ "how much did I spend at costco since september": what the merchant cost, and
-    how many purchases, over the months asked (or all the data), from merchant_index."""
-    index = summary["merchant_index"]
-    asked = (query_spec.category or "").strip()
-    label = re.sub(r"\bMc([a-z])", lambda m: "Mc" + m.group(1).upper(), asked.title())
-    label = re.sub(r" S\b", "'s", label)
+def _asked_months(query_spec, summary):
+    """(months, months with data) a merchant or payer question asks about: the months
+    named, a year's months, or all the data, trimmed to where the data starts."""
     month_index = summary.get("month_index") if isinstance(summary.get("month_index"), dict) else {}
     data = sorted(month_index)
     period_type, key = query_spec.period_type, query_spec.period_key
-    if period_type == "days":
-        return _pointer(
-            f"Chat has each merchant's spending by month, not by day, so it can't add up "
-            f"{label} for the last {key} days. Ask about this month or a month by name.",
-            f"Search Activity for {label} to see those days.",
-        )
     if period_type == "month_range":
         months = [k for k in key.split(",") if k]
     elif period_type == "month":
@@ -3934,6 +3926,104 @@ def _merchant_spending(query_spec, summary, scope_label):
     if data and len(months) > 1:
         # "this year" when the data starts in February: from February
         months = [m for m in months if m >= data[0]] or months
+    return months, data
+
+
+def _income_from(query_spec, summary, scope_label):
+    """ "how much did I get from Zelle since may": money received from a payer over the
+    months asked (or all the data), from income_index."""
+    index = summary["income_index"]
+    asked = (query_spec.category or "").strip()
+    label = asked.title() if asked.islower() else asked
+    if query_spec.period_type == "days":
+        return _pointer(
+            f"Chat has the money each payer sent by month, not by day, so it can't add up "
+            f"{label} for {query_spec.period_key}. Ask about this month or a month by name.",
+            f"Search Activity for {label} to see those days.",
+        )
+    months, data = _asked_months(query_spec, summary)
+    if not months:
+        return None
+    span = months[0] if len(months) == 1 else f"{months[0]} to {months[-1]}"
+    within = f"in {span}" if len(months) == 1 else f"from {span}"
+    names = matching_merchants(asked, index)
+    no = "No. " if query_spec.compare_to == "yes_no" else ""
+    if not names:
+        where = f" (your data runs {data[0]} to {data[-1]})" if data else ""
+        return _pointer(
+            f"{no}I don't see any money received from {label} for {scope_label}{where}.",
+            f"Search Activity for {label} to check the name it shows under.",
+            ("income_index",),
+        )
+    if len(names) == 1:
+        who = names[0]
+    elif len(names) <= 3:
+        who = f"{label} ({', '.join(names[:-1])} and {names[-1]})"
+    else:
+        who = f"{label} ({len(names)} payer names)"
+    if query_spec.compare_to == "when":
+        last = max(m for name in names for m in index[name]["months"])
+        return {
+            "reply": (
+                f"The last money from {who} came in {last}. Chat has payers by month, so "
+                "Activity shows the exact day."
+            ),
+            "insights": [],
+            "actions": [f"Search Activity for {label} to see the date."],
+            "missing_fields": [],
+            "facts_used": ["income_index"],
+            "period_resolved": last,
+        }
+    received, count, by_month = 0.0, 0, {}
+    for name in names:
+        for month, cell in index[name]["months"].items():
+            if month in months:
+                received += float(cell["received"])
+                count += int(cell["count"])
+                by_month[month] = by_month.get(month, 0.0) + float(cell["received"])
+    if count == 0:
+        last = max(m for name in names for m in index[name]["months"])
+        return _pointer(
+            f"{no}You didn't receive anything from {who} {within}. The last money from them "
+            f"came in {last}.",
+            f"Ask how much you got from {label} in {last}.",
+            ("income_index",),
+        )
+    reply = (
+        f"{'Yes. ' if no else ''}Your income from {who} {within} was ${received:,.2f}, across "
+        f"{count} deposit{'' if count == 1 else 's'}."
+    )
+    listed = [(m, v) for m, v in sorted(by_month.items()) if v >= 0.5]
+    if len(months) > 1 and 1 < len(listed) <= 6:
+        reply += " By month: " + ", ".join(f"{m} ${v:,.0f}" for m, v in listed) + "."
+    month_index = summary.get("month_index") or {}
+    income = sum(float((month_index.get(m) or {}).get("income", 0) or 0) for m in months)
+    if income >= 0.5:
+        reply += f" That's {min(received / income, 1) * 100:.0f}% of your income {within}."
+    return {
+        "reply": reply,
+        "insights": ["Counted as income, so money back for a purchase isn't in it."],
+        "actions": [f"Search Activity for {label} to see each deposit."],
+        "missing_fields": [],
+        "facts_used": ["income_index"],
+        "period_resolved": span,
+    }
+
+
+def _merchant_spending(query_spec, summary, scope_label):
+    """ "how much did I spend at costco since september": what the merchant cost, and
+    how many purchases, over the months asked (or all the data), from merchant_index."""
+    index = summary["merchant_index"]
+    asked = (query_spec.category or "").strip()
+    label = re.sub(r"\bMc([a-z])", lambda m: "Mc" + m.group(1).upper(), asked.title())
+    label = re.sub(r" S\b", "'s", label)
+    if query_spec.period_type == "days":
+        return _pointer(
+            f"Chat has each merchant's spending by month, not by day, so it can't add up "
+            f"{label} for {query_spec.period_key}. Ask about this month or a month by name.",
+            f"Search Activity for {label} to see those days.",
+        )
+    months, data = _asked_months(query_spec, summary)
     if not months:
         return None
     span = months[0] if len(months) == 1 else f"{months[0]} to {months[-1]}"

@@ -47,7 +47,9 @@ def _amount_metric(text):
         return "net"
     has_income = re.search(
         r"\b(income|earn|earned|earning|earnings|salary|paycheck|paychecks|take home|takehome)\b"
-        r"|\b(did|do|have) i (make|made)\b|\bi made\b|\b(was|were) i paid\b|"
+        # "did I make a purchase" is spending, not money made
+        r"|\b(did|do|have) i (make|made)\b(?! (?:a |any )?(?:purchase|payment|order|transfer)s?\b)"
+        r"|\bi made\b(?! (?:a |any )?(?:purchase|payment|order|transfer)s?\b)|\b(was|were) i paid\b|"
         r"\b(get|got|getting) paid\b|\b(came|come|comes|coming) in\b|\bmoney in\b",
         text,
     )
@@ -2574,7 +2576,11 @@ def _canonical_wording(message, summary):
 def parse_query_v2(message, summary, history=None):
     message = _last_month_named(message, summary)
     spec = _parse_query_v2(message, summary, history)
-    spec = _subscriptions_asked(spec, message, summary) or _merchant_asked(spec, message, summary)
+    spec = (
+        _subscriptions_asked(spec, message, summary)
+        or _income_from_asked(spec, message, summary)
+        or _merchant_asked(spec, message, summary)
+    )
     return _over_asked_months(spec, message, summary)
 
 
@@ -2711,6 +2717,9 @@ def _merchant_asked(spec, message, summary):
             spec.task_type
             not in {"category_spending", "amount_lookup", "compare_periods", "day_span"}
             and spec.reason_mode not in {"find_purchase", "tx_count"}
+            # "did I make any purchases at costco": a merchant the user has, named after
+            # "at", that the rules above didn't read at all
+            and not (spec.task_type == "general" and term == named_at)
         ):
             return spec
         spec = QuerySpec(
@@ -2729,6 +2738,83 @@ def _merchant_asked(spec, message, summary):
     )
 
 
+# "received from zelle", "income from acme", "how much did alice send me"
+_INCOME_FROM_RE = re.compile(
+    r"\b(?:receive|received|get|got|earn|earned|make|made|collect|collected|income|"
+    r"deposits?|came in|come in)\b[a-z ]{0,25}?\bfrom ([a-z0-9][a-z0-9 .&*'-]{1,30})|"
+    r"\b(?:how much|what) (?:did|has|have|does) ([a-z0-9][a-z0-9 .&*'-]{1,30}?) "
+    r"(?:pay|paid|send|sent) me\b|"
+    r"^(?:did|has|have) ([a-z0-9][a-z0-9 .&*'-]{1,30}?) (?:pay|paid|send|sent) me\b"
+)
+# Where income comes from in general: the income total answers these.
+_GENERIC_PAYERS = {
+    "work",
+    "job",
+    "jobs",
+    "salary",
+    "paycheck",
+    "paychecks",
+    "wages",
+    "employer",
+    "employers",
+    "company",
+    "boss",
+    "income",
+    "it",
+}
+
+
+def _income_from_asked(spec, message, summary):
+    """Money received from one payer ("how much did I get from Zelle last month") over
+    the period it names, from the server's income_index. None when the question names
+    no payer, names a general source ("my job"), or the summary has no income_index."""
+    from .query_executors_v2 import matching_merchants  # the executor owns name matching
+
+    index = summary.get("income_index") if isinstance(summary, dict) else None
+    if not isinstance(index, dict):
+        return None
+    text = _normalize(message)
+    asked = _INCOME_FROM_RE.search(text)
+    if not asked or re.search(
+        r"\b(refund|refunded|refunds|back|spend|spent|buy|bought|purchases?|purchased|"
+        r"orders?|ordered|charged?|transfer|transferred|payment|payments)\b",
+        text,
+    ):
+        return None  # money back for a purchase, a split, or money going out isn't income
+    raw = next(g for g in asked.groups() if g)
+    name = re.sub(r"^(the|my|our) ", "", _AFTER_NAME_RE.sub("", raw).strip())
+    if not name or name.split()[-1] in _GENERIC_PAYERS:
+        return None  # "my day job" is where all the pay comes from: the income total
+    if not matching_merchants(name, index) and (
+        spec.reason_mode == "payer"
+        # "what did I get from amazon" may be a purchase: only clear money-in words
+        # get "I don't see any money from ..."
+        or not re.search(
+            r"\b(receive|received|income|deposits?|earn|earned|make|made|paid me|pay me|"
+            r"sent me|send me|came in|come in)\b",
+            text,
+        )
+    ):
+        return None  # the pointer for a payer not named in the data says to search Activity
+    period_type, period_key = _asked_months_or_all(text, summary)
+    if re.search(r"\bwhen\b|\blast time\b", text):
+        asks = "when"
+    elif re.match(r"^(did|has|have|was|were|is|are|do|does)\b", text):
+        asks = "yes_no"
+    else:
+        asks = ""
+    return QuerySpec(
+        task_type="data_pointer",
+        metric="income",
+        period_type=period_type,
+        period_key=period_key,
+        scope=clamp_str(summary.get("scope", ""), 32) or "unknown",
+        reason_mode="income_source",
+        category=name,
+        compare_to=asks,
+    )
+
+
 def _asked_months_or_all(text, summary):
     """(period_type, period_key) for the period normalized `text` names: several months,
     a run of days, a month, a year, or ("all", "") when it names none."""
@@ -2737,7 +2823,7 @@ def _asked_months_or_all(text, summary):
     if asked is not None and asked.months:
         return "month_range", ",".join(asked.months)
     if asked is not None:
-        return "days", str(asked.days)
+        return "days", asked.label.removeprefix("for ")
     if re.search(r"\blast month\b", text):
         return "month", previous_month_key(summary)
     if re.search(r"\bthis month\b", text):
