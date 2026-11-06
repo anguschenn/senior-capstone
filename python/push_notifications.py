@@ -13,7 +13,6 @@ from budget_progress import (
     classify_rows,
     fetch_decisions,
     is_p2p_inflow,
-    rule_key_for_row,
     user_category_for_row,
 )
 from config import (
@@ -153,9 +152,7 @@ def _pending_budget_events(user_id: str) -> list[dict]:
         events.append(
             _budget_event(
                 {
-                    "event_key": (
-                        f"budget:{month}:{category_id}:{kind}:{detected_at}"
-                    ),
+                    "event_key": (f"budget:{month}:{category_id}:{kind}:{detected_at}"),
                     "kind": "budget_alert",
                     "url": "/?notification=budget",
                 }
@@ -299,9 +296,9 @@ def dispatch_pending_notifications(user_id: str) -> None:
         return
 
     stale_before = (dt.datetime.now(dt.timezone.utc) - _CLAIM_TIMEOUT).isoformat()
-    supabase.table("notification_deliveries").update(
-        {"status": "pending", "claimed_at": None}
-    ).eq("user_id", user_id).eq("status", "sending").lt("claimed_at", stale_before).execute()
+    supabase.table("notification_deliveries").update({"status": "pending", "claimed_at": None}).eq(
+        "user_id", user_id
+    ).eq("status", "sending").lt("claimed_at", stale_before).execute()
 
     deliveries = (
         supabase.table("notification_deliveries")
@@ -348,9 +345,9 @@ def dispatch_pending_notifications(user_id: str) -> None:
             if invalid:
                 invalid_ids.append(subscription["id"])
         for subscription_id in invalid_ids:
-            supabase.table("push_subscriptions").delete().eq(
-                "id", subscription_id
-            ).eq("user_id", user_id).execute()
+            supabase.table("push_subscriptions").delete().eq("id", subscription_id).eq(
+                "user_id", user_id
+            ).execute()
 
         if delivered:
             supabase.table("notification_deliveries").update(

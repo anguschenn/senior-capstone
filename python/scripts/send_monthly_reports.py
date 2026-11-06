@@ -29,11 +29,7 @@ def run(now: dt.datetime | None = None) -> int:
         return 0
 
     now = now or dt.datetime.now(dt.timezone.utc)
-    users = (
-        supabase.table("push_subscriptions")
-        .select("user_id")
-        .execute()
-    ).data or []
+    users = (supabase.table("push_subscriptions").select("user_id").execute()).data or []
     user_ids = sorted({str(row["user_id"]) for row in users if row.get("user_id")})
 
     if is_monthly_report_time(now):

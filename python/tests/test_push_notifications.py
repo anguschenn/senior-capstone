@@ -1,14 +1,15 @@
 import base64
-import datetime as dt
 import contextlib
+import datetime as dt
 import io
 import unittest
 from unittest import mock
 
+from cryptography.hazmat.primitives import serialization
+from py_vapid import Vapid
+
 import push_notifications
 from budget_progress import rule_key_for_row
-from py_vapid import Vapid
-from cryptography.hazmat.primitives import serialization
 from scripts.generate_vapid_keys import main as generate_vapid_keys
 from scripts.send_monthly_reports import is_monthly_report_time, previous_month_key
 
@@ -145,7 +146,9 @@ class PendingBudgetNotificationTests(unittest.TestCase):
             mock.patch.object(push_notifications, "push_enabled", return_value=True),
             mock.patch.object(push_notifications, "_pending_budget_events", return_value=[event]),
             mock.patch.object(push_notifications, "_pending_subscription_events", return_value=[]),
-            mock.patch.object(push_notifications, "pending_transaction_review_events", return_value=[]),
+            mock.patch.object(
+                push_notifications, "pending_transaction_review_events", return_value=[]
+            ),
             mock.patch.object(push_notifications, "_queue_event") as queue_event,
             mock.patch.object(push_notifications, "dispatch_pending_notifications"),
         ):
@@ -168,9 +171,7 @@ class PendingBudgetNotificationTests(unittest.TestCase):
         query.eq.assert_any_call("month", "2026-10")
         query.eq.assert_any_call("category_id", "food")
         query.eq.assert_any_call("kind", "over_budget")
-        query.eq.assert_any_call(
-            "first_detected_at", "2026-10-10T12:00:00+00:00"
-        )
+        query.eq.assert_any_call("first_detected_at", "2026-10-10T12:00:00+00:00")
 
 
 class MonthlyReportScheduleTests(unittest.TestCase):
