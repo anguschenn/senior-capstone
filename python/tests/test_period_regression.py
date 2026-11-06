@@ -31,9 +31,6 @@ ASKS = {
 # Kinds chat answers for several months, and for a run of days.
 MONTHS_ANSWERED = set(ASKS) - {"merchant"}
 DAYS_ANSWERED = {"spend", "count", "daily_average"}
-# "Is my spending going up since September" compares the running month's pace with
-# September and leaves the months between out, so chat says it can't.
-NOT_ANSWERED = {("trend", "since")}
 
 
 def month_name(month_key):
@@ -200,7 +197,7 @@ class PeriodRegressionTests(unittest.TestCase):
     def test_answers_the_kinds_chat_supports(self):
         for kind, span, label, prompt in self.cases():
             supported = MONTHS_ANSWERED if span == "months" else DAYS_ANSWERED
-            if kind not in supported or (kind, label) in NOT_ANSWERED:
+            if kind not in supported:
                 continue
             with self.subTest(prompt=prompt):
                 reply = self.ask(prompt)["reply"]

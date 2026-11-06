@@ -813,9 +813,14 @@ def _exec_category_change(query_spec, summary, scope_label):
     }
 
 
+# Days into a month before its pace counts toward a trend.
+_PACE_MIN_DAYS = 10
+
+
 def _exec_spending_trend(query_spec, summary, scope_label):
     keys, month_index = _recent_full_months(summary)
     note = ""
+    running = ""
     if query_spec.period_type == "month_range":
         # "average between may and august": those months, without the one still running.
         current = date_cls.today().strftime("%Y-%m")
@@ -823,6 +828,9 @@ def _exec_spending_trend(query_spec, summary, scope_label):
         keys = sorted((k for k in wanted if k in month_index and k != current), reverse=True)
         if current in wanted and current in month_index:
             note = f" {current} is left out because it isn't over yet."
+            if query_spec.reason_mode == "trend" and len(keys) < 3 and keys:
+                # "going up since april" with April and May done: June counts at its pace
+                running = current
         if not keys and wanted:
             missing = _missing_month_reply(wanted[0], month_index) or _missing_month_reply(
                 wanted[-1], month_index
@@ -858,6 +866,31 @@ def _exec_spending_trend(query_spec, summary, scope_label):
         if amount is None:
             return None
         values.append(amount)
+    so_far, progress, early = 0.0, None, ""
+    if running:
+        factor, progress = _month_scale(running)
+        row = month_index[running]
+        so_far = _month_amount(row, category) if category else float(row.get("expenses", 0) or 0)
+        if so_far is None or not progress:
+            running = ""
+        elif progress[0] < _PACE_MIN_DAYS:
+            # a few days in, the month's pace swings with one big charge: report it, but
+            # set the direction from the full months
+            early = (
+                f" {running} is only {progress[0]} of {progress[1]} days in, with "
+                f"${so_far:.0f} spent so far, too early to count."
+            )
+            running = ""
+            if len(values) < 2:
+                return _pointer(
+                    f"It's too early in {query_spec.period_key.split(',')[-1]} to tell: "
+                    f"{progress[0]} of {progress[1]} days in, {scope_label} has spent "
+                    f"${so_far:.0f}, against ${values[0]:.0f} in {keys[0]}.",
+                    "Ask again later in the month.",
+                    ("month_index",),
+                )
+        else:
+            keys, values = [running, *keys], [so_far * factor, *values]
     if category:
         subject = f"{category} spending"
     else:
@@ -871,7 +904,10 @@ def _exec_spending_trend(query_spec, summary, scope_label):
         # Savings can be negative: "+$631", "-$776".
         series = ", ".join(f"{k} {'+' if v >= 0 else '-'}${abs(v):.0f}" for k, v in oldest_first)
     else:
-        series = ", ".join(f"{k} ${v:.0f}" for k, v in oldest_first)
+        series = ", ".join(
+            f"{k} on pace for about ${v:.0f}" if k == running else f"{k} ${v:.0f}"
+            for k, v in oldest_first
+        )
     if (
         category
         and query_spec.reason_mode in {"average", "trend", "per_week", "per_year"}
@@ -1042,20 +1078,33 @@ def _exec_spending_trend(query_spec, summary, scope_label):
         ):
             # Income lands in lumps, so say where the running month already stands.
             so_far = float(row_now.get("income", 0) or 0)
-            last_full = oldest_first[-1][1]
-            side = "above" if so_far > last_full else "below"
-            reply += (
-                f" {current} so far is ${so_far:.0f}, already {side} {oldest_first[-1][0]}."
-                if so_far > last_full
-                else f" {current} so far is ${so_far:.0f}, {side} {oldest_first[-1][0]} so far."
-            )
+            last_key, last_full = oldest_first[-1]
+            if abs(so_far - last_full) < 1:
+                where = f"already as much as {last_key}"
+            elif so_far > last_full:
+                where = f"already above {last_key}"
+            else:
+                where = f"below {last_key} so far"
+            reply += f" {current} so far is ${so_far:.0f}, {where}."
         if len(oldest_first) >= 3 and direction != "roughly flat":
             (prev_key, prev), (last_key, last_value) = oldest_first[-2], oldest_first[-1]
             step = last_value - prev
             if abs(step) >= max(1.0, 0.05 * abs(prev)) and (step > 0) != (direction == "going up"):
                 moved = "rose" if step > 0 else "dipped"
                 word = "up" if step > 0 else "down"
-                reply += f" It {moved} in {last_key}, {word} ${abs(step):.0f} from {prev_key}."
+                if last_key == running:
+                    reply += (
+                        f" {last_key} is on pace to come in {word} ${abs(step):.0f} from "
+                        f"{prev_key}."
+                    )
+                else:
+                    reply += f" It {moved} in {last_key}, {word} ${abs(step):.0f} from {prev_key}."
+        if running:
+            reply += (
+                f" {running} is {progress[0]} of {progress[1]} days in, with ${so_far:.0f} "
+                "spent so far."
+            )
+        reply += early
     else:
         shown = f"{'+' if avg >= 0 else '-'}${abs(avg):.0f}" if metric == "net" else f"${avg:.0f}"
         verb = "are" if subject.startswith("savings") else "is"
@@ -1065,7 +1114,11 @@ def _exec_spending_trend(query_spec, summary, scope_label):
         )
     return {
         "reply": reply,
-        "insights": [f"Based on the {len(values)} full months before {query_spec.period_key}."],
+        "insights": [
+            f"{running} counts at its pace so far; the other months are full."
+            if running
+            else f"Based on the {len(values)} full months before {query_spec.period_key}."
+        ],
         "actions": ["Ask whether this month is on pace compared with that average."],
         "missing_fields": [],
         "facts_used": ["month_index.categories" if category else f"month_index.{metric}"],
