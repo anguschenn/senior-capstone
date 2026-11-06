@@ -6,7 +6,7 @@ import re
 from datetime import date as date_cls
 from datetime import timedelta
 
-from .asked_period import asked_period
+from .asked_period import asked_period, calendar_week, week_span
 from .asked_period import months_back as _months_back
 from .asked_period import months_between as _months_between
 from .query_contracts import QuerySpec
@@ -414,6 +414,7 @@ def _category_month_amount(text, summary, scope):
             scope=scope,
             category=categories[0],
             reason_mode="category_week",
+            compare_to=_calendar_week(text),
         )
     exclude = _EXCLUDE_RE.search(text)
     versus = len(categories) == 2 and re.search(r"\b(vs|versus|or|compared? to)\b", text)
@@ -1916,6 +1917,16 @@ def _up_or_down_in(asked, spec, summary):
     return _scope_guard(compare if either else _asked_direction(asked, compare), summary)
 
 
+def _calendar_week(text):
+    """ "first,last" day of the calendar week "this week" or "last week" in `text` names,
+    else ""."""
+    which = calendar_week(text)
+    if not which:
+        return ""
+    first, last = week_span(which, date_cls.today())
+    return f"{first.isoformat()},{last.isoformat()}"
+
+
 _WEEK_WORDS_RE = re.compile(
     r"\b(last week|this week|past week|last 7 days|past 7 days)\b|"
     r"\b(?:last|past) (\d{1,2}|two|three|four) (days|weeks)\b"
@@ -1928,7 +1939,7 @@ def _week_by_category(asked, spec, summary):
     week = _WEEK_WORDS_RE.search(asked)
     if not week or _named_month_keys(asked, summary):
         return None
-    days = ""
+    days = _calendar_week(asked)
     if week.group(2):
         count = int(week.group(2)) if week.group(2).isdigit() else _NUMBER_WORDS[week.group(2)]
         days = str(count * 7 if week.group(3) == "weeks" else count)
@@ -1954,6 +1965,7 @@ def _week_by_category(asked, spec, summary):
             period_key=selected_month_key(summary),
             scope=spec.scope,
             reason_mode="category_week",
+            compare_to=days,
         )
     return None
 
@@ -1982,15 +1994,16 @@ def _saving_enough(asked, spec, summary):
 
 
 def _week_before_last(asked, spec, summary):
-    """ "how much did I spend the week before last": 8 to 14 days ago."""
+    """ "how much did I spend the week before last": the calendar week before last week,
+    Monday to Sunday."""
     if not re.search(r"\b(the )?week before last\b|\btwo weeks ago\b|\b2 weeks ago\b", asked):
         return None
-    today = date_cls.today()
+    first, _ = week_span("last", date_cls.today())
     return QuerySpec(
         task_type="day_span",
         metric="expenses",
         period_type="days",
-        period_key=f"{(today - timedelta(days=13)).isoformat()},{(today - timedelta(days=7)).isoformat()}",
+        period_key=f"{(first - timedelta(days=7)).isoformat()},{(first - timedelta(days=1)).isoformat()}",
         scope=spec.scope if spec.scope != "unknown" else "all_accounts",
     )
 
@@ -2064,7 +2077,8 @@ def _months_saved(asked, spec, summary):
 
 
 def _week_vs_usual(asked, spec, summary):
-    """ "is my spending this week normal": the last 7 days against a usual week."""
+    """ "is my spending this week normal": this week so far, last week, or the last 7
+    days against a usual week."""
     if not re.search(r"\b(this|last|past) week\b|\blast 7 days\b", asked) or not re.search(
         r"\b(normal|usual|typical|a lot|too much|high|low|ok|okay)\b", asked
     ):
@@ -2074,6 +2088,7 @@ def _week_vs_usual(asked, spec, summary):
     return QuerySpec(
         task_type="week_compare",
         metric="expenses",
+        period_key=_calendar_week(asked),
         scope=spec.scope if spec.scope != "unknown" else "all_accounts",
         reason_mode="usual",
     )
@@ -3553,7 +3568,7 @@ def _resolve_followup(text, summary, history):
 # ── Broader amount asks ──────────────────────────────────────────────────
 
 _ROLLING_RE = re.compile(
-    r"\b(?:last|past|previous)\s+(7|30|90)\s+days\b|\b(?:last|past|this) (week)\b"
+    r"\b(?:last|past|previous)\s+(7|30|90)\s+days\b|\b(?:last|past|this|previous) (week)\b"
 )
 _HALF_RE = re.compile(r"\b(first|second) half of (?:(?:the |this )?year|20\d{2})\b")
 _QUARTER_RE = re.compile(r"\bq([1-4])\b|\b(first|second|third|fourth) quarter\b")
@@ -3635,6 +3650,15 @@ def _slot_fallback(text, summary, scope):
         )
     rolling = _ROLLING_RE.search(text)
     if rolling and not categories:
+        week = calendar_week(text) and _asked_days_spec(
+            text,
+            summary,
+            scope,
+            "",
+            {"income": "income", "net": "net", "both": "net"}.get(metric, "expenses"),
+        )
+        if week:
+            return week  # a calendar week: Monday to Sunday, or Monday to today
         days = rolling.group(1) or "7"
         return QuerySpec(
             task_type="amount_lookup",
@@ -4568,18 +4592,18 @@ def _amount_judgement_spec(text, summary, scope):
     )
 
 
-def _asked_days_spec(text, summary, scope, reason_mode):
-    """ "the past 2 weeks", "the last 10 days", "this week": that run of days, ending
-    today, from the daily totals. None when the question names no run of days."""
+def _asked_days_spec(text, summary, scope, reason_mode, metric="expenses"):
+    """ "the past 2 weeks", "the last 10 days", "this week", "last week": that run of
+    days, from the daily totals. None when the question names no run of days."""
     asked = asked_period(text, summary)
     if asked is None or asked.kind != "days":
         return None
-    today = date_cls.today()
+    end = asked.last_day or date_cls.today()
     return QuerySpec(
         task_type="day_span",
-        metric="expenses",
+        metric=metric,
         period_type="days",
-        period_key=f"{(today - timedelta(days=asked.days - 1)).isoformat()},{today.isoformat()}",
+        period_key=f"{(end - timedelta(days=asked.days - 1)).isoformat()},{end.isoformat()}",
         scope=scope,
         reason_mode=reason_mode,
         # daily totals have no categories: the day-span answer says so
@@ -5352,12 +5376,17 @@ def _followup_about_previous(text, previous, summary):
         r"\b(last week|past week|last 7 days|past 7 days|this week)\b", _normalize(previous)
     ):
         today = date_cls.today()
+        start, end = today - timedelta(days=13), today - timedelta(days=7)
+        which = calendar_week(_normalize(previous))
+        if which:
+            # the calendar week before the one asked about: Monday to Sunday
+            first, _ = week_span(which, today)
+            start, end = first - timedelta(days=7), first - timedelta(days=1)
         return QuerySpec(
             task_type="day_span",
             metric="expenses",
             period_type="days",
-            period_key=f"{(today - timedelta(days=13)).isoformat()},"
-            f"{(today - timedelta(days=7)).isoformat()}",
+            period_key=f"{start.isoformat()},{end.isoformat()}",
             scope=prev_spec.scope,
             category=prev_spec.category,
         )
@@ -5765,7 +5794,10 @@ def _day_span_spec(text, summary, scope):
     start = today - timedelta(days=days_back - 1)
     return QuerySpec(
         task_type="day_span",
-        metric="expenses",
+        # "my income over the past 2 weeks": the daily totals carry money in too
+        metric={"income": "income", "net": "net", "both": "net"}.get(
+            _amount_metric(text), "expenses"
+        ),
         period_type="days",
         period_key=f"{start.isoformat()},{today.isoformat()}",
         scope=scope,

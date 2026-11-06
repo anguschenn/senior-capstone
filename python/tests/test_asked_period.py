@@ -3,7 +3,7 @@ import os
 import unittest
 from unittest import mock
 
-from ai.asked_period import asked_period, covers, shows_other_period
+from ai.asked_period import asked_period, covers, shows_other_period, week_span
 from ai.chat_service import ChatService
 from ai.query_parser_v2 import _normalize
 
@@ -35,8 +35,10 @@ class AskedPeriodTests(unittest.TestCase):
             ("how much this year", "months", ("2026-01", "2026-05")),
             ("over the past 2 weeks", "days", 14),
             ("in the last 10 days", "days", 10),
-            ("this week", "days", 7),
+            # Monday to today
+            ("this week", "days", dt.date.today().weekday() + 1),
             ("last week", "days", 7),
+            ("over the past week", "days", 7),
         ]
         for text, kind, expected in cases:
             with self.subTest(text=text):
@@ -46,6 +48,26 @@ class AskedPeriodTests(unittest.TestCase):
                     self.assertEqual(asked.days, expected)
                 else:
                     self.assertEqual((asked.months[0], asked.months[-1]), expected)
+
+    def test_last_week_is_monday_to_sunday(self):
+        wednesday = dt.date(2026, 11, 4)
+        self.assertEqual(
+            week_span("last", wednesday), (dt.date(2026, 10, 26), dt.date(2026, 11, 1))
+        )
+        self.assertEqual(week_span("this", wednesday), (dt.date(2026, 11, 2), wednesday))
+        # on a Monday, this week is that one day and last week ended yesterday
+        monday = dt.date(2026, 11, 2)
+        self.assertEqual(week_span("this", monday), (monday, monday))
+        self.assertEqual(week_span("last", monday)[1], dt.date(2026, 11, 1))
+        asked = asked_period("how much did i spend last week", SUMMARY)
+        self.assertEqual(asked.last_day, week_span("last")[1])
+        # an answer about the last 7 days isn't about last week
+        last_7 = {"reply": "Over the last 7 days, you spent about $90.", "period_resolved": ""}
+        if dt.date.today().weekday() != 6:
+            self.assertFalse(covers(asked, last_7, SUMMARY))
+        first, last = week_span("last")
+        week = {"reply": "", "period_resolved": f"{first} to {last}"}
+        self.assertTrue(covers(asked, week, SUMMARY))
 
     def test_other_wordings_read_as_runs_of_months(self):
         cases = [

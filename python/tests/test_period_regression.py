@@ -200,7 +200,7 @@ class PeriodRegressionTests(unittest.TestCase):
     def test_answers_the_kinds_chat_supports(self):
         for kind, span, label, prompt in self.cases():
             supported = MONTHS_ANSWERED if span == "months" else DAYS_ANSWERED
-            if kind not in supported or (kind, label) in NOT_ANSWERED or label == "last_week":
+            if kind not in supported or (kind, label) in NOT_ANSWERED:
                 continue
             with self.subTest(prompt=prompt):
                 reply = self.ask(prompt)["reply"]
