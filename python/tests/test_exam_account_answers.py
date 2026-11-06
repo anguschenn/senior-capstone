@@ -1,6 +1,6 @@
 """Answers on the chat exam's made-up account (tests/exam_fixture.py, today pinned to
-Monday 2026-06-15) for calendar weeks, runs of days, a named year's months, tied months, and a short
-trend since a month. Expected numbers are sums over the
+Monday 2026-06-15) for calendar weeks, a named year's months, tied months, a short trend
+since a month, and money received from one payer. Expected numbers are sums over the
 fixture's rows."""
 
 import unittest
@@ -144,6 +144,28 @@ class ExamAccountAnswerTests(unittest.TestCase):
         self.assertIn(
             "too early in 2026-06 to tell", self.ask("Is my spending going up since May?")
         )
+
+    def test_money_received_from_a_payer(self):
+        # pay on the 1st and 15th, only the 1st in February
+        self.assertIn(
+            "Your income from ACME PAYROLL from 2026-01 to 2026-06 was $27,500.00, across 11 "
+            "deposits.",
+            self.ask("How much did I get from ACME this year?"),
+        )
+        self.assertIn(
+            "I don't see any money received from Zelle",
+            self.ask("How much did I receive from Zelle last month?"),
+        )
+        # where all the pay comes from is the income total
+        self.assertIn("total income", self.ask("How much did I earn from my day job last month?"))
+
+    def test_making_a_purchase_is_spending(self):
+        self.assertTrue(
+            self.ask("Did I make any purchases at Costco in April?").startswith(
+                "No. You didn't spend anything at Costco in 2026-04."
+            )
+        )
+        self.assertNotIn("income", self.ask("Did I make a purchase from Amazon?"))
 
 
 if __name__ == "__main__":

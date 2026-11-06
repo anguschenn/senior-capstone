@@ -98,14 +98,41 @@ ROWS = [
         "FOOD_AND_DRINK_RESTAURANT",
         "Uber Eats",
     ),
+    # money in, on the checking account
+    row(10, "2026-04-01", "ACME PAYROLL", -2000.0, "INCOME", "INCOME_WAGES"),
+    row(11, "2026-05-01", "ACME PAYROLL", -2000.0, "INCOME", "INCOME_WAGES"),
+    row(
+        12,
+        "2026-05-03",
+        "Zelle payment from ALICE HUANG 290677128",
+        -50.0,
+        "TRANSFER_IN",
+        "TRANSFER_IN_ACCOUNT_TRANSFER",
+    ),
+    row(
+        13,
+        "2026-05-10",
+        "Zelle payment from Ryan Cao COFJGHAMBWMY",
+        -30.0,
+        "TRANSFER_IN",
+        "TRANSFER_IN_ACCOUNT_TRANSFER",
+    ),
 ]
+for r in ROWS[-4:]:
+    r["plaid_account_id"] = "acc-checking"
 ACCOUNTS = {
     "acc-card": {
         "plaid_account_id": "acc-card",
         "name": "Card",
         "account_type": "credit",
         "subtype": "credit card",
-    }
+    },
+    "acc-checking": {
+        "plaid_account_id": "acc-checking",
+        "name": "Checking",
+        "account_type": "depository",
+        "subtype": "checking",
+    },
 }
 SUBSCRIPTIONS = [
     {
@@ -138,6 +165,7 @@ def build():
         tz_name="",
     )
     summary["merchant_index"], summary["category_counts"] = server_summary.spending_detail(txs)
+    summary["income_index"] = server_summary.income_detail(txs)
     summary["subscriptions"] = SUBSCRIPTIONS
     return summary
 
@@ -152,6 +180,14 @@ class SpendingDetailTests(unittest.TestCase):
         for month in ("2026-04", "2026-05"):
             merchants = sum(e["months"].get(month, {}).get("spent", 0) for e in index.values())
             self.assertAlmostEqual(merchants, summary["month_index"][month]["expenses"])
+
+    def test_payers_add_up_like_the_month_income(self):
+        summary = build()
+        index = summary["income_index"]
+        for month in ("2026-04", "2026-05"):
+            payers = sum(e["months"].get(month, {}).get("received", 0) for e in index.values())
+            self.assertAlmostEqual(payers, summary["month_index"][month]["income"])
+        self.assertNotIn("Costco", index)  # its refund is money back, not income
 
     def test_purchases_per_category(self):
         may = build()["category_counts"]["2026-05"]
@@ -251,9 +287,30 @@ class ChatAnswerTests(unittest.TestCase):
         # a past charge, not the next renewal
         self.assertNotIn("renews on", self.ask("When was Spotify charged last?"))
 
+    def test_money_received_from_a_payer(self):
+        self.assertEqual(
+            self.ask("How much did I get from ACME last month?"),
+            "Your income from ACME PAYROLL in 2026-04 was $2,000.00, across 1 deposit. "
+            "That's 100% of your income in 2026-04.",
+        )
+        zelle = self.ask("How much did I receive from Zelle this month?")
+        self.assertIn("Your income from Zelle (Zelle payment from ALICE HUANG", zelle)
+        self.assertIn("was $80.00, across 2 deposits", zelle)
+        self.assertIn("$50.00", self.ask("How much did Alice send me this month?"))
+        self.assertTrue(self.ask("Did ACME pay me in April?").startswith("Yes. "))
+        self.assertIn("in 2026-05", self.ask("When did I last get money from ACME?"))
+        self.assertIn(
+            "I don't see any money received from Walmart",
+            self.ask("How much did I receive from Walmart?"),
+        )
+        # a general source is the income total, and a payback isn't income
+        self.assertNotIn("Your income from", self.ask("How much did I earn from work last month?"))
+        self.assertNotIn("Your income from", self.ask("Did Alice pay me back?"))
+
     def test_money_received_and_plain_words_are_not_merchants(self):
         received = self.ask("How much did I receive from Uber last month?")
         self.assertNotIn("at Uber", received)
+        self.assertIn("I don't see any money received from Uber", received)
         goal = self.ask("How much do I need to save to hit my target this month?")
         self.assertNotIn("You spent", goal)
 

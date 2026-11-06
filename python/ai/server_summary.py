@@ -301,6 +301,36 @@ def spending_detail(transactions: list[Tx]) -> tuple[dict, dict]:
     return merchant_index, {month: dict(sorted(c.items())) for month, c in sorted(counts.items())}
 
 
+def income_detail(transactions: list[Tx]) -> dict:
+    """income_index: money received per payer and month ("ACME PAYROLL", "Zelle payment
+    from ..."), counted as build_summary counts income, so a month's payers add up to
+    its income. Refunds are money back for a purchase, not income, and aren't in it.
+    Server only, like merchant_index."""
+    payers: dict[str, dict[str, dict]] = {}
+    for tx in transactions:
+        if not tx.is_income or tx.kind == "refund":
+            continue
+        amount = tx.income_amount
+        if amount <= 0:
+            continue
+        cell = payers.setdefault(tx.merchant, {}).setdefault(
+            _month_key(tx.date), {"received": 0.0, "count": 0}
+        )
+        cell["received"] += amount
+        cell["count"] += 1
+    totals = {name: sum(c["received"] for c in months.values()) for name, months in payers.items()}
+    kept = sorted(payers, key=lambda n: -totals[n])[:MERCHANT_INDEX_LIMIT]
+    return {
+        name: {
+            "months": {
+                month: {"received": round(cell["received"], 2), "count": cell["count"]}
+                for month, cell in sorted(payers[name].items())
+            }
+        }
+        for name in kept
+    }
+
+
 # ── AiSummaryService.build ──────────────────────────────────────────────
 
 
@@ -917,6 +947,7 @@ def summary_for(user_id: str, context: dict, tx_rows=None) -> dict:
             for month, month_progress in past_progress.items()
         }
     summary["merchant_index"], summary["category_counts"] = spending_detail(txs)
+    summary["income_index"] = income_detail(txs)
     subscriptions = fetch_subscriptions(user_id)
     if subscriptions is not None:
         summary["subscriptions"] = subscriptions
