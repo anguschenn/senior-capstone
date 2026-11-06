@@ -2273,8 +2273,9 @@ def _since_trend(asked, spec, summary):
         start = [_month_range_spec(since.group(1), summary).split(",")[0]]  # "since spring"
     if len(start) != 1:
         return None
-    last_full = _months_back(date_cls.today().strftime("%Y-%m"), 1)
-    if start[0] >= last_full:
+    current = date_cls.today().strftime("%Y-%m")
+    last_full = _months_back(current, 1)
+    if start[0] > last_full:
         return None
     categories = [c for c in (spec.category or "").split(",") if c]
     if len(categories) > 1:
@@ -2283,9 +2284,13 @@ def _since_trend(asked, spec, summary):
     if metric == "expenses" and _amount_metric(asked) in {"income", "net"}:
         metric = _amount_metric(asked)
     months = _months_between(start[0], last_full)
-    if not average and len(months) < 3:
-        # "has my food spending dropped since august": too few full months for a trend,
-        # so this month (at its pace) against August.
+    if not average and len(months) < 3 and (categories or metric == "expenses"):
+        # "is my spending going up since april": too few full months for a trend, so
+        # each of them and this month at its pace
+        months.append(current)
+    elif not average and len(months) < 2:
+        # "has my income dropped since may": income lands in lumps, so this month so
+        # far against May.
         compare = QuerySpec(
             task_type="compare_periods",
             metric="expenses" if categories else metric,
