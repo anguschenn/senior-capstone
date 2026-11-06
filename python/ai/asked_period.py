@@ -32,7 +32,10 @@ _RUN = r"(?:the )?(?:last|past|previous|recent)"
 _MONTHS_RE = re.compile(rf"\b{_RUN} {_COUNT} months\b|\b(?:in )?recent months\b")
 _WEEKS_RE = re.compile(rf"\b{_RUN} {_COUNT} weeks\b")
 _DAYS_RE = re.compile(rf"\b{_RUN} {_COUNT} days\b")
-_ONE_WEEK_RE = re.compile(r"\b(this|last|past|current) week\b")
+_ONE_WEEK_RE = re.compile(r"\b(this|last|past|current|previous) week\b")
+# "last week" is the calendar week before this one, and so is "the previous week"; "the
+# last week" is the last 7 days
+_CALENDAR_WEEK_RE = re.compile(r"(?<!\bthe )\b(this|last|current) week\b|\b(previous) week\b")
 _SINCE_RE = re.compile(r"\bsince (?:the (?:start|beginning) of )?([a-z]+)\b")
 _SPAN_RE = re.compile(r"\b(?:between|from)\b.*\b(?:and|to|through|thru|until)\b")
 _THIS_YEAR_RE = re.compile(r"\b(?:this year|so far this year|year to date|ytd)\b")
@@ -42,9 +45,9 @@ _THIS_YEAR_RE = re.compile(r"\b(?:this year|so far this year|year to date|ytd)\b
 class AskedPeriod:
     """kind "months" (also this year) lists the months asked for; alt_months is the
     other common reading of "the last N months" (ending with this month). kind "days"
-    is a run of `days` days ending today. ends, for "from February to May", are the two
-    months a comparison of the span may show alone. label reads after a verb: "for the
-    last 3 months", "since September"."""
+    is a run of `days` days ending on `last_day` (today when None). ends, for "from
+    February to May", are the two months a comparison of the span may show alone. label
+    reads after a verb: "for the last 3 months", "since September"."""
 
     kind: str
     label: str
@@ -52,6 +55,7 @@ class AskedPeriod:
     alt_months: tuple = ()
     days: int = 0
     ends: tuple = ()
+    last_day: dt.date | None = None
 
 
 def _count(word):
@@ -83,6 +87,24 @@ def months_between(start, end):
     return keys
 
 
+def calendar_week(text):
+    """ "this" or "last" for the calendar week lowercased `text` names, else ""."""
+    match = _CALENDAR_WEEK_RE.search(text)
+    if not match:
+        return ""
+    return "last" if match.group(1) in {"last", None} else "this"
+
+
+def week_span(which, today=None):
+    """(first day, last day) of "this week", Monday to today, or of "last week", the
+    Monday to Sunday before it."""
+    today = today or dt.date.today()
+    monday = today - dt.timedelta(days=today.weekday())
+    if which == "last":
+        return monday - dt.timedelta(days=7), monday - dt.timedelta(days=1)
+    return monday, today
+
+
 def asked_period(text, summary):
     """The several-month or several-day period lowercased `text` asks about, else None
     (a single month, a day, or no period at all)."""
@@ -109,7 +131,16 @@ def asked_period(text, summary):
             )
     match = _ONE_WEEK_RE.search(text)
     if match:
-        return AskedPeriod(kind="days", label=f"for {match.group(0)}", days=7)
+        which = calendar_week(text)
+        if not which:
+            return AskedPeriod(kind="days", label=f"for the {match.group(0)}", days=7)
+        first, last = week_span(which)
+        return AskedPeriod(
+            kind="days",
+            label=f"for {which} week",
+            days=(last - first).days + 1,
+            last_day=last if which == "last" else None,
+        )
     year = int(current[:4])
     match = _SINCE_RE.search(text)
     named = month_mentions(match.group(1)) if match else []
@@ -190,10 +221,12 @@ def covers(asked, response, summary, today=None):
         return True
     months, runs = shown
     if asked.kind == "days":
-        # "the last N days" ends today; a run of the same length elsewhere doesn't count.
-        today = today or dt.date.today()
+        # "the last N days" ends today and "last week" on Sunday; a run of the same
+        # length ending elsewhere doesn't count.
+        end = asked.last_day or today or dt.date.today()
         return any(
-            abs(length - asked.days) <= 1 and (last is None or abs((today - last).days) <= 1)
+            abs(length - asked.days) <= 1
+            and (asked.last_day is None if last is None else abs((end - last).days) <= 1)
             for length, last in runs
         )
     if asked.ends and set(asked.ends) <= months:

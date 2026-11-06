@@ -6,26 +6,13 @@ Stop rule: no wrong number or yes/no, and at most 3% of questions off target (no
 answered, answered when chat should say it can't, a month/category/merchant asked about
 left out, no yes or no, or handed to the model)."""
 
-import datetime as dt
 import json
-import os
 import re
-import types
 import unittest
 from pathlib import Path
-from unittest import mock
 
 import exam_fixture
 
-from ai import (
-    asked_period,
-    chat_service,
-    intent_router,
-    query_executors_v2,
-    query_parser_v2,
-    time_parsing,
-    time_scope_resolver,
-)
 from ai.chat_service import ChatService
 
 EXAM = json.loads((Path(__file__).parent / "data" / "chat_exam_v1.json").read_text())
@@ -38,14 +25,6 @@ _SAYS_CANT_RE = re.compile(
     r"hasn't happened yet",
     re.IGNORECASE,
 )
-
-
-class _ExamDate(dt.date):
-    """dt.date with today() pinned to the exam's day."""
-
-    @classmethod
-    def today(cls):
-        return exam_fixture.TODAY
 
 
 def _amounts(reply):
@@ -81,23 +60,7 @@ def grade(item, response):
 
 class ChatExamTests(unittest.TestCase):
     def setUp(self):
-        patches = [mock.patch.dict(os.environ, {"AI_ROUTER_V2_ENABLED": "1"})]
-        for module in (
-            chat_service,
-            intent_router,
-            query_executors_v2,
-            query_parser_v2,
-            time_parsing,
-            time_scope_resolver,
-        ):
-            patches.append(mock.patch.object(module, "date_cls", _ExamDate))
-        exam_dt = types.SimpleNamespace(
-            date=_ExamDate, timedelta=dt.timedelta, datetime=dt.datetime
-        )
-        patches.append(mock.patch.object(asked_period, "dt", exam_dt))
-        for patch in patches:
-            patch.start()
-            self.addCleanup(patch.stop)
+        exam_fixture.pin_today(self)
 
     def test_exam(self):
         summary = exam_fixture.summary()

@@ -7,6 +7,7 @@ import re
 from datetime import date as date_cls
 from datetime import timedelta
 
+from .asked_period import week_span
 from .query_parser_v2 import category_named, credit_card_scope, group_months
 from .response_utils import describe_plaid_amount
 from .time_scope_resolver import previous_month_from_anchor as _prev_month_key
@@ -1902,23 +1903,32 @@ def _exec_week_compare(query_spec, summary, scope_label):
         return out
 
     if query_spec.reason_mode == "usual":
-        # the last 7 days against a usual week (the recent monthly average x 12 / 52)
+        # the week asked (or the last 7 days) against a usual week (the recent monthly
+        # average x 12 / 52), scaled to the days of this week so far
         recent, recent_index = _recent_full_months(summary)
         if not recent:
             return None
         monthly = sum(float(recent_index[k].get("expenses", 0) or 0) for k in recent) / len(recent)
-        usual = monthly * 12 / 52
-        week = total((today - timedelta(days=6)).isoformat(), today.isoformat())
+        start, end = (today - timedelta(days=6)).isoformat(), today.isoformat()
+        when, period = "Over the last 7 days", "last 7 days"
+        if "," in (query_spec.period_key or ""):
+            start, end = query_spec.period_key.split(",")
+            when = f"On {start}" if start == end else f"From {start} to {end}"
+            period = f"{start} to {end}"
+        span = (date_cls.fromisoformat(end) - date_cls.fromisoformat(start)).days + 1
+        usual = monthly * 12 / 52 * span / 7
+        week = total(start, end)
+        usual_is = {7: "A usual week is", 1: "A usual day is"}.get(
+            span, f"Usual for {span} days is"
+        )
         gap = week - usual
         if abs(gap) < 0.1 * usual:
-            verdict = "That's about a normal week."
+            verdict = "That's about normal."
         else:
-            verdict = (
-                f"That's {'above' if gap > 0 else 'below'} a usual week, by about ${abs(gap):.0f}."
-            )
+            verdict = f"That's {'above' if gap > 0 else 'below'} usual, by about ${abs(gap):.0f}."
         return {
             "reply": (
-                f"Over the last 7 days, {scope_label} spent about ${week:.0f}. A usual week is "
+                f"{when}, {scope_label} spent about ${week:.0f}. {usual_is} "
                 f"about ${usual:.0f} (from your ${monthly:.0f} monthly average, "
                 f"{recent[-1]} to {recent[0]}). {verdict}"
             ),
@@ -1926,7 +1936,7 @@ def _exec_week_compare(query_spec, summary, scope_label):
             "actions": ["Ask which days were biggest this week."],
             "missing_fields": [],
             "facts_used": ["day_index_recent.expenses", "month_index.expenses"],
-            "period_resolved": "last 7 days",
+            "period_resolved": period,
         }
     if query_spec.reason_mode == "halves":
         # the first half of a month (days 1-15) against the rest of it
@@ -1986,7 +1996,36 @@ def _exec_week_compare(query_spec, summary, scope_label):
             "facts_used": ["day_index_recent.expenses"],
             "period_resolved": f"{this_start.strftime('%Y-%m')} vs {last_start.strftime('%Y-%m')}",
         }
-    span = int(query_spec.period_key) if (query_spec.period_key or "").isdigit() else 7
+    if not (query_spec.period_key or "").isdigit():
+        # "this week vs last week": Monday to today, and the same days of last week
+        this_start, _ = week_span("this", today)
+        last_start, last_same = this_start - timedelta(days=7), today - timedelta(days=7)
+        if last_start.isoformat() < min(days):
+            return _pointer(
+                f"I only get daily totals from {min(days)} on, so I can't add up last week "
+                f"from {last_start.isoformat()}.",
+                "Ask how much you spent this week.",
+            )
+        now = total(this_start.isoformat(), today.isoformat())
+        before = total(last_start.isoformat(), last_same.isoformat())
+        whole = total(last_start.isoformat(), (this_start - timedelta(days=1)).isoformat())
+        gap = now - before
+        so_far = "" if today.weekday() == 6 else " so far"
+        return {
+            "reply": (
+                f"This week{so_far} ({this_start.isoformat()} to {today.isoformat()}) you've "
+                f"spent about ${now:.0f} for {scope_label}, vs about ${before:.0f} over the "
+                f"same days last week ({last_start.isoformat()} to {last_same.isoformat()}): "
+                f"${abs(gap):.0f} {'more' if gap > 0 else 'less'}. Last week came to about "
+                f"${whole:.0f} in all."
+            ),
+            "insights": ["Weeks run Monday to Sunday."],
+            "actions": ["Ask which days were biggest this week."],
+            "missing_fields": [],
+            "facts_used": ["day_index_recent.expenses"],
+            "period_resolved": f"{last_start.isoformat()} to {today.isoformat()}",
+        }
+    span = int(query_spec.period_key)
     this_start = (today - timedelta(days=span - 1)).isoformat()
     last_start = (today - timedelta(days=2 * span - 1)).isoformat()
     last_end = (today - timedelta(days=span)).isoformat()
@@ -2000,13 +2039,13 @@ def _exec_week_compare(query_spec, summary, scope_label):
     last_week = total(last_start, last_end)
     gap = this_week - last_week
     word = "more" if gap > 0 else "less"
-    when = "this week" if span == 7 else f"in the last {span} days"
+    when = f"in the last {span} days"
     return {
         "reply": (
             f"Last {span} days: about ${this_week:.0f}; the {span} days before: about "
             f"${last_week:.0f} for {scope_label}. That's ${abs(gap):.0f} {word} {when}."
         ),
-        "insights": ["Weeks are the last 7 days and the 7 days before them."],
+        "insights": [f"The last {span} days and the {span} days before them."],
         "actions": ["Ask which days were biggest this week."],
         "missing_fields": [],
         "facts_used": ["day_index_recent.expenses"],
@@ -2242,6 +2281,34 @@ def _exec_day_span(query_spec, summary, scope_label):
             total += float(row.get("expenses", 0) or 0)
             count += int(row.get("tx_count", 0) or 0)
             deposits += float(row.get("income", 0) or 0)
+    when = f"On {start}" if start == end else f"From {start} to {end}"
+    if query_spec.metric == "income":
+        if deposits < 0.5:
+            return _pointer(
+                f"I don't see any income for {scope_label} from {start} to {end}.",
+                "Ask about a wider date range.",
+            )
+        return {
+            "reply": f"{when}, {scope_label} received about ${deposits:.0f} in income.",
+            "insights": ["Summed from the daily totals the app sends."],
+            "actions": ["Ask what your income was this month."],
+            "missing_fields": [],
+            "facts_used": ["day_index_recent.income"],
+            "period_resolved": f"{start} to {end}",
+        }
+    if query_spec.metric == "net":
+        net = deposits - total
+        return {
+            "reply": (
+                f"{when}, {scope_label} received about ${deposits:.0f} and spent about "
+                f"${total:.0f}, so net cash flow is about {'+' if net >= 0 else '-'}${abs(net):.0f}."
+            ),
+            "insights": ["Summed from the daily totals the app sends."],
+            "actions": ["Ask what your net cash flow was this month."],
+            "missing_fields": [],
+            "facts_used": ["day_index_recent.income", "day_index_recent.expenses"],
+            "period_resolved": f"{start} to {end}",
+        }
     if total < 0.5:
         # Days can hold only deposits or transfers in, which aren't spending.
         return _pointer(
@@ -2260,8 +2327,8 @@ def _exec_day_span(query_spec, summary, scope_label):
         days_in = (date_cls.fromisoformat(end) - date_cls.fromisoformat(start)).days + 1
         return {
             "reply": (
-                f"From {start} to {end}, that's about ${total / days_in:.0f} a day for "
-                f"{scope_label} ({shown} over {days_in} days)."
+                f"{when}, that's about ${total / days_in:.0f} a day for {scope_label} "
+                f"({shown} over {days_in} day{'' if days_in == 1 else 's'})."
             ),
             "insights": ["Summed from the daily totals the app sends."],
             "actions": ["Ask which of those days was biggest."],
@@ -2271,7 +2338,7 @@ def _exec_day_span(query_spec, summary, scope_label):
         }
     return {
         "reply": (
-            f"From {start} to {end}, you spent about {shown} for {scope_label} across "
+            f"{when}, you spent about {shown} for {scope_label} across "
             f"{count} transaction{'' if count == 1 else 's'}"
             f"{', counting deposits' if deposits >= 0.5 else ''}."
         ),
@@ -3090,45 +3157,61 @@ def _exec_data_pointer(query_spec, summary, scope_label):
             else {}
         )
         week = float((windows.get("last_7d") or {}).get("expenses", 0) or 0)
-        span = 7
+        span = "the last 7 days"
+        days = (
+            summary.get("day_index_recent")
+            if isinstance(summary.get("day_index_recent"), dict)
+            else {}
+        )
+        start, end = "", date_cls.today().isoformat()
         if (query_spec.compare_to or "").isdigit():
             # "the past 2 weeks": the daily totals for those days
-            span = int(query_spec.compare_to)
-            days = (
-                summary.get("day_index_recent")
-                if isinstance(summary.get("day_index_recent"), dict)
-                else {}
-            )
-            start = (date_cls.today() - timedelta(days=span - 1)).isoformat()
-            week = sum(
-                float(r.get("expenses", 0) or 0)
-                for k, r in days.items()
-                if isinstance(r, dict) and k >= start
+            span = f"the last {query_spec.compare_to} days"
+            start = (date_cls.today() - timedelta(days=int(query_spec.compare_to) - 1)).isoformat()
+        elif "," in (query_spec.compare_to or ""):
+            # "last week": Monday to Sunday
+            start, end = query_spec.compare_to.split(",")
+            span = start if start == end else f"{start} to {end}"
+        if start:
+            # daily totals that don't reach back that far can't add it up
+            week = (
+                sum(
+                    float(r.get("expenses", 0) or 0)
+                    for k, r in days.items()
+                    if isinstance(r, dict) and start <= k <= end
+                )
+                if days and start >= min(days)
+                else None
             )
         row = (summary.get("month_index") or {}).get(query_spec.period_key)
         month_amount = _month_amount(row, category) if isinstance(row, dict) else None
-        parts = [
-            f"Chat only has category totals by month, so I can't split the last {span} days by "
-            f"category. Over the last {span} days, {scope_label} spent about ${week:.0f} in total"
-        ]
+        over = f"Over {span}"
+        if "," in (query_spec.compare_to or ""):
+            over = f"On {start}" if start == end else f"From {span}"
+        parts = [f"Chat only has category totals by month, so I can't split {span} by category."]
+        if week is not None:
+            parts.append(f"{over}, {scope_label} spent about ${week:.0f} in total.")
         if not category:
             # "what did I spend the most on last week": the month's leader instead
             cats = row.get("categories") if isinstance(row, dict) else None
             if isinstance(cats, dict) and cats:
                 name, amount = max(cats.items(), key=lambda kv: float(kv[1] or 0))
                 parts.append(
-                    f", and your biggest category in {query_spec.period_key} so far is {name} at "
-                    f"about ${float(amount or 0):.0f}"
+                    f"Your biggest category in {query_spec.period_key} so far is {name} at "
+                    f"about ${float(amount or 0):.0f}."
                 )
-            return _pointer("".join(parts) + ".", "Search Activity to see this week's charges.")
-        if month_amount is not None and month_amount >= 1:
-            parts.append(
-                f", and {category} in {query_spec.period_key} so far is about ${month_amount:.0f}"
+            answer = _pointer(" ".join(parts), "Search Activity to see this week's charges.")
+        else:
+            if month_amount is not None and month_amount >= 1:
+                parts.append(
+                    f"{category} in {query_spec.period_key} so far is about ${month_amount:.0f}."
+                )
+            answer = _pointer(
+                " ".join(parts),
+                f"Search Activity for {category} to see this week's charges.",
             )
-        return _pointer(
-            "".join(parts) + ".",
-            f"Search Activity for {category} to see this week's charges.",
-        )
+        # the days added up, even when they are one day ("this week" on a Monday)
+        return {**answer, "period_resolved": f"{start} to {end}" if start else "last 7 days"}
     if mode == "refunds":
         row = (summary.get("month_index") or {}).get(query_spec.period_key)
         if credit_card_scope(summary) and isinstance(row, dict) and "card_payments_in" in row:
