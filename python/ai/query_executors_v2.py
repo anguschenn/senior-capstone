@@ -1342,7 +1342,14 @@ def _exec_month_extreme(query_spec, summary, scope_label):
         if amount is not None:
             values.append((str(key), amount))
     if not values:
-        return None
+        if span or not month_index:
+            return None
+        return _pointer(
+            f"I don't see any months of {year} for {scope_label}; your data runs "
+            f"{min(month_index)} to {max(month_index)}.",
+            f"Ask which month you spent the most in {max(month_index)[:4]}.",
+            ("month_index",),
+        )
     where = f"In {year}"
     if span:
         ordered = sorted(k for k, _ in values)
@@ -1380,21 +1387,30 @@ def _exec_month_extreme(query_spec, summary, scope_label):
         }
     key, amount = (min if lowest else max)(full, key=lambda kv: kv[1])
     tied = sorted(k for k, v in full if abs(v - amount) < 1)
-    if category and len(tied) >= 3 and amount >= 1 and not query_spec.compare_to:
-        # "$33 in every month": no single month stands out
-        word = "lowest" if lowest else "highest"
-        return _pointer(
-            f"{where}, {category} spending for {scope_label} was at its {word}, about "
-            f"${amount:.0f}, in {len(tied)} months ({tied[0]} to {tied[-1]}), so no single "
-            "month stands out.",
-            f"Ask how {category} compares with your other categories.",
-            ("month_index.categories",),
-        )
     if category:
         subject = f"{category} spending"
     else:
         subject = {"income": "income", "net": "savings (income minus spending)"}.get(
             metric, "spending"
+        )
+    if len(tied) >= 2 and amount >= 1 and not query_spec.compare_to:
+        # "$5,000 in every month": no single month stands out
+        word = "lowest" if lowest else "highest"
+        if len(tied) == len(full):
+            months = f"all {len(full)} months ({tied[0]} to {tied[-1]})"
+        elif len(tied) == 2:
+            months = f"both {tied[0]} and {tied[1]}"
+        elif len(tied) <= 4:
+            months = f"{len(tied)} months ({', '.join(tied[:-1])} and {tied[-1]})"
+        else:
+            months = f"{len(tied)} of the {len(full)} months ({tied[0]} to {tied[-1]})"
+        return _pointer(
+            f"{where}, your {subject} for {scope_label} was at its {word}, about "
+            f"${amount:.0f}, in {months}, so no single month stands out.",
+            f"Ask how {category} compares with your other categories."
+            if category
+            else "Ask which category grew the most.",
+            ("month_index.categories" if category else f"month_index.{metric}",),
         )
     word = "lowest" if lowest else "highest"
     note = f" ({current} is left out because it isn't over yet.)" if len(full) < len(values) else ""
