@@ -1,5 +1,5 @@
 """Answers on the chat exam's made-up account (tests/exam_fixture.py, today pinned to
-Monday 2026-06-15) for calendar weeks and runs of days. Expected numbers are sums over the
+Monday 2026-06-15) for calendar weeks, runs of days, a named year's months and tied months. Expected numbers are sums over the
 fixture's rows."""
 
 import unittest
@@ -84,6 +84,41 @@ class ExamAccountAnswerTests(unittest.TestCase):
         )["reply"]
         # June 1 to 7: lunch $70, Spotify $11.99, Uber $20
         self.assertIn("From 2026-06-01 to 2026-06-07, you spent about $102", reply)
+
+    def test_highest_month_of_the_year_asked(self):
+        self.assertIn(
+            "In 2025, your month with the highest spending for Overall (All Accounts) was "
+            "2025-07, at about $637.",
+            self.ask("Which was my highest expense month in 2025?"),
+        )
+        # August, October and December 2025: $487.48 each
+        self.assertIn(
+            "lowest, about $487, in 3 months (2025-08, 2025-10 and 2025-12)",
+            self.ask("Which month did I spend the least last year?"),
+        )
+        self.assertIn(
+            "In 2025, your savings (income minus spending)",
+            self.ask("Which month did I save the most last year?"),
+        )
+        self.assertIn(
+            "Between 2025-12 and 2026-05, your month with the highest spending",
+            self.ask("Which month did I spend the most in the last 6 months?"),
+        )
+        self.assertIn(
+            "I don't see any months of 2024",
+            self.ask("Which month did I spend the most in 2024?"),
+        )
+
+    def test_tied_months_are_named_as_a_tie(self):
+        self.assertIn(
+            "your income for Overall (All Accounts) was at its lowest, about $5,000, in all 6 "
+            "months (2025-07 to 2025-12), so no single month stands out.",
+            self.ask("Which month did I earn the least last year?"),
+        )
+        self.assertIn(
+            "in 4 months (2026-01, 2026-03, 2026-04 and 2026-05)",
+            self.ask("Which month did I earn the most this year?"),
+        )
 
 
 if __name__ == "__main__":

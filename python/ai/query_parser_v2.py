@@ -2523,7 +2523,7 @@ _WILL_SPEND_MORE_RE = re.compile(
 
 _EXTREME_MONTH_RE = re.compile(
     r"^(?:what|which) (?:was|is|s|were) (?:my |the )?(highest|lowest|biggest|smallest|most expensive|"
-    r"cheapest|priciest)[ -]spending month\b(.*)$"
+    r"cheapest|priciest)[ -](?:spending|expenses?|spend) month\b(.*)$"
 )
 _MOST_IN_A_MONTH_RE = re.compile(
     r"^what(?: s| is| was)? the (most|least|highest|lowest) (?:i ve |i have |i )?(?:ever )?"
@@ -2796,6 +2796,13 @@ def _over_asked_months(spec, message, summary):
             scope=spec.scope,
             category=_category_in(text, summary) or "",
         )
+    if (
+        spec.task_type == "month_extreme"
+        and spec.period_type == "year"
+        and asked.label != "for this year"
+    ):
+        # "which month did I spend the most in the last 6 months": those months only
+        return dataclasses.replace(spec, period_type="month_range", period_key=months)
     if (
         spec.task_type == "amount_lookup"
         and spec.reason_mode == "earn_vs_spend"
@@ -3963,23 +3970,33 @@ def _average_or_trend_spec(text, summary, scope):
     )
 
 
+def _extreme_year(text, summary):
+    """The year whose months "which month did I spend the most" ranks: the one named ("in
+    2025", "last year"), else this year."""
+    named = re.search(r"\b(20\d{2})\b(?!-\d)", text)
+    if re.search(r"\blast year\b", text):
+        return _selected_year(summary) - 1
+    return int(named.group(1)) if named else _selected_year(summary)
+
+
 def _month_extreme_spec(text, summary, scope):
     """ "Which month did I spend the most this year?" """
     named = re.search(
         r"\b(cheapest|most expensive|priciest|biggest|highest|lowest|worst|best)\s+"
-        r"(spending\s+|income\s+|earning\s+)?month\b",
+        r"(spending\s+|expenses?\s+|spend\s+|income\s+|earning\s+)?month\b",
         text,
     )
     saving_month = re.search(
         r"\b(best|worst) month for sav(ing|ings)\b|\bmonth (did )?i (save|saved) the (most|least)\b",
         text,
     )
+    year = _extreme_year(text, summary)
     if saving_month:
         return QuerySpec(
             task_type="month_extreme",
             metric="net",
             period_type="year",
-            period_key=str(_selected_year(summary)),
+            period_key=str(year),
             scope=scope,
             reason_mode="lowest" if re.search(r"\b(worst|least)\b", text) else "highest",
         )
@@ -3997,7 +4014,7 @@ def _month_extreme_spec(text, summary, scope):
         task_type="month_extreme",
         metric="income" if _amount_metric(text) == "income" else "expenses",
         period_type="year",
-        period_key=str(_selected_year(summary)),
+        period_key=str(year),
         scope=scope,
         category=_category_in(text, summary),
         reason_mode="lowest" if lowest else "highest",
@@ -4371,7 +4388,7 @@ def _special_asks_spec(text, summary, scope):
             task_type="month_extreme",
             metric="net",
             period_type="year",
-            period_key=str(_selected_year(summary)),
+            period_key=str(_extreme_year(text, summary)),
             scope=scope,
             reason_mode="lowest" if "least" in text else "highest",
         )

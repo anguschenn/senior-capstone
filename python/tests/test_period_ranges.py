@@ -164,7 +164,11 @@ class TopCategoryAndBiggestPurchaseTests(PeriodRangeTestCase):
 
     def test_highest_expense_month_is_not_a_purchase(self):
         reply = self.ask("Which was my highest expense month in the last 3 months?")["reply"]
-        self.assertIn("Highest was 2026-04 ($900)", reply)
+        self.assertIn("Between 2026-02 and 2026-04, your month with the highest spending", reply)
+        self.assertIn("was 2026-04, at about $900", reply)
+        # with no period named, the months of this year
+        reply = self.ask("Which was my highest expense month?")["reply"]
+        self.assertIn("your month with the highest spending", reply)
 
 
 class PastFewMonthsTests(PeriodRangeTestCase):
