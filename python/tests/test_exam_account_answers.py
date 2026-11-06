@@ -1,5 +1,6 @@
 """Answers on the chat exam's made-up account (tests/exam_fixture.py, today pinned to
-Monday 2026-06-15) for calendar weeks, runs of days, a named year's months and tied months. Expected numbers are sums over the
+Monday 2026-06-15) for calendar weeks, runs of days, a named year's months, tied months, and a short
+trend since a month. Expected numbers are sums over the
 fixture's rows."""
 
 import unittest
@@ -118,6 +119,30 @@ class ExamAccountAnswerTests(unittest.TestCase):
         self.assertIn(
             "in 4 months (2026-01, 2026-03, 2026-04 and 2026-05)",
             self.ask("Which month did I earn the most this year?"),
+        )
+
+    def test_trend_since_a_recent_month_counts_this_month_at_its_pace(self):
+        # June so far: $307.48 in 15 of 30 days
+        reply = self.ask("Is my spending going up since April?")
+        self.assertIn(
+            "has been going up: 2026-04 $427, 2026-05 $637, 2026-06 on pace for about $615.",
+            reply,
+        )
+        self.assertIn("2026-06 is 15 of 30 days in, with $307 spent so far.", reply)
+        self.assertIn(
+            "2026-06 so far is $5,000, already as much as 2026-05.",
+            self.ask("Is my income going up since April?"),
+        )
+
+    def test_a_few_days_into_a_month_its_pace_is_left_out(self):
+        exam_fixture.pin_today(self, exam_fixture.TODAY.replace(day=4))
+        reply = self.ask("Is my spending going up since April?")
+        # the direction comes from April and May alone
+        self.assertIn("2026-04 $427, 2026-05 $637.", reply)
+        self.assertIn("2026-06 is only 4 of 30 days in", reply)
+        self.assertNotIn("on pace", reply)
+        self.assertIn(
+            "too early in 2026-06 to tell", self.ask("Is my spending going up since May?")
         )
 
 
