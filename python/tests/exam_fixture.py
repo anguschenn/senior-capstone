@@ -96,6 +96,44 @@ def rows():
     return out
 
 
+def pin_today(case, today=TODAY):
+    """Pin today (TODAY unless given) for a test case, in every module that reads the
+    date."""
+    import types
+    from unittest import mock
+
+    from ai import (
+        asked_period,
+        chat_service,
+        intent_router,
+        query_executors_v2,
+        query_parser_v2,
+        time_parsing,
+        time_scope_resolver,
+    )
+
+    class _ExamDate(dt.date):
+        @classmethod
+        def today(cls):
+            return today
+
+    patches = [mock.patch.dict("os.environ", {"AI_ROUTER_V2_ENABLED": "1"})]
+    for module in (
+        chat_service,
+        intent_router,
+        query_executors_v2,
+        query_parser_v2,
+        time_parsing,
+        time_scope_resolver,
+    ):
+        patches.append(mock.patch.object(module, "date_cls", _ExamDate))
+    exam_dt = types.SimpleNamespace(date=_ExamDate, timedelta=dt.timedelta, datetime=dt.datetime)
+    patches.append(mock.patch.object(asked_period, "dt", exam_dt))
+    for patch in patches:
+        patch.start()
+        case.addCleanup(patch.stop)
+
+
 def summary():
     """The chat summary for this account, built by the server's own code, with
     the server-only blocks the app's summary lacks."""

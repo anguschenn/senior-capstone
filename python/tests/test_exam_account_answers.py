@@ -1,0 +1,90 @@
+"""Answers on the chat exam's made-up account (tests/exam_fixture.py, today pinned to
+Monday 2026-06-15) for calendar weeks and runs of days. Expected numbers are sums over the
+fixture's rows."""
+
+import unittest
+
+import exam_fixture
+
+from ai.chat_service import ChatService
+
+
+class ExamAccountAnswerTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.summary = exam_fixture.summary()
+
+    def setUp(self):
+        exam_fixture.pin_today(self)
+        self.service = ChatService(
+            generate_reply=lambda _prompt, generation_config=None: "NONE",
+            get_detailed_snapshot=lambda _uid: "",
+        )
+
+    def ask(self, prompt):
+        return self.service.handle_chat(
+            {"prompt": prompt, "history": [], "spending_summary": self.summary}, user_id="u"
+        )["reply"]
+
+    def test_last_week_is_monday_to_sunday(self):
+        # June 8 to 14: lunch every day $70, Netflix $15.49, Target $60, Regal $30
+        self.assertEqual(
+            self.ask("How much did I spend last week?"),
+            "From 2026-06-08 to 2026-06-14, you spent about $175 for Overall (All Accounts) "
+            "across 10 transactions.",
+        )
+        compared = self.ask("How did this week compare to last week?")
+        self.assertIn("This week so far (2026-06-15 to 2026-06-15)", compared)
+        self.assertIn("same days last week (2026-06-08 to 2026-06-08)", compared)
+        self.assertIn("Last week came to about $175 in all.", compared)
+        self.assertIn(
+            "2026-06-08 to 2026-06-14", self.ask("How much did I spend the previous week?")
+        )
+        # "the past week" and "the last week" stay the last 7 days
+        self.assertIn("last 7 days", self.ask("How much did I spend in the past week?"))
+        self.assertIn("last 7 days", self.ask("How much did I spend over the last week?"))
+
+    def test_income_and_cash_flow_over_days(self):
+        # June 6 to 15: pay $2,500 on the 15th; $225.49 spent
+        self.assertIn(
+            "received about $2,500 and spent about $225, so net cash flow is about +$2,275",
+            self.ask("What was my cash flow in the last 10 days?"),
+        )
+        self.assertIn(
+            "From 2026-06-02 to 2026-06-15, Overall (All Accounts) received about $2,500 in income",
+            self.ask("What was my income over the past 2 weeks?"),
+        )
+        self.assertIn(
+            "From 2026-06-01 to 2026-06-07", self.ask("How much did I spend the week before last?")
+        )
+
+    def test_this_week_on_a_monday_is_that_day(self):
+        # this week so far is Monday June 15 alone, and still gets an answer
+        for prompt in (
+            "Is my spending this week normal?",
+            "Did I spend anything on food this week?",
+            "What's my average daily spending this week?",
+        ):
+            with self.subTest(prompt=prompt):
+                reply = self.ask(prompt)
+                self.assertIn("2026-06-15", reply)
+                self.assertNotIn("I can't answer that", reply)
+        self.assertIn("A usual day is about $32", self.ask("Is my spending this week normal?"))
+
+    def test_the_week_before_last_week(self):
+        first = "How much did I spend last week?"
+        history = [{"role": "user", "text": first}, {"role": "assistant", "text": self.ask(first)}]
+        reply = self.service.handle_chat(
+            {
+                "prompt": "What about the week before?",
+                "history": history,
+                "spending_summary": self.summary,
+            },
+            user_id="u",
+        )["reply"]
+        # June 1 to 7: lunch $70, Spotify $11.99, Uber $20
+        self.assertIn("From 2026-06-01 to 2026-06-07, you spent about $102", reply)
+
+
+if __name__ == "__main__":
+    unittest.main()
