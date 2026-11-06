@@ -151,6 +151,7 @@ def summary():
         tz_name="",
     )
     built["merchant_index"], built["category_counts"] = server_summary.spending_detail(txs)
+    built["income_index"] = server_summary.income_detail(txs)
 
     def budget(month):
         cats = built["month_index"].get(month, {}).get("categories", {})

@@ -419,6 +419,22 @@ def sanitize_spending_summary(summary):
                     "category": clamp_str(entry.get("category", ""), 64),
                     "months": months,
                 }
+    payers = summary.get("income_index")
+    if isinstance(payers, dict):
+        cleaned["income_index"] = {}
+        for name, entry in list(payers.items())[:300]:
+            if not isinstance(entry, dict) or not isinstance(entry.get("months"), dict):
+                continue
+            months = {
+                month: {
+                    "received": max(0.0, to_float(cell.get("received", 0))),
+                    "count": max(0, int(to_float(cell.get("count", 0)))),
+                }
+                for month, cell in list(entry["months"].items())[-36:]
+                if re.match(r"^20\d{2}-\d{2}$", str(month)) and isinstance(cell, dict)
+            }
+            if clamp_str(name, 80) and months:
+                cleaned["income_index"][clamp_str(name, 80)] = {"months": months}
     counts = summary.get("category_counts")
     if isinstance(counts, dict):
         cleaned["category_counts"] = {
