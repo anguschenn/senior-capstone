@@ -182,6 +182,34 @@ class ExamAccountAnswerTests(unittest.TestCase):
             self.ask("How much did I spend yesterday?"),
         )
 
+    def test_a_follow_up_about_that_keeps_its_period(self):
+        first = "How much did I spend in April?"
+        history = [{"role": "user", "text": first}, {"role": "assistant", "text": self.ask(first)}]
+        reply = self.service.handle_chat(
+            {
+                "prompt": "How much of that was shopping?",
+                "history": history,
+                "spending_summary": self.summary,
+            },
+            user_id="u",
+        )["reply"]
+        # Target $60 less the $50 Costco refund, of April's $427.48
+        self.assertIn("In 2026-04, Shopping was about $10", reply)
+
+        first = "How much did I spend last week?"
+        history = [{"role": "user", "text": first}, {"role": "assistant", "text": self.ask(first)}]
+        reply = self.service.handle_chat(
+            {
+                "prompt": "How much of that was food?",
+                "history": history,
+                "spending_summary": self.summary,
+            },
+            user_id="u",
+        )["reply"]
+        # a week can't be split by category: say so, with the week's total
+        self.assertIn("can't split 2026-06-08 to 2026-06-14 by category", reply)
+        self.assertIn("about $175 in total", reply)
+
     def test_making_a_purchase_is_spending(self):
         self.assertTrue(
             self.ask("Did I make any purchases at Costco in April?").startswith(

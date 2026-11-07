@@ -3555,6 +3555,28 @@ def _resolve_followup(text, summary, history):
     about_previous = _followup_about_previous(text, previous, summary)
     if about_previous is not None:
         return about_previous
+    if re.search(r"\b(of|out of) (that|it|this|those)\b", text) and not _PERIOD_WORDS_RE.search(
+        text
+    ):
+        # "how much of that was shopping" after "how much did I spend in august": August
+        prev_spec = parse_query_v2(previous, summary)
+        keys = [k for k in (prev_spec.period_key or "").split(",") if k]
+        if prev_spec.period_type in {"month", "year"} and len(keys) == 1:
+            return f"{text} in {keys[0]}"
+        if prev_spec.period_type == "month_range" and len(keys) >= 2:
+            return f"{text} from {keys[0]} to {keys[-1]}"
+        category = _category_in(text, summary)
+        if prev_spec.period_type == "days" and len(keys) == 2 and category:
+            # "how much of that was food" after "last week": those days, which chat
+            # can't split by category, so it says so with their total
+            return QuerySpec(
+                task_type="day_span",
+                metric="expenses",
+                period_type="days",
+                period_key=prev_spec.period_key,
+                scope=prev_spec.scope,
+                category=category,
+            )
     if re.match(
         r"^(by )?how much( more| less| higher| lower)?( was it| is it| did it| exactly)?$|"
         r"^how (big|large) (was|is) the (difference|gap|change)$|^what( s|was| is) the "
