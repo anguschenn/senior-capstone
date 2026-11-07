@@ -2587,7 +2587,18 @@ def _canonical_wording(message, summary):
         prev = previous_month_key(summary)
         name = calendar.month_name[int(prev[5:])].lower()
         return f"{change.group(1)} my {change.group(2)} {change.group(3)} in {name} {prev[:4]}"
+    slang = _SPEND_SLANG_RE.match(text)
+    if slang:
+        # "how much did I blow last month" is how much I spent
+        verb = "spent" if slang.group(2) == "have" else "spend"
+        return f"{slang.group(1)}{slang.group(2)} i {verb}{text[slang.end() :]}"
     return message
+
+
+_SPEND_SLANG_RE = re.compile(
+    r"^(how much (?:money |cash )?)(did|have|do) i (blow|blew|blown|burn|burned|burnt|"
+    r"drop|dropped|shell out|shelled out|fork out|forked out|splash out|splashed out)\b"
+)
 
 
 def parse_query_v2(message, summary, history=None):
@@ -2769,6 +2780,31 @@ def _has_merchant(name, summary):
     return isinstance(index, dict) and bool(matching_merchants(name, index))
 
 
+# "at" before these isn't a store: "at all", "at least", "at home".
+_NOT_A_STORE = {"all", "least", "most", "home", "night", "once", "work", "school"}
+# Kinds of places, not a store's name: "at the movies" may be any cinema.
+_PLACE_WORDS = set(
+    """movie movies cinema cinemas theater theaters theatre mall malls bar bars pub pubs club
+    clubs restaurant restaurants cafe cafes coffee grocery groceries supermarket market store
+    stores shop shops gas station pharmacy doctor doctors dentist hospital airport gym salon
+    hotel hotels park beach concert concerts game games church bank atm office campus
+    festival fair zoo museum""".split()
+)
+
+
+def _bare_merchant(text, summary):
+    """The merchant normalized `text` is only a name and a period of ("costco this year",
+    "uber in october"), else ""."""
+    words = text.split()
+    for size in (3, 2, 1):
+        head, rest = " ".join(words[:size]), " ".join(words[size:])
+        if len(words) < size or len(head) < 3 or not _has_merchant(head, summary):
+            continue
+        if _PERIOD_WORDS_RE.sub(" ", rest).split() in ([], ["in"], ["for"], ["so", "far"]):
+            return head
+    return ""
+
+
 def _merchant_asked(spec, message, summary):
     """A merchant question with the period it names (several months, a month, a year,
     or all the data when it names none), so per-merchant totals can answer it."""
@@ -2789,6 +2825,9 @@ def _merchant_asked(spec, message, summary):
             text,
         ):
             return spec  # money coming in, not spending at a merchant
+        named_at = re.sub(r"^(the|a|an) ", "", named_at)  # "at the apple store"
+        if named_at.split()[:1] and named_at.split()[0] in _NOT_A_STORE:
+            named_at = ""  # "did I spend anything at all"
         term = (
             named_at
             if named_at and _has_merchant(named_at, summary)
@@ -2801,13 +2840,30 @@ def _merchant_asked(spec, message, summary):
                 "",
             )
         )
+        bare = spec.task_type == "general" and _bare_merchant(text, summary)
+        if bare:
+            term = bare  # "costco this year": a merchant the user has, and a period
+        elif (
+            not term
+            and named_at
+            and spec.task_type == "amount_lookup"
+            and not spec.category
+            and re.match(r"^(did|have|has) i\b", text)
+            and re.search(r"\b(spend|spent|buy|bought|shop|shopped|purchase|purchased)\b", text)
+            and not _category_in(named_at, summary)
+            and named_at.split()[0] not in _NOT_A_STORE
+            and not set(named_at.split()) & _PLACE_WORDS
+        ):
+            # "did I spend anything at walmart": a store not in the data is a No, not
+            # the month's total
+            term = named_at
         if not term or (
             spec.task_type
             not in {"category_spending", "amount_lookup", "compare_periods", "day_span"}
             and spec.reason_mode not in {"find_purchase", "tx_count"}
             # "did I make any purchases at costco": a merchant the user has, named after
             # "at", that the rules above didn't read at all
-            and not (spec.task_type == "general" and term == named_at)
+            and not (spec.task_type == "general" and term in {named_at, bare})
         ):
             return spec
         spec = QuerySpec(
@@ -2833,6 +2889,10 @@ _INCOME_FROM_RE = re.compile(
     r"\b(?:how much|what) (?:did|has|have|does) ([a-z0-9][a-z0-9 .&*'-]{1,30}?) "
     r"(?:pay|paid|send|sent) me\b|"
     r"^(?:did|has|have) ([a-z0-9][a-z0-9 .&*'-]{1,30}?) (?:pay|paid|send|sent) me\b"
+)
+_CASH_DEPOSIT_RE = re.compile(
+    r"\bcash deposits?\b|\bdeposit(?:ed)? (?:any |some )?cash\b|"
+    r"\bcash (?:did|have|do) i (?:deposit|deposited|put in)\b|\batm deposits?\b"
 )
 # Where income comes from in general: the income total answers these.
 _GENERIC_PAYERS = {
@@ -2863,14 +2923,18 @@ def _income_from_asked(spec, message, summary):
         return None
     text = _normalize(message)
     asked = _INCOME_FROM_RE.search(text)
-    if not asked or re.search(
+    if _CASH_DEPOSIT_RE.search(text) and matching_merchants("cash deposit", index):
+        # "how much cash did I deposit this year": the bank's ATM cash deposits
+        name = "cash deposit"
+    elif not asked or re.search(
         r"\b(refund|refunded|refunds|back|spend|spent|buy|bought|purchases?|purchased|"
         r"orders?|ordered|charged?|transfer|transferred|payment|payments)\b",
         text,
     ):
         return None  # money back for a purchase, a split, or money going out isn't income
-    raw = next(g for g in asked.groups() if g)
-    name = re.sub(r"^(the|my|our) ", "", _AFTER_NAME_RE.sub("", raw).strip())
+    else:
+        raw = next(g for g in asked.groups() if g)
+        name = re.sub(r"^(the|my|our) ", "", _AFTER_NAME_RE.sub("", raw).strip())
     if not name or name.split()[-1] in _GENERIC_PAYERS:
         return None  # "my day job" is where all the pay comes from: the income total
     if not matching_merchants(name, index) and (
@@ -4837,10 +4901,13 @@ def _derived_metric_spec(text, summary, scope):
         mode = "per_tx"
     elif re.search(
         r"\bhow many (transactions|purchases|charges)\b|\bnumber of transactions\b|"
-        r"\bhow many times did i (buy|shop|spend|pay|purchase)\b",
+        r"\bhow many times did i (buy|shop|spend|pay|purchase)\b|"
+        r"\bhow (many times|often) (did|have|do) i (eat|ate|eaten|dine|dined) out\b",
         text,
     ):
         mode = "tx_count"
+        # "how many times did I eat out": Food purchases
+        eat_out = re.search(r"\b(eat|ate|eaten|dine|dined) out\b", text)
         day = _day_key(text, _selected_year(summary))
         if day:
             return QuerySpec(
@@ -4853,7 +4920,8 @@ def _derived_metric_spec(text, summary, scope):
         span = _asked_days_spec(text, summary, scope, "")
         if span is not None:
             return span  # daily totals carry counts, so a run of days can be counted
-        if _category_in(text, summary):
+        category = _category_in(text, summary) or ("Food" if eat_out else "")
+        if category:
             asked = asked_period(text, summary)
             return QuerySpec(
                 task_type="data_pointer",
@@ -4862,7 +4930,7 @@ def _derived_metric_spec(text, summary, scope):
                 if asked is not None and asked.months
                 else _period_for(text, summary),
                 scope=scope,
-                category=_category_in(text, summary),
+                category=category,
                 reason_mode="category_count",
             )
     elif re.search(

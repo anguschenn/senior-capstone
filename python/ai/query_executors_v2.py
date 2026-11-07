@@ -4172,8 +4172,9 @@ def _merchant_spending(query_spec, summary, scope_label):
     names = matching_merchants(asked, index)
     if not names:
         where = f" (your data runs {data[0]} to {data[-1]})" if data else ""
+        no = "No. " if query_spec.compare_to == "yes_no" else ""
         return _pointer(
-            f"I don't see any charges from {label} for {scope_label}{where}.",
+            f"{no}I don't see any charges from {label} for {scope_label}{where}.",
             f"Search Activity for {label} to check the name it shows under.",
             ("merchant_index",),
         )
