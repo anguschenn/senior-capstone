@@ -9,6 +9,7 @@ from unittest import mock
 from ai import server_summary
 from ai.chat_service import ChatService
 from ai.query_executors_v2 import matching_merchants
+from ai.response_utils import short_name
 from ai.validators import sanitize_spending_summary
 
 
@@ -188,6 +189,25 @@ class SpendingDetailTests(unittest.TestCase):
             payers = sum(e["months"].get(month, {}).get("received", 0) for e in index.values())
             self.assertAlmostEqual(payers, summary["month_index"][month]["income"])
         self.assertNotIn("Costco", index)  # its refund is money back, not income
+        # payers are named without the bank's reference numbers
+        self.assertIn("Zelle payment from ALICE HUANG", index)
+        self.assertIn("Zelle payment from Ryan Cao", index)
+
+    def test_short_names_drop_bank_references(self):
+        for name, short in [
+            ("ATM CASH DEPOSIT 10/12 5423 8TH AVE", "ATM CASH DEPOSIT"),
+            ("Zelle payment from Ryan Cao COFJGHAMBWMY", "Zelle payment from Ryan Cao"),
+            ("172355 CLASSLINK PAYROLL PPD ID: 1364227403", "CLASSLINK PAYROLL"),
+            ("REMOTE ONLINE DEPOSIT # 1", "REMOTE ONLINE DEPOSIT"),
+            ("Zelle payment from CHRISTOPHER", "Zelle payment from CHRISTOPHER"),
+            ("7-Eleven 34567", "7-Eleven"),
+            ("99 Ranch Market", "99 Ranch Market"),
+            ("Pier 1 Imports", "Pier 1 Imports"),
+            ("Trader Joe's #552", "Trader Joe's"),
+            ("McDonald's", "McDonald's"),
+        ]:
+            with self.subTest(name=name):
+                self.assertEqual(short_name(name), short)
 
     def test_purchases_per_category(self):
         may = build()["category_counts"]["2026-05"]

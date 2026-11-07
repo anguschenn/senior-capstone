@@ -33,7 +33,7 @@ _PROTECTED = set(
     spent send sent earns learn near year hear dear food good foot rest best test west weak
     week weekend today total totals noted tool expensive tips spends shows categorize
     recategorize export remind delete feels speed spelt moths mouths mounts toady tonal monte
-    least sending foods
+    least sending foods sends
     """.split()
 )
 

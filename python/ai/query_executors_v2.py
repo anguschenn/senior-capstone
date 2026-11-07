@@ -9,7 +9,7 @@ from datetime import timedelta
 
 from .asked_period import week_span
 from .query_parser_v2 import category_named, credit_card_scope, group_months
-from .response_utils import describe_plaid_amount
+from .response_utils import describe_plaid_amount, short_name
 from .time_scope_resolver import previous_month_from_anchor as _prev_month_key
 
 
@@ -3694,6 +3694,10 @@ def _exec_data_pointer(query_spec, summary, scope_label):
         )
     if mode == "income_source" and isinstance(summary.get("income_index"), dict):
         return _income_from(query_spec, summary, scope_label)
+    if mode == "payer_rank" and isinstance(summary.get("income_index"), dict):
+        return _ranked_names(query_spec, summary, scope_label)
+    if mode == "merchant_rank" and isinstance(summary.get("merchant_index"), dict):
+        return _ranked_names(query_spec, summary, scope_label)
     if mode == "merchant":
         name = (query_spec.category or "").strip()
         if isinstance(summary.get("merchant_index"), dict) and query_spec.period_type:
@@ -3845,9 +3849,13 @@ def _subscription_answer(query_spec, subs):
         asked = (query_spec.category or "").lower()
         chosen = [s for s in subs if s["name"].lower() == asked] if asked else subs[:1]
         if not chosen:
+            # "my gym membership" may be one of them under the merchant's name
             name = query_spec.category.title()
+            names = [s["name"] for s in subs]
+            listed = names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
             return answer(
-                f"{name} isn't among the active recurring charges on the Subs tab.",
+                f"{name} isn't among the active recurring charges on the Subs tab. They are "
+                f"{listed}.",
                 "Open the Subs tab to see every recurring charge.",
             )
         sub = chosen[0]
@@ -3860,6 +3868,36 @@ def _subscription_answer(query_spec, subs):
             f"{lead} on {sub['next_charge']} for ${sub['amount']:.2f} ({sub['frequency']}).",
             "Open the Subs tab to see every recurring charge.",
         )
+    if query_spec.compare_to in {"priciest", "cheapest"}:
+        cheap = query_spec.compare_to == "cheapest"
+
+        def per_month(sub):
+            return sub["amount"] * _PER_MONTH.get(sub["frequency"].lower(), 1.0)
+
+        ranked = sorted(subs, key=per_month, reverse=not cheap)
+        word = "cheapest" if cheap else "most expensive"
+        tied = [s for s in ranked if abs(per_month(s) - per_month(ranked[0])) < 0.005]
+        if len(subs) == 1:
+            return answer(
+                f"Of your subscriptions, there's only one active: {line(subs[0])}.",
+                "Open the Subs tab to cancel or confirm it.",
+            )
+        if len(tied) > 1:
+            names = f"{', '.join(s['name'] for s in tied[:-1])} and {tied[-1]['name']}"
+            reply = (
+                f"Of your {len(subs)} subscriptions, {names} are the {word}, at about "
+                f"${per_month(tied[0]):,.2f} a month each: "
+                + "; ".join(line(s) for s in tied)
+                + "."
+            )
+        else:
+            reply = (
+                f"Of your {len(subs)} subscriptions, the {word} is {line(ranked[0])}, about "
+                f"${per_month(ranked[0]):,.2f} a month."
+            )
+            if len(ranked) > 1:
+                reply += f" Next: {line(ranked[1])}."
+        return answer(reply, "Open the Subs tab to cancel or confirm one.")
     if query_spec.compare_to == "total":
         return answer(
             f"Your {len(subs)} active subscription{'' if len(subs) == 1 else 's'} come to about "
@@ -3940,6 +3978,96 @@ def _asked_months(query_spec, summary):
 def _for_days(label):
     """ "for the last 10 days", "for this week", or "since Monday" as it is."""
     return label if label.startswith("since ") else f"for {label}"
+
+
+def _ranked_names(query_spec, summary, scope_label):
+    """ "who sends me the most money", "my top 5 merchants last month": payers by money
+    received, or merchants by money spent (or by purchases, for "most often"), over the
+    months asked or all the data, from income_index or merchant_index."""
+    payers = query_spec.reason_mode == "payer_rank"
+    index = summary["income_index" if payers else "merchant_index"]
+    kind = "payer" if payers else "merchant"
+    if query_spec.period_type == "days":
+        return _pointer(
+            f"Chat has each {kind}'s money by month, not by day, so it can't rank them "
+            f"{_for_days(query_spec.period_key)}. Ask about this month or a month by name.",
+            "Search Activity to see those days.",
+        )
+    months, data = _asked_months(query_spec, summary)
+    if not months:
+        return None
+    span = months[0] if len(months) == 1 else f"{months[0]} to {months[-1]}"
+    within = f"in {span}" if len(months) == 1 else f"from {span}"
+    totals, counts = {}, {}
+    for name, entry in index.items():
+        label = short_name(name)  # one person's Zelle transfers count together
+        for month, cell in (entry.get("months") or {}).items():
+            if month in months and isinstance(cell, dict):
+                amount = float(cell.get("received" if payers else "spent", 0) or 0)
+                totals[label] = totals.get(label, 0.0) + amount
+                counts[label] = counts.get(label, 0) + int(cell.get("count", 0) or 0)
+    often = query_spec.compare_to == "often"
+    ranked = sorted(
+        (name for name in totals if totals[name] >= 0.5),
+        key=lambda name: (-counts[name], -totals[name]) if often else (-totals[name], name),
+    )
+    if not ranked:
+        where = f" (your data runs {data[0]} to {data[-1]})" if data else ""
+        return _pointer(
+            f"I don't see any {'money received' if payers else 'spending at merchants'} "
+            f"{within} for {scope_label}{where}.",
+            "Ask about a month with data.",
+            ("income_index" if payers else "merchant_index",),
+        )
+    top = ranked[: int(query_spec.category) if query_spec.category.isdigit() else 5]
+    noun = "deposit" if payers else "purchase"
+
+    def item(name):
+        return (
+            f"{name} ${totals[name]:,.0f} ({counts[name]} {noun}{'' if counts[name] == 1 else 's'})"
+        )
+
+    month_index = summary.get("month_index") or {}
+    whole = sum(
+        float((month_index.get(m) or {}).get("income" if payers else "expenses", 0) or 0)
+        for m in months
+    )
+    share = sum(totals[name] for name in top) / whole * 100 if whole >= 0.5 else 0
+    where = within[0].upper() + within[1:]
+    if payers:
+        lead = (
+            "most of your income came from"
+            if whole >= 0.5 and totals[top[0]] / whole > 0.5
+            else "your biggest source of income was"
+        )
+        reply = (
+            f"{where}, {lead} {item(top[0])}"
+            + (f", then {', '.join(item(n) for n in top[1:])}" if len(top) > 1 else "")
+            + "."
+        )
+    else:
+        by = "purchases" if often else "spending"
+        reply = (
+            f"{where}, your top {'merchant' if len(top) == 1 else f'{len(top)} merchants'} by "
+            f"{by} {'was' if len(top) == 1 else 'were'} " + ", ".join(item(n) for n in top) + "."
+        )
+    if share:
+        reply += (
+            f" {'That covers' if len(top) == 1 else 'Together they cover'} {min(share, 100):.0f}% "
+            f"of your {'income' if payers else 'spending'} {within}."
+        )
+    return {
+        "reply": reply,
+        "insights": [
+            "Each bank reference number is left out, so one person's transfers count together."
+            if payers
+            else "Counted as category spending is, so a refund lowers its merchant."
+        ],
+        "actions": [f"Ask how much you got from {top[0]}." if payers else f"Ask about {top[0]}."],
+        "missing_fields": [],
+        "facts_used": ["income_index" if payers else "merchant_index"],
+        "period_resolved": span,
+    }
 
 
 def _income_from(query_spec, summary, scope_label):

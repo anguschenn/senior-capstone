@@ -1008,6 +1008,23 @@ def _outside_summary_spec(text, summary, scope):
     """Asks the chat summary cannot answer in full; say where to look instead of
     asking the user for a metric they already gave."""
     biggest = _BIGGEST_PURCHASE_RE.search(text)
+    month_index = summary.get("month_index") if isinstance(summary, dict) else None
+    if (
+        biggest
+        and isinstance(month_index, dict)
+        and len(month_index) >= 2
+        and re.search(r"\b(ever|of all time|all time|all-time)\b", text)
+    ):
+        # "my biggest purchase ever": every month of data
+        return QuerySpec(
+            task_type="data_pointer",
+            period_type="month_range",
+            period_key=",".join(sorted(month_index)),
+            scope=scope,
+            reason_mode="biggest_purchase",
+            category=_category_in(text, summary),
+            compare_to="several" if biggest.group(0).endswith("s") else "",
+        )
     if biggest:
         named_year = re.search(r"\b(20\d{2})\b", text)
         return QuerySpec(
@@ -2578,10 +2595,59 @@ def parse_query_v2(message, summary, history=None):
     spec = _parse_query_v2(message, summary, history)
     spec = (
         _subscriptions_asked(spec, message, summary)
+        or _ranking_asked(spec, message, summary)
         or _income_from_asked(spec, message, summary)
         or _merchant_asked(spec, message, summary)
     )
     return _over_asked_months(spec, message, summary)
+
+
+# "who sends me the most money", "where does my income come from"
+_PAYER_RANK_RE = re.compile(
+    r"\bwho (sends|sent|pays|paid|gives|gave) me (the )?most\b|"
+    r"\bwhere (does|did|do) (all )?(my|the) (income|money|pay) (come|comes) from\b|"
+    r"\b(top|biggest|main|largest|primary) (sources?|payers?) of (my )?(income|money)\b|"
+    r"\b(top|biggest|main|largest|primary) (income sources?|payers?)\b|"
+    r"\bincome (sources|by source|by payer)\b"
+)
+# "my top 5 merchants last month", "where do I shop the most"
+_MERCHANT_RANK_RE = re.compile(
+    r"\btop (?:\d{1,2} |three |five |ten )?(merchants|stores|shops|places|vendors|retailers)\b|"
+    r"\bwhere (do|did|have) i (shop|shopped|go|gone) (the )?(most|most often)\b|"
+    r"\bwhich (merchants?|stores?|shops?|places?|vendors?) (do|did|have) i\b.*\bmost\b|"
+    r"\bmost (visited|frequent) (merchants?|stores?|shops?|places?)\b"
+)
+_TOP_COUNT_WORDS = {"three": 3, "five": 5, "ten": 10}
+
+
+def _ranking_asked(spec, message, summary):
+    """Who sends the user the most money, or where they spend the most, over the period
+    asked (or all the data), from income_index or merchant_index. None otherwise."""
+    if not isinstance(summary, dict):
+        return None
+    text = _normalize(message)
+    if _PAYER_RANK_RE.search(text) and isinstance(summary.get("income_index"), dict):
+        mode, metric = "payer_rank", "income"
+    elif _MERCHANT_RANK_RE.search(text) and isinstance(summary.get("merchant_index"), dict):
+        mode, metric = "merchant_rank", "expenses"
+    else:
+        return None
+    period_type, period_key = _asked_months_or_all(text, summary)
+    top = re.search(r"\btop (\d{1,2}|three|five|ten)\b", text)
+    count = 5
+    if top:
+        count = int(top.group(1)) if top.group(1).isdigit() else _TOP_COUNT_WORDS[top.group(1)]
+    often = re.search(r"\b(often|frequent|frequently|visited|visit|go)\b", text)
+    return QuerySpec(
+        task_type="data_pointer",
+        metric=metric,
+        period_type=period_type,
+        period_key=period_key,
+        scope=clamp_str(summary.get("scope", ""), 32) or "unknown",
+        reason_mode=mode,
+        category=str(max(1, min(count, 10))),
+        compare_to="often" if often and mode == "merchant_rank" else "",
+    )
 
 
 _PAST_PERIOD_RE = re.compile(
@@ -2633,6 +2699,25 @@ def _subscriptions_asked(spec, message, summary):
         )
     if not re.search(r"\bsubscriptions?\b|\brecurring (charges|payments|bills)\b", text):
         return None
+    ranked = re.search(
+        r"\b(most expensive|priciest|biggest|largest|costliest|cheapest|least expensive|"
+        r"smallest)\b.*\b(subscription|recurring (charge|payment|bill))\b",
+        text,
+    )
+    costs = re.search(r"\bsubscriptions? (?:costs?|charges?) (?:me )?the (most|least)\b", text)
+    if (ranked or costs) and not _PAST_PERIOD_RE.search(text):
+        # "what's my most expensive subscription": the Subs tab's, by monthly cost
+        cheap = (
+            ranked.group(1) in {"cheapest", "least expensive", "smallest"}
+            if ranked
+            else costs.group(1) == "least"
+        )
+        return QuerySpec(
+            task_type="data_pointer",
+            scope=spec.scope,
+            reason_mode="subscriptions",
+            compare_to="cheapest" if cheap else "priciest",
+        )
     if _PAST_PERIOD_RE.search(text):
         if re.search(r"\b(what|which|list|show|any)\b.*\bsubscriptions\b", text):
             # "what subscriptions did I have in april": that period's Subscriptions charges
@@ -2653,7 +2738,10 @@ def _subscriptions_asked(spec, message, summary):
             reason_mode="subscriptions",
             compare_to="list",
         )
-    if re.search(r"\b(cost|costs|costing|per month|a month|monthly|total|add up)\b", text):
+    if re.search(
+        r"\b(cost|costs|costing|per month|a month|each month|every month|monthly|total|add up)\b",
+        text,
+    ):
         return QuerySpec(
             task_type="data_pointer",
             scope=spec.scope,

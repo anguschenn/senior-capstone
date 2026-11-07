@@ -210,6 +210,52 @@ class ExamAccountAnswerTests(unittest.TestCase):
         self.assertIn("can't split 2026-06-08 to 2026-06-14 by category", reply)
         self.assertIn("about $175 in total", reply)
 
+    def test_rankings(self):
+        self.assertIn(
+            "Your biggest expense from 2025-07 to 2026-06 was Apple Store at $1,200.00",
+            self.ask("What's my biggest purchase ever?"),
+        )
+        self.assertIn(
+            "the most expensive is Netflix $15.49",
+            self.ask("What's my most expensive subscription?"),
+        )
+        # pay on the 1st and 15th from July 2025, only the 1st in February
+        self.assertIn(
+            "most of your income came from ACME PAYROLL $57,500 (23 deposits). That covers 100%",
+            self.ask("Who sends me the most money?"),
+        )
+        # lunch every day for 350 days; Costco 6 x $150 less the $50 refund
+        self.assertIn(
+            "Corner Deli $3,500 (350 purchases), Apple Store $1,200 (1 purchase), Costco $850",
+            self.ask("Where do I shop the most?"),
+        )
+        self.assertIn(
+            "by purchases were Corner Deli $3,500 (350 purchases), Uber $700 (35 purchases)",
+            self.ask("Which store do I go to most often?"),
+        )
+
+        self.assertIn(
+            "the most expensive is Netflix", self.ask("Which subscription costs the most?")
+        )
+        # "where do I spend" is categories, not stores
+        self.assertNotIn("merchants", self.ask("Where do I spend the most money?"))
+        # a payer under half of the income is the biggest source, not "most of it"
+        summary = {
+            **self.summary,
+            "income_index": {
+                "ACME PAYROLL": {"months": {"2026-05": {"received": 2000.0, "count": 1}}},
+                "Venmo": {"months": {"2026-05": {"received": 1500.0, "count": 3}}},
+                "Zelle payment from ALICE": {
+                    "months": {"2026-05": {"received": 1500.0, "count": 2}}
+                },
+            },
+        }
+        reply = self.service.handle_chat(
+            {"prompt": "Who paid me the most in May?", "history": [], "spending_summary": summary},
+            user_id="u",
+        )["reply"]
+        self.assertIn("your biggest source of income was ACME PAYROLL $2,000", reply)
+
     def test_making_a_purchase_is_spending(self):
         self.assertTrue(
             self.ask("Did I make any purchases at Costco in April?").startswith(

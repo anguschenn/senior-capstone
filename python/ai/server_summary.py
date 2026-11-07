@@ -25,6 +25,7 @@ import re
 import threading
 import time
 
+from ai.response_utils import short_name
 from budget_progress import (
     budget_bucket_for_row,
     build_budget_progress,
@@ -303,9 +304,10 @@ def spending_detail(transactions: list[Tx]) -> tuple[dict, dict]:
 
 def income_detail(transactions: list[Tx]) -> dict:
     """income_index: money received per payer and month ("ACME PAYROLL", "Zelle payment
-    from ..."), counted as build_summary counts income, so a month's payers add up to
-    its income. Refunds are money back for a purchase, not income, and aren't in it.
-    Server only, like merchant_index."""
+    from ALICE HUANG"), counted as build_summary counts income, so a month's payers add
+    up to its income. Payers are named without the bank's reference numbers, so one
+    person's transfers or every ATM deposit add up together. Refunds are money back for a
+    purchase, not income, and aren't in it. Server only, like merchant_index."""
     payers: dict[str, dict[str, dict]] = {}
     for tx in transactions:
         if not tx.is_income or tx.kind == "refund":
@@ -313,7 +315,7 @@ def income_detail(transactions: list[Tx]) -> dict:
         amount = tx.income_amount
         if amount <= 0:
             continue
-        cell = payers.setdefault(tx.merchant, {}).setdefault(
+        cell = payers.setdefault(short_name(tx.merchant), {}).setdefault(
             _month_key(tx.date), {"received": 0.0, "count": 0}
         )
         cell["received"] += amount
