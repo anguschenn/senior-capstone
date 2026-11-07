@@ -29,6 +29,7 @@ class TypoFixTests(unittest.TestCase):
             "showing what i budgeted",
             "it feels like i spend a lot",
             "which category did i spend the least on",
+            "who sends me the most money",
         ):
             with self.subTest(text=text):
                 self.assertEqual(fix_typos(text), text)
