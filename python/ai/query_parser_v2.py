@@ -6,7 +6,7 @@ import re
 from datetime import date as date_cls
 from datetime import timedelta
 
-from .asked_period import asked_period, calendar_week, week_span
+from .asked_period import asked_period, calendar_week, since_weekday, week_span
 from .asked_period import months_back as _months_back
 from .asked_period import months_between as _months_between
 from .query_contracts import QuerySpec
@@ -5856,6 +5856,8 @@ def _day_span_spec(text, summary, scope):
     if _last_weekend_asked(text):
         # The latest Saturday and Sunday, or this weekend so far.
         saturday = today - timedelta(days=(today.weekday() - 5) % 7)
+        if today.weekday() >= 5 and re.search(r"\b(last|past|previous) weekend\b", text):
+            saturday -= timedelta(days=7)  # on a weekend, "last weekend" is the one before
         sunday = min(saturday + timedelta(days=1), today)
         return QuerySpec(
             task_type="day_span",
@@ -5885,6 +5887,19 @@ def _day_span_spec(text, summary, scope):
             metric="expenses",
             period_type="days",
             period_key=f"{year}-{month:02d}-{start:02d},{year}-{month:02d}-{end:02d}",
+            scope=scope,
+            category=_category_in(text, summary),
+        )
+    first = since_weekday(text, today)
+    if first and _amount_metric(text):
+        # "how much have I spent since monday": that day to today
+        return QuerySpec(
+            task_type="day_span",
+            metric={"income": "income", "net": "net", "both": "net"}.get(
+                _amount_metric(text), "expenses"
+            ),
+            period_type="days",
+            period_key=f"{first.isoformat()},{today.isoformat()}",
             scope=scope,
             category=_category_in(text, summary),
         )

@@ -37,6 +37,8 @@ _ONE_WEEK_RE = re.compile(r"\b(this|last|past|current|previous) week\b")
 # last week" is the last 7 days
 _CALENDAR_WEEK_RE = re.compile(r"(?<!\bthe )\b(this|last|current) week\b|\b(previous) week\b")
 _SINCE_RE = re.compile(r"\bsince (?:the (?:start|beginning) of )?([a-z]+)\b")
+_WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+_SINCE_DAY_RE = re.compile(rf"\bsince (last )?({'|'.join(_WEEKDAYS)})\b")
 _SPAN_RE = re.compile(r"\b(?:between|from)\b.*\b(?:and|to|through|thru|until)\b")
 _THIS_YEAR_RE = re.compile(r"\b(?:this year|so far this year|year to date|ytd)\b")
 
@@ -105,6 +107,19 @@ def week_span(which, today=None):
     return monday, today
 
 
+def since_weekday(text, today=None):
+    """The day "since monday" in lowercased `text` starts from: the latest Monday up to
+    today, or the one before today for "since last monday". None when it names none."""
+    match = _SINCE_DAY_RE.search(text)
+    if not match:
+        return None
+    today = today or dt.date.today()
+    back = (today.weekday() - _WEEKDAYS.index(match.group(2))) % 7
+    if match.group(1) and back == 0:
+        back = 7
+    return today - dt.timedelta(days=back)
+
+
 def asked_period(text, summary):
     """The several-month or several-day period lowercased `text` asks about, else None
     (a single month, a day, or no period at all)."""
@@ -140,6 +155,12 @@ def asked_period(text, summary):
             label=f"for {which} week",
             days=(last - first).days + 1,
             last_day=last if which == "last" else None,
+        )
+    first = since_weekday(text)
+    if first:
+        name = _SINCE_DAY_RE.search(text).group(2).capitalize()
+        return AskedPeriod(
+            kind="days", label=f"since {name}", days=(dt.date.today() - first).days + 1
         )
     year = int(current[:4])
     match = _SINCE_RE.search(text)
