@@ -272,6 +272,26 @@ class ExamAccountAnswerTests(unittest.TestCase):
             )
         )
 
+    def test_yes_or_no_and_no_stray_notes(self):
+        # June so far: Food $150 of $305 (on pace for $300); Transport $40 of $65 (pace $80)
+        self.assertTrue(self.ask("Will I go over my food budget this month?").startswith("No. "))
+        self.assertTrue(
+            self.ask("Will I go over my transport budget this month?").startswith("Yes. ")
+        )
+        # this week $30 (Monday) against $25.49 last Monday
+        self.assertTrue(self.ask("Did I spend more this week than last week?").startswith("Yes. "))
+        for prompt in (
+            "How much budget do I have left for food?",
+            "How many days in May did I not spend anything?",
+        ):
+            with self.subTest(prompt=prompt):
+                self.assertNotIn("doesn't cover", self.ask(prompt))
+
+        # a threshold isn't a day with no spending
+        self.assertNotIn(
+            "had no spending", self.ask("How many days did I not spend more than $50 in May?")
+        )
+
     def test_cash_deposits_are_a_payer(self):
         summary = {
             **self.summary,

@@ -1097,6 +1097,9 @@ def _outside_summary_spec(text, summary, scope):
             # the Budget tab's "Left to spend"
             else "left"
             if re.search(r"\b(left|remaining|remain)\b", text)
+            # "will I go over my food budget": yes when over or on pace to go over
+            else "yes_will_go_over"
+            if re.match(r"^(will|am i going to|am i gonna|is it going to)\b.*\bover\b", text)
             else "yes_no"
             if re.match(r"^(am|is|are|was|were|did|do|have|has)\b.*\bover\b", text)
             # "am I on track": yes means nothing is over or on pace to go over
@@ -5284,7 +5287,14 @@ def _week_compare_spec(text, summary, scope):
         )
     if not re.search(r"\bthis week\b.*\blast week\b|\blast week\b.*\bthis week\b", text):
         return None
-    return QuerySpec(task_type="week_compare", metric="expenses", scope=scope)
+    asks = ""
+    if re.match(r"^(did|have|am|was|is|are|do)\b", text):
+        # "did I spend more this week than last week": lead with yes or no
+        if re.search(r"\b(more|higher|over|above)\b", text):
+            asks = "asked_more"
+        elif re.search(r"\b(less|lower|under|below|fewer)\b", text):
+            asks = "asked_less"
+    return QuerySpec(task_type="week_compare", metric="expenses", scope=scope, compare_to=asks)
 
 
 def asks_for_advice(message):
@@ -6229,7 +6239,10 @@ def _month_outlook_spec(text, summary, scope):
 def _no_spend_days_spec(text, summary, scope):
     if not re.search(
         r"\b(days|day) (did i|i) (spend|spent) (nothing|zero|no money)\b|\bno spend days\b|"
-        r"\bzero spend days\b|\bdays without spending\b",
+        r"\bzero spend days\b|\bdays without spending\b|"
+        # "how many days in october did I not spend anything"
+        r"\bdays\b.{0,30}\b(not|didn t|never) (spend|spent)\b"
+        r"(?!.*\b(more|less|over|under|than|on|at)\b)",
         text,
     ):
         return None
