@@ -2264,7 +2264,9 @@ class ChatService:
         r"^(Yes|No|Probably|Not yet)\b|\b(over|under|above|below) \$\d", re.IGNORECASE
     )
     _ASKS_COUNT_RE = re.compile(r"\bhow many (months|weeks|days)\b")
-    _ANSWERED_COUNT_RE = re.compile(r"\b\d+ of (your|the)\b|\bIn \d+ of\b")
+    _ANSWERED_COUNT_RE = re.compile(
+        r"\b\d+ of (your|the)\b|\bIn \d+ of\b|\b\d+ of \d+ (days|weeks|months)\b"
+    )
     _ASKS_SPEND_RE = re.compile(r"\b(spend|spent|spending|expenses?|cost|costs)\b")
     _ANSWERED_INCOME_RE = re.compile(
         r"income|earned|money into|card payments|not income|paycheck", re.IGNORECASE
@@ -2440,7 +2442,12 @@ class ChatService:
         if self._ASKS_INCOME_RE.search(text) and not spend:
             if not self._ANSWERED_INCOME_RE.search(reply):
                 missing.append("income")
-        elif self._ASKS_NET_RE.search(text) and not self._ANSWERED_NET_RE.search(reply):
+        elif (
+            self._ASKS_NET_RE.search(text)
+            # "how much budget do I have left" is a budget's room, not net cash flow
+            and not re.search(r"\bbudget", text)
+            and not self._ANSWERED_NET_RE.search(reply)
+        ):
             missing.append("net cash flow")
         if self._ASKS_EXTREME_RE.search(text) and not self._ANSWERED_EXTREME_RE.search(reply):
             missing.append("which one was highest or lowest")
