@@ -256,6 +256,40 @@ class ExamAccountAnswerTests(unittest.TestCase):
         )["reply"]
         self.assertIn("your biggest source of income was ACME PAYROLL $2,000", reply)
 
+    def test_merchants_counts_and_slang(self):
+        self.assertTrue(
+            self.ask("Did I spend anything at Walmart last month?").startswith(
+                "No. I don't see any charges from Walmart"
+            )
+        )
+        self.assertIn("You spent $92.94 at Netflix", self.ask("netflix this year"))
+        self.assertIn("made 31 Food purchases", self.ask("How many times did I eat out in May?"))
+        self.assertIn("about $637", self.ask("How much did I blow last month?"))
+
+        self.assertTrue(
+            self.ask("Did I make any purchases at the Apple Store in March?").startswith(
+                "Yes. You spent $1,200.00 at Apple Store in 2026-03"
+            )
+        )
+
+    def test_cash_deposits_are_a_payer(self):
+        summary = {
+            **self.summary,
+            "income_index": {
+                **self.summary["income_index"],
+                "ATM CASH DEPOSIT": {"months": {"2026-05": {"received": 300.0, "count": 1}}},
+            },
+        }
+        reply = self.service.handle_chat(
+            {
+                "prompt": "How much cash did I deposit last month?",
+                "history": [],
+                "spending_summary": summary,
+            },
+            user_id="u",
+        )["reply"]
+        self.assertIn("Your income from ATM CASH DEPOSIT in 2026-05 was $300.00", reply)
+
     def test_making_a_purchase_is_spending(self):
         self.assertTrue(
             self.ask("Did I make any purchases at Costco in April?").startswith(
