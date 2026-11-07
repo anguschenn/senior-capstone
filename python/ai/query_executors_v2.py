@@ -2379,6 +2379,14 @@ def _exec_day_span(query_spec, summary, scope_label):
             "period_resolved": f"{start} to {end}",
         }
     if total < 0.5:
+        synced = _synced_through(summary)
+        if synced and start > synced:
+            # "this weekend" when the bank's latest transactions are from Thursday
+            return _pointer(
+                f"Your latest synced transaction is from {synced}, so I don't see any spending "
+                f"from {start} to {end} yet.",
+                "Ask again after your next bank sync.",
+            )
         # Days can hold only deposits or transfers in, which aren't spending.
         return _pointer(
             f"I don't see any spending for {scope_label} from {start} to {end}.",
@@ -3929,6 +3937,11 @@ def _asked_months(query_spec, summary):
     return months, data
 
 
+def _for_days(label):
+    """ "for the last 10 days", "for this week", or "since Monday" as it is."""
+    return label if label.startswith("since ") else f"for {label}"
+
+
 def _income_from(query_spec, summary, scope_label):
     """ "how much did I get from Zelle since may": money received from a payer over the
     months asked (or all the data), from income_index."""
@@ -3938,7 +3951,7 @@ def _income_from(query_spec, summary, scope_label):
     if query_spec.period_type == "days":
         return _pointer(
             f"Chat has the money each payer sent by month, not by day, so it can't add up "
-            f"{label} for {query_spec.period_key}. Ask about this month or a month by name.",
+            f"{label} {_for_days(query_spec.period_key)}. Ask about this month or a month by name.",
             f"Search Activity for {label} to see those days.",
         )
     months, data = _asked_months(query_spec, summary)
@@ -4020,7 +4033,7 @@ def _merchant_spending(query_spec, summary, scope_label):
     if query_spec.period_type == "days":
         return _pointer(
             f"Chat has each merchant's spending by month, not by day, so it can't add up "
-            f"{label} for {query_spec.period_key}. Ask about this month or a month by name.",
+            f"{label} {_for_days(query_spec.period_key)}. Ask about this month or a month by name.",
             f"Search Activity for {label} to see those days.",
         )
     months, data = _asked_months(query_spec, summary)
@@ -4665,6 +4678,13 @@ def _exec_what_if_cancel(query_spec, summary, scope_label):
     }
 
 
+def _synced_through(summary):
+    """The date of the latest transaction the summary counts ("2026-11-05"), else ""."""
+    coverage = summary.get("data_coverage") if isinstance(summary, dict) else None
+    end = str((coverage or {}).get("range_end") or "") if isinstance(coverage, dict) else ""
+    return end if re.match(r"^20\d{2}-\d{2}-\d{2}$", end) else ""
+
+
 def _exec_amount_day(query_spec, summary, scope_label):
     days = summary.get("day_index_recent")
     if not isinstance(days, dict) or not days:
@@ -4689,6 +4709,11 @@ def _exec_amount_day(query_spec, summary, scope_label):
         reply = (
             f"On {target}, total expenses for {scope_label} were about ${expenses:.2f} "
             f"across {count} {noun}."
+        )
+    elif _synced_through(summary) and target > _synced_through(summary):
+        reply = (
+            f"Your latest synced transaction is from {_synced_through(summary)}, so I don't see "
+            f"any spending on {target} yet."
         )
     else:
         reply = f"I don't see any recorded spending on {target} for {scope_label}."

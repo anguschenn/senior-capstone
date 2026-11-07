@@ -159,6 +159,29 @@ class ExamAccountAnswerTests(unittest.TestCase):
         # where all the pay comes from is the income total
         self.assertIn("total income", self.ask("How much did I earn from my day job last month?"))
 
+    def test_since_a_weekday_and_last_weekend(self):
+        # Monday June 15: lunch $10 and Uber $20
+        self.assertIn(
+            "On 2026-06-15, you spent about $30", self.ask("How much have I spent since Monday?")
+        )
+        # June 8 to 15: lunch $80, Netflix $15.49, Target $60, Regal $30, Uber $20
+        self.assertIn(
+            "From 2026-06-08 to 2026-06-15, you spent about $205",
+            self.ask("How much have I spent since last Monday?"),
+        )
+        # on Saturday June 13, last weekend is June 6 and 7: lunch alone
+        exam_fixture.pin_today(self, exam_fixture.TODAY.replace(day=13))
+        self.assertIn(
+            "From 2026-06-06 to 2026-06-07, you spent about $20",
+            self.ask("How much did I spend last weekend?"),
+        )
+        # after the latest transaction (June 15), there's nothing to count yet
+        exam_fixture.pin_today(self, exam_fixture.TODAY.replace(day=17))
+        self.assertIn(
+            "Your latest synced transaction is from 2026-06-15",
+            self.ask("How much did I spend yesterday?"),
+        )
+
     def test_making_a_purchase_is_spending(self):
         self.assertTrue(
             self.ask("Did I make any purchases at Costco in April?").startswith(
