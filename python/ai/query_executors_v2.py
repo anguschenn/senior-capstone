@@ -2080,9 +2080,13 @@ def _exec_week_compare(query_spec, summary, scope_label):
         whole = total(last_start.isoformat(), (this_start - timedelta(days=1)).isoformat())
         gap = now - before
         so_far = "" if today.weekday() == 6 else " so far"
+        lead = ""
+        if query_spec.compare_to in {"asked_more", "asked_less"}:
+            more = gap > 0 if query_spec.compare_to == "asked_more" else gap < 0
+            lead = "Yes. " if more and abs(gap) >= 0.5 else "No. "
         return {
             "reply": (
-                f"This week{so_far} ({this_start.isoformat()} to {today.isoformat()}) you've "
+                f"{lead}This week{so_far} ({this_start.isoformat()} to {today.isoformat()}) you've "
                 f"spent about ${now:.0f} for {scope_label}, vs about ${before:.0f} over the "
                 f"same days last week ({last_start.isoformat()} to {last_same.isoformat()}): "
                 f"${abs(gap):.0f} {'more' if gap > 0 else 'less'}. Last week came to about "
@@ -4468,11 +4472,15 @@ def _budget_status(query_spec, summary):
             reply += (
                 f" At this pace you'd reach about ${pace(item):.0f} by month end, over the limit."
             )
-        if query_spec.compare_to in {"yes_no", "yes_within", "yes_on_track"}:
+        if query_spec.compare_to in {"yes_no", "yes_within", "yes_on_track", "yes_will_go_over"}:
             # "was I over my food budget": Yes when over; "did I stay within it": the
-            # reverse; "am I on track": no when over or on pace to go over
+            # reverse; "am I on track": no when over or on pace to go over; "will I go
+            # over": yes when over already or on pace to
+            over_or_pace = left < 0 or bool(progress and pace(item) > limit)
             if query_spec.compare_to == "yes_on_track":
-                said = left >= 0 and not (progress and pace(item) > limit)
+                said = not over_or_pace
+            elif query_spec.compare_to == "yes_will_go_over":
+                said = over_or_pace
             else:
                 said = (left < 0) == (query_spec.compare_to == "yes_no")
             reply = f"{'Yes' if said else 'No'}. {reply}"
@@ -4552,6 +4560,8 @@ def _budget_status(query_spec, summary):
         lead = "No. " if over else "Yes, so far. "
     elif query_spec.compare_to == "yes_on_track":
         lead = "No. "  # something is over, or on pace to go over
+    elif query_spec.compare_to == "yes_will_go_over":
+        lead = "Yes. "  # something is over, or on pace to go over
     return answer(
         f"{lead}For {month}: " + " ".join(parts) + tail, "Open the Budget tab to adjust a limit."
     )
