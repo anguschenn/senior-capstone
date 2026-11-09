@@ -1945,9 +1945,15 @@ def _exec_extra_spend(query_spec, summary, scope_label):
     after = net - extra
     sign = "+" if after >= 0 else "-"
     verdict = "you'd still be ahead for the month" if after >= 0 else "you'd be behind"
+    # "spending is ahead of income by $558", not "income is ahead of spending by $-558"
+    ahead = (
+        f"your income is ahead of spending by ${net:.0f}"
+        if net >= 0
+        else f"your spending is ahead of income by ${-net:.0f}"
+    )
     return {
         "reply": (
-            f"So far in {target} your income is ahead of spending by ${net:.0f}. Spending "
+            f"So far in {target} {ahead}. Spending "
             f"${extra:.0f} more would leave {sign}${abs(after):.0f}, so {verdict}."
         ),
         "insights": ["Based on this month's income and spending so far."],
@@ -3133,6 +3139,21 @@ def _exec_data_pointer(query_spec, summary, scope_label):
             "I'm SmartSpend's assistant. I answer questions about your own spending and "
             "income from the accounts you've connected.",
             "Ask: How much did I spend this month?",
+        )
+    if mode == "how_it_works":
+        return _pointer(
+            "Every amount comes from your bank transactions, synced through Plaid. Code on the "
+            "server reads your question and adds those transactions up, so the AI model never "
+            "does the math. The model only helps with unusual wording and writes advice, and "
+            "any advice sentence with an amount that isn't in your data is removed. Each answer "
+            "says which period it covers, so you can check it against the Activity tab.",
+            "Open Activity to see the transactions behind an answer.",
+        )
+    if mode == "off_topic":
+        return _pointer(
+            "I only answer questions about your own money: spending, income, budgets and "
+            "subscriptions. Try: How much did I spend this month?",
+            "Ask about a month, a category or a budget.",
         )
     if mode == "products":
         return _pointer(

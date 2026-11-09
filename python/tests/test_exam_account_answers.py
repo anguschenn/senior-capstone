@@ -310,6 +310,38 @@ class ExamAccountAnswerTests(unittest.TestCase):
         )["reply"]
         self.assertIn("Your income from ATM CASH DEPOSIT in 2026-05 was $300.00", reply)
 
+    def test_how_answers_are_made_and_off_topic_asks(self):
+        for prompt in (
+            "How do you calculate these numbers?",
+            "How do I know your answer is correct?",
+            "How did you get $747 for food?",
+        ):
+            with self.subTest(prompt=prompt):
+                reply = self.ask(prompt)
+                self.assertIn("the AI model never does the math", reply)
+                self.assertNotIn("doesn't cover", reply)
+        self.assertIn(
+            "I only answer questions about your own money", self.ask("What's the weather today?")
+        )
+        # still data questions
+        for prompt in ("Is my food budget right?", "Is the food total for May correct?"):
+            with self.subTest(prompt=prompt):
+                self.assertNotIn("never does the math", self.ask(prompt))
+
+    def test_spending_ahead_of_income_reads_as_spending(self):
+        june = {**self.summary["month_index"]["2026-06"], "income": 100.0}
+        summary = {**self.summary, "month_index": {**self.summary["month_index"], "2026-06": june}}
+        reply = self.service.handle_chat(
+            {
+                "prompt": "Can I afford a $500 purchase this month?",
+                "history": [],
+                "spending_summary": summary,
+            },
+            user_id="u",
+        )["reply"]
+        self.assertIn("your spending is ahead of income by $", reply)
+        self.assertNotIn("$-", reply)
+
     def test_making_a_purchase_is_spending(self):
         self.assertTrue(
             self.ask("Did I make any purchases at Costco in April?").startswith(
