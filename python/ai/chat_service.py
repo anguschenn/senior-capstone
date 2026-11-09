@@ -2278,7 +2278,8 @@ class ChatService:
     _EXPLAINED_RE = re.compile(
         r"can't|cannot|doesn't get|don't see|isn't tracked|hasn't happened|haven't happened|"
         r"data starts|not income|first month in your data|I read this as|Chat (only|doesn't)|"
-        r"no spending split by category|No category|only has",
+        r"no spending split by category|No category|only has|never does the math|"
+        r"I only answer questions",
         re.IGNORECASE,
     )
 
