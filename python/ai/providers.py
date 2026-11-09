@@ -15,7 +15,16 @@ from config import (
     OPENROUTER_MODEL,
 )
 
-_DEFAULT_TIMEOUT_SECONDS = 60
+# The app gives up on an answer after 30 seconds, so a model call stops at 20 and the
+# question gets its rules-only answer instead of a timeout error in the app.
+_DEFAULT_TIMEOUT_SECONDS = 20
+# After a call times out, model calls fail at once for a minute, so a question that would
+# ask a slow model twice (reword, then classify) still answers before the app gives up.
+_SLOW_PAUSE_SECONDS = 60
+_slow_until = 0.0
+# Keep the local model loaded between questions; reloading it adds seconds to the next one.
+_OLLAMA_KEEP_ALIVE = "30m"
+
 _OPENROUTER_MAX_RETRIES = 2
 
 
@@ -51,6 +60,7 @@ def _generate_ollama_reply(prompt, generation_config=None):
         # Thinking models (qwen3.5) otherwise reason for about a minute before a one-line
         # answer; models without thinking ignore this.
         "think": False,
+        "keep_alive": _OLLAMA_KEEP_ALIVE,
     }
     # Ollama reads sampling settings only from "options"; top-level temperature and
     # num_predict are ignored, which made the same question route differently each time.
@@ -158,11 +168,26 @@ def _generate_openrouter_reply(prompt, generation_config=None):
     return text
 
 
+def _timed_out(error):
+    """Whether a urlopen error is a timeout (on connect it comes wrapped in a URLError)."""
+    return isinstance(error, TimeoutError) or isinstance(
+        getattr(error, "reason", None), TimeoutError
+    )
+
+
 def generate_llm_reply(prompt, generation_config=None):
+    global _slow_until
+    if time.monotonic() < _slow_until:
+        raise RuntimeError("The model timed out a moment ago; answering without it for now")
     provider = _provider_name()
-    if provider == "openrouter":
-        return _generate_openrouter_reply(prompt, generation_config=generation_config)
-    return _generate_ollama_reply(prompt, generation_config=generation_config)
+    try:
+        if provider == "openrouter":
+            return _generate_openrouter_reply(prompt, generation_config=generation_config)
+        return _generate_ollama_reply(prompt, generation_config=generation_config)
+    except (TimeoutError, urllib.error.URLError) as error:
+        if _timed_out(error):
+            _slow_until = time.monotonic() + _SLOW_PAUSE_SECONDS
+        raise
 
 
 def ping_llm():

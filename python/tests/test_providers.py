@@ -68,6 +68,44 @@ class OllamaRequestTests(unittest.TestCase):
         self.assertEqual(reply, '{"reply":"ok"}')
         self.assertEqual([("format" in body) for body in sent], [True, False])
 
+    def test_the_model_stays_loaded_between_questions(self):
+        self.assertEqual(self._sent_body(None)["keep_alive"], "30m")
+
+
+class SlowModelTests(unittest.TestCase):
+    def setUp(self):
+        for patch in (
+            mock.patch.object(providers, "AI_PROVIDER", "ollama"),
+            mock.patch.object(providers, "_slow_until", 0.0),
+        ):
+            patch.start()
+            self.addCleanup(patch.stop)
+
+    def _ask(self, error):
+        calls = []
+
+        def fake_urlopen(req, timeout=None, **_kwargs):
+            calls.append(timeout)
+            raise error
+
+        with mock.patch.object(providers.urllib.request, "urlopen", fake_urlopen):
+            for _ in range(2):
+                with self.assertRaises(Exception):
+                    providers.generate_llm_reply("hi")
+        return calls
+
+    def test_a_timeout_skips_the_model_for_a_while(self):
+        # the app gives up after 30 seconds, so the next call answers without the model
+        self.assertEqual(self._ask(TimeoutError("timed out")), [20])
+
+    def test_a_timeout_while_connecting_counts_too(self):
+        error = providers.urllib.error.URLError(TimeoutError("timed out"))
+        self.assertEqual(self._ask(error), [20])
+
+    def test_other_errors_keep_asking_the_model(self):
+        error = providers.urllib.error.URLError(ConnectionRefusedError("refused"))
+        self.assertEqual(self._ask(error), [20, 20])
+
 
 class OpenRouterRequestTests(unittest.TestCase):
     def _run(self, fail_first_with=None):
