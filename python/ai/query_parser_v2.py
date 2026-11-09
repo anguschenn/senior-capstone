@@ -724,8 +724,37 @@ _SMALL_TALK_WORDS = set(
 )
 
 
+# "how do you calculate these numbers", "how do I know your answer is correct"
+_HOW_IT_WORKS_RE = re.compile(
+    r"\bhow (do|did|does|can) (you|chat|the app|smartspend) (calculate|compute|work out|"
+    r"figure out|come up with|get|know|count|add up)\b|"
+    r"\bhow (are|were|is|was) (these|those|the|this|that|your|my) (numbers?|answers?|amounts?|"
+    r"figures?|totals?|data) (calculated|computed|worked out|made|counted|checked)\b|"
+    r"\bwhere (do|does|did) (these|those|the|this|that|your) (numbers?|answers?|amounts?|"
+    r"figures?|totals?|data|info|information) come from\b|"
+    r"\bhow (do|can|would) i (know|be sure|tell|trust|verify|check) (that )?(you|your|these|this|"
+    r"those|it|the (answers?|numbers?|data))\b(?!.*\b(spent|spend|budget|income|over|under)\b)|"
+    r"\b(is|are) (this|that|these|those|your|the)( (answers?|numbers?|figures?|data|amounts?|"
+    r"totals?|information))? (accurate|correct|right|reliable|trustworthy|real)\b|"
+    r"\bcan i trust (you|this|these|that|your|the|it)\b|"
+    r"\b(do|did) you (use|call|run) (ai|an ai|a model|an llm|chatgpt|gpt|a language model)\b|"
+    r"\bare you (an? )?(ai|llm|chatgpt|gpt|language model)\b|"
+    r"\bdo you (make (things|numbers|stuff) up|hallucinate)\b"
+)
+# Asks about something other than the user's money: "what's the weather today"
+_OFF_TOPIC_RE = re.compile(
+    r"\b(weather|weather forecast|the news|headlines|tell me a joke|a joke|recipe|recipes|"
+    r"sports? scores?|who won|capital of|translate)\b|"
+    r"\bwrite (me )?(a|an) (poem|essay|story|song)\b"
+)
+
+
 def _boundary_spec(text, scope):
     """Asks that are outside what this assistant should answer from the user's data."""
+    if _HOW_IT_WORKS_RE.search(text):
+        return QuerySpec(task_type="data_pointer", scope=scope, reason_mode="how_it_works")
+    if _OFF_TOPIC_RE.search(text):
+        return QuerySpec(task_type="data_pointer", scope=scope, reason_mode="off_topic")
     capabilities = re.search(
         r"\b(what can you do|what do you do|how can you help|what can i ask|help me use|"
         r"what can you help( me)? with|what are you able to do|how do you work)\b",

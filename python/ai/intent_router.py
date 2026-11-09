@@ -722,7 +722,8 @@ class IntentRouter:
 
         if llm_parsed is None:
             return self._clarification_result(
-                "Please clarify your request with a metric and time period.",
+                "I didn't catch that. I answer questions about your spending, income, budgets "
+                "and subscriptions, for example: How much did I spend on food last month?",
                 source="llm",
             )
 
