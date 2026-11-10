@@ -716,7 +716,7 @@ class TestChatServiceV2Regression(unittest.TestCase):
             ("how much have I spent since the start of april", "For 2026-04 to 2026-05"),
             ("what can you do?", "I answer questions about your own spending"),
             ("how do I add another bank?", "Add Bank"),
-            ("is my data private?", "summary of your own accounts"),
+            ("is my data private?", "Your bank login goes to Plaid"),
         ]
         for prompt, expected in cases:
             with self.subTest(prompt=prompt):
