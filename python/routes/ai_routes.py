@@ -3,7 +3,7 @@
 from flask import Blueprint, current_app, jsonify, request
 
 from ai import server_summary
-from ai.providers import current_llm_info, use_provider
+from ai.providers import answer_within, current_llm_info, use_provider
 from ai.response_utils import confidence_label, short_copy
 from ai.validators import clamp_str
 from api.http_helpers import log_route_error
@@ -14,6 +14,9 @@ ai_bp = Blueprint("ai", __name__)
 
 
 _MODEL_SOURCES = {"local": "ollama", "online": "openrouter"}
+# The app stops waiting for a chat answer after 30 seconds. A question's model calls share
+# 25 of them (counted from when the request arrives); after that the rules answer alone.
+_CHAT_MODEL_SECONDS = 25
 
 
 def _switched_provider(body):
@@ -50,6 +53,11 @@ def _with_server_summary(body, user_id):
 
 @ai_bp.route("/api/ai/chat", methods=["POST"])
 def ai_chat():
+    with answer_within(_CHAT_MODEL_SECONDS):
+        return _ai_chat()
+
+
+def _ai_chat():
     body = request.get_json(silent=True) or {}
     try:
         user_id = require_supabase_user_id()
