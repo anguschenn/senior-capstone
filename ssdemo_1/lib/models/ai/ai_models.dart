@@ -76,7 +76,8 @@ class AiBudgetAlert {
 
   factory AiBudgetAlert.fromJson(Map<String, dynamic> json) {
     return AiBudgetAlert(
-      category: (json['category'] ?? 'Unknown').toString(),
+      // Server burn-rate alerts carry no category; their message already names it.
+      category: (json['category'] ?? '').toString(),
       severity: (json['severity'] ?? json['level'] ?? 'med').toString(),
       reason: (json['reason'] ?? json['message'] ?? '').toString(),
     );

@@ -200,7 +200,10 @@ class BudgetAiAnalysisCard extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(bottom: 6),
                   child: Text(
-                    '• [${item.severity}] ${item.category}: ${item.reason}',
+                    item.category.isEmpty ||
+                            item.reason.startsWith(item.category)
+                        ? '• [${item.severity}] ${item.reason}'
+                        : '• [${item.severity}] ${item.category}: ${item.reason}',
                   ),
                 ),
             ],
