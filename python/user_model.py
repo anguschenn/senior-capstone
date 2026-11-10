@@ -237,10 +237,12 @@ def build_suggestions(
     alerts: list[dict],
     past_limits: dict[str, dict[str, float]] | None = None,
 ) -> list[dict]:
-    """Only for cards with an alert this month whose limit is below the user's normal month
+    """For cards with an alert this month whose limit is below the user's normal month
     (history_limit): suggest raising it to that normal. Spending above one's own normal gets
-    the alert alone. past_limits ({month: {card_key: limit}}) feeds months_over, the number
-    of history months the card ended over its limit."""
+    the alert alone. Also for cards with no limit at all that the user didn't set to $0
+    themselves (limit_source 'auto'): suggest that normal as a first limit, so nobody has to
+    type every limit by hand; transfers are left out. past_limits ({month: {card_key:
+    limit}}) feeds months_over, the number of history months the card ended over its limit."""
     alerted = {str(a["category_id"]) for a in alerts}
     names = [category_names_by_id.get(str(r.get("category_id") or ""), "") for r in budget_rows]
     history = card_history(stats, [n for n in names if n], month)
@@ -249,12 +251,19 @@ def build_suggestions(
     for row, name in zip(budget_rows, names):
         budget_id = str(row.get("id") or "").strip()
         category_id = str(row.get("category_id") or "").strip()
-        if not budget_id or category_id not in alerted or not name:
+        if not budget_id or not name:
+            continue
+        current = float(row.get("monthly_limit") or 0)
+        unset = (
+            current <= 0
+            and (row.get("limit_source") or "user") == "auto"
+            and "transfer" not in name.lower()
+        )
+        if category_id not in alerted and not unset:
             continue
         key = normalize_category_key(name)
         spend = history["spend"].get(key, [])
         suggested = history_limit(spend)
-        current = float(row.get("monthly_limit") or 0)
         if suggested is None or suggested <= current:
             continue
         change = suggested - current
@@ -277,6 +286,7 @@ def build_suggestions(
                 "suggested_limit": suggested,
                 "basis": {
                     "method": "trimmed_mean",
+                    "reason": "no_limit" if unset else "below_usual",
                     "months": history["months"],
                     "monthly_spend": spend,
                     "months_over": months_over,
