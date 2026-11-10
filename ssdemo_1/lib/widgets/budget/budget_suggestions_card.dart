@@ -36,6 +36,7 @@ class BudgetSuggestionsCard extends StatefulWidget {
 class _BudgetSuggestionsCardState extends State<BudgetSuggestionsCard> {
   List<BudgetSuggestion> _items = const [];
   final Set<String> _busy = {};
+  bool _acceptingAll = false;
 
   String get _monthKey => monthKeyOf(widget.month);
 
@@ -122,6 +123,40 @@ class _BudgetSuggestionsCardState extends State<BudgetSuggestionsCard> {
     if (value != null) await _decide(item, 'edited', limit: value);
   }
 
+  /// Accepts every suggestion shown, one after another. Stops at the first one
+  /// that fails (it has said so), leaving the rest in the list.
+  Future<void> _acceptAll() async {
+    setState(() => _acceptingAll = true);
+    try {
+      for (final item in [..._items]) {
+        if (!mounted) return;
+        await _decide(item, 'accepted', limit: item.suggestedLimit);
+        if (_items.contains(item)) break;
+      }
+    } finally {
+      if (mounted) setState(() => _acceptingAll = false);
+    }
+  }
+
+  /// What the suggestions are, by whether the categories have a limit yet.
+  String get _intro {
+    const usual =
+        'Your usual month leaves out your highest and lowest. Nothing '
+        'changes unless you accept.';
+    final unset = _items.where((i) => i.currentLimit <= 0).length;
+    if (unset == 0) {
+      return _items.length == 1
+          ? 'This limit is below what you usually spend. $usual'
+          : 'These limits are below what you usually spend. $usual';
+    }
+    if (unset == _items.length) {
+      return unset == 1
+          ? 'This category has no limit yet. $usual'
+          : 'These categories have no limit yet. $usual';
+    }
+    return 'Limits from what you usually spend. $usual';
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_items.isEmpty) return const SizedBox.shrink();
@@ -133,17 +168,28 @@ class _BudgetSuggestionsCardState extends State<BudgetSuggestionsCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Suggested limits',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Suggested limits',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+              ),
+              if (_items.length >= 2)
+                TextButton(
+                  onPressed: _busy.isEmpty && !_acceptingAll
+                      ? _acceptAll
+                      : null,
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  child: const Text('Accept all'),
+                ),
+            ],
           ),
           const SizedBox(height: 4),
-          Text(
-            'This limit is below what you usually spend. Your usual month '
-            'leaves out your highest and lowest. Nothing changes unless you '
-            'accept.',
-            style: TextStyle(fontSize: 12, color: c.muted),
-          ),
+          Text(_intro, style: TextStyle(fontSize: 12, color: c.muted)),
           for (final item in _items) _row(item),
         ],
       ),
@@ -152,7 +198,7 @@ class _BudgetSuggestionsCardState extends State<BudgetSuggestionsCard> {
 
   Widget _row(BudgetSuggestion item) {
     final c = context.colors;
-    final busy = _busy.contains(item.id);
+    final busy = _acceptingAll || _busy.contains(item.id);
     final current = item.currentLimit > 0
         ? formatMoney(item.currentLimit, signed: false)
         : 'no limit';

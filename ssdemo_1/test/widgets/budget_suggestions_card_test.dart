@@ -31,6 +31,20 @@ BudgetSuggestion _food() => BudgetSuggestion.fromRow({
   },
 })!;
 
+BudgetSuggestion _unset(String id, String category, int suggested) =>
+    BudgetSuggestion.fromRow({
+      'id': id,
+      'budget_id': 'b-$id',
+      'category': category,
+      'current_limit': 0,
+      'suggested_limit': '$suggested.00',
+      'basis': {
+        'reason': 'no_limit',
+        'months': ['2026-04', '2026-05', '2026-06'],
+        'months_over': 0,
+      },
+    })!;
+
 Future<List<String>> _pump(WidgetTester tester, _FakeService service) async {
   final updates = <String>[];
   await tester.pumpWidget(
@@ -88,6 +102,37 @@ void main() {
     await tester.pumpAndSettle();
     expect(updates, ['b-food:260.0']);
     expect(service.decisions, ['s1:edited:260.0']);
+  });
+
+  testWidgets('categories with no limit get one suggested, all at once', (
+    tester,
+  ) async {
+    final service = _FakeService([
+      _unset('s2', 'Shopping', 545),
+      _unset('s3', 'Transport', 225),
+    ]);
+    final updates = await _pump(tester, service);
+    expect(find.text('Shopping: no limit → \$545.00'), findsOneWidget);
+    expect(find.text('Transport: no limit → \$225.00'), findsOneWidget);
+    expect(
+      find.textContaining('These categories have no limit yet.'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Accept all'));
+    await tester.pumpAndSettle();
+    expect(updates, ['b-s2:545.0', 'b-s3:225.0']);
+    expect(service.decisions, ['s2:accepted:545.0', 's3:accepted:225.0']);
+    expect(find.text('Suggested limits'), findsNothing);
+  });
+
+  testWidgets('one suggestion has no Accept all', (tester) async {
+    await _pump(tester, _FakeService([_food()]));
+    expect(find.text('Accept all'), findsNothing);
+    expect(
+      find.textContaining('This limit is below what you usually spend.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('nothing pending renders nothing', (tester) async {

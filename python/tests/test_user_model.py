@@ -198,6 +198,40 @@ class SuggestionTests(unittest.TestCase):
             user_model.build_suggestions(budgets, CATEGORIES, _stats(), "2026-10", []), []
         )
 
+    def test_a_card_with_no_limit_gets_its_normal_month_suggested(self):
+        # no alert is needed: the app filled in $0, so there is nothing to be over
+        budgets = [
+            {"id": "b-food", "category_id": "cat-food", "monthly_limit": 0, "limit_source": "auto"}
+        ]
+        (suggestion,) = user_model.build_suggestions(budgets, CATEGORIES, _stats(), "2026-10", [])
+        self.assertEqual(suggestion["category"], "Food")
+        self.assertEqual(suggestion["current_limit"], 0.0)
+        self.assertEqual(suggestion["suggested_limit"], 240.0)
+        self.assertEqual(suggestion["basis"]["reason"], "no_limit")
+
+    def test_a_zero_limit_the_user_set_is_left_alone(self):
+        for source in ("user", None):
+            with self.subTest(source=source):
+                budgets = [
+                    {
+                        "id": "b-food",
+                        "category_id": "cat-food",
+                        "monthly_limit": 0,
+                        "limit_source": source,
+                    }
+                ]
+                self.assertEqual(
+                    user_model.build_suggestions(budgets, CATEGORIES, _stats(), "2026-10", []), []
+                )
+
+    def test_transfers_get_no_first_limit(self):
+        names = {"cat-food": "Fees & Transfers"}
+        stats = [{**row, "category": "Fees & Transfers"} for row in _stats()]
+        budgets = [
+            {"id": "b-food", "category_id": "cat-food", "monthly_limit": 0, "limit_source": "auto"}
+        ]
+        self.assertEqual(user_model.build_suggestions(budgets, names, stats, "2026-10", []), [])
+
     def test_months_over_counts_history_months_over_their_limit(self):
         budgets = [{"id": "b-food", "category_id": "cat-food", "monthly_limit": 150}]
         alerts = [{"category_id": "cat-food"}]
