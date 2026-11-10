@@ -2,6 +2,7 @@
 
 from flask import Blueprint, current_app, jsonify, request
 
+import supabase_repo
 from ai import server_summary
 from ai.providers import answer_within, current_llm_info, use_provider
 from ai.response_utils import confidence_label, short_copy
@@ -24,6 +25,47 @@ def _switched_provider(body):
     if not current_app.config.get("model_switch_enabled") or not isinstance(body, dict):
         return ""
     return _MODEL_SOURCES.get(str(body.get("model_source") or "").lower(), "")
+
+
+# Users known to have a linked bank. Only "yes" is remembered (nothing unlinks a bank), so
+# someone who has just connected one can use the AI at once.
+_linked_users = set()
+
+
+def _has_linked_bank(user_id):
+    """Whether the user has connected a bank. The AI answers from the user's own
+    transactions: without a bank there is nothing to answer from, and no reason to pay
+    for a model call. A failed lookup counts as linked, so a database hiccup doesn't lock
+    real users out."""
+    if user_id in _linked_users:
+        return True
+    try:
+        linked = supabase_repo.has_linked_bank(user_id)
+    except Exception as error:
+        log_route_error("linked bank lookup", error)
+        return True
+    if linked:
+        _linked_users.add(user_id)
+    return linked
+
+
+def _connect_bank_reply():
+    """The chat answer for an account with no bank linked: no model call, no summary."""
+    return {
+        "reply": (
+            "Connect a bank account first. I answer from your own transactions, and this "
+            "account has no bank linked yet."
+        ),
+        "insights": [],
+        "actions": ["Open Wallet and tap +, or use Add Bank in Settings."],
+        "confidence": 1.0,
+        "citations": [],
+        "intent": "general",
+        "context_source": "no_linked_bank",
+        "answer_source": "no_linked_bank",
+        "used_summary": False,
+        "summary_meta": {"tx_count_30d": 0, "summary_empty": True},
+    }
 
 
 def _record_question(body, response):
@@ -63,6 +105,8 @@ def _ai_chat():
         user_id = require_supabase_user_id()
         if is_rate_limited_for_ai(user_id):
             return jsonify({"error": "Rate limit exceeded"}), 429
+        if not _has_linked_bank(user_id):
+            return jsonify(_connect_bank_reply())
         payload, summary_source = _with_server_summary(body, user_id)
         if payload is None:
             return jsonify({"retry_with_summary": True}), 200
@@ -116,7 +160,8 @@ def ai_budget_suggest():
         "view_mode": clamp_str(body.get("view_mode", "month"), 16) or "month",
         "spending_summary": body.get("spending_summary"),
         "budget_progress": body.get("budget_progress"),
-        "simplified": bool(body.get("simplified", False)),
+        # Without a linked bank the model isn't asked: the rule wording only.
+        "simplified": bool(body.get("simplified", False)) or not _has_linked_bank(user_id),
     }
     simplified = bool(predict_payload["simplified"])
     try:
@@ -172,6 +217,9 @@ def ai_predict():
         user_id = require_supabase_user_id()
         if is_rate_limited_for_ai(user_id):
             return jsonify({"error": "Rate limit exceeded"}), 429
+        if isinstance(body, dict) and not _has_linked_bank(user_id):
+            # Without a linked bank the model isn't asked: the rule wording only.
+            body = {**body, "simplified": True}
         response = current_app.config["predict_service"].handle_predict(body)
         return jsonify(response)
     except UserAuthError as error:
@@ -198,8 +246,9 @@ def ai_predict():
 def ai_suggest_category():
     body = request.get_json(silent=True) or {}
     try:
-        # Raises UserAuthError -> 401 for unauthenticated callers. The id only keys the
-        # rate limit; the suggestion is derived only from the posted transaction.
+        # Raises UserAuthError -> 401 for unauthenticated callers. The id keys the rate
+        # limit and the linked-bank check; the suggestion is derived only from the posted
+        # transaction.
         user_id = require_supabase_user_id()
         if is_rate_limited_for_ai(user_id):
             return jsonify({"error": "Rate limit exceeded"}), 429
@@ -210,6 +259,16 @@ def ai_suggest_category():
 
         if not merchant_name and not transaction_name:
             return jsonify({"error": "merchant_name or transaction_name required"}), 400
+
+        if not _has_linked_bank(user_id):
+            return jsonify(
+                {
+                    "suggested_category": "",
+                    "merchant_name": merchant_name,
+                    "transaction_name": transaction_name,
+                    "context_source": "no_linked_bank",
+                }
+            )
 
         # Build prompt for category suggestion
         context = f"Merchant: {merchant_name}\nDescription: {transaction_name}"
