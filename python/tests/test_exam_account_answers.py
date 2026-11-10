@@ -177,9 +177,19 @@ class ExamAccountAnswerTests(unittest.TestCase):
         )
         # after the latest transaction (June 15), there's nothing to count yet
         exam_fixture.pin_today(self, exam_fixture.TODAY.replace(day=17))
+        for prompt in ("How much did I spend yesterday?", "How much did I spend today?"):
+            with self.subTest(prompt=prompt):
+                reply = self.ask(prompt)
+                self.assertIn("Your latest synced transaction is from 2026-06-15", reply)
+                # and still gives a number: the latest synced day ($10 lunch, $20 Uber)
+                self.assertIn("On 2026-06-15, Overall (All Accounts) spent about $30.00.", reply)
+        # a week that starts after the latest transaction: the 7 days up to it
+        # (lunch June 9 to 15 $70, Target $60, Regal $30, Uber $20)
+        exam_fixture.pin_today(self, exam_fixture.TODAY.replace(day=22))
         self.assertIn(
-            "Your latest synced transaction is from 2026-06-15",
-            self.ask("How much did I spend yesterday?"),
+            "In the 7 days up to then (2026-06-09 to 2026-06-15), Overall (All Accounts) "
+            "spent about $180.",
+            self.ask("How much did I spend this week?"),
         )
 
     def test_a_follow_up_about_that_keeps_its_period(self):
@@ -371,7 +381,24 @@ class ExamAccountAnswerTests(unittest.TestCase):
                 "I want to save $1000 in 3 months. How much should I cut each month?"
             ).startswith("$1,000 over 3 months is about $333 a month. Saving $333 a month")
         )
-        self.assertIn("never does the math", self.ask("Are you using AI?"))
+        for prompt in ("Are you using AI?", "Is this a bot?", "Does the app use AI?"):
+            with self.subTest(prompt=prompt):
+                reply = self.ask(prompt)
+                self.assertTrue(reply.startswith("Yes, partly."), reply)
+                self.assertIn("never does the math", reply)
+        # not a yes-or-no question
+        self.assertTrue(self.ask("What model do you use?").startswith("Every amount comes"))
+        # the app's tab is called Wallet
+        for prompt in ("How much money do I have?", "How do I add another bank?"):
+            with self.subTest(prompt=prompt):
+                self.assertIn("Wallet tab", self.ask(prompt))
+        self.assertIn(
+            "Ask which category was highest in 2026-06.",
+            self.service.handle_chat(
+                {"prompt": "Predict my spending.", "history": [], "spending_summary": self.summary},
+                user_id="u",
+            )["actions"],
+        )
         self.assertIn(
             "can't recommend specific financial products", self.ask("Should I get a credit card?")
         )
