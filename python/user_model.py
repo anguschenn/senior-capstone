@@ -157,8 +157,10 @@ def auto_limits(
     """Limits for a new month's rows: {card name: {'limit', 'source'}}.
 
     previous maps a normalized card name to last month's {'limit', 'source'}. A limit the
-    user set is carried forward as is; otherwise the history-based limit; otherwise last
-    month's limit; otherwise $0. Only a user limit stays 'user'."""
+    user set is carried forward as is. A card with no limit last month stays at $0: nothing
+    is budgeted for the user out of nowhere, build_suggestions offers a limit to accept
+    instead. A limit the app set carries on as the history-based limit, or as last month's
+    when there is too little history. Only a user limit stays 'user'."""
     history = card_history(stats, card_names, month)
     out = {}
     for name in card_names:
@@ -167,11 +169,14 @@ def auto_limits(
         if prev and prev.get("source") == "user":
             out[name] = {"limit": float(prev["limit"]), "source": "user"}
             continue
+        if not prev or float(prev.get("limit") or 0) <= 0:
+            out[name] = {"limit": 0.0, "source": "auto"}
+            continue
         limit = history_limit(history["spend"].get(key, []))
         if limit is not None and limit > 0:
             out[name] = {"limit": limit, "source": "auto"}
             continue
-        out[name] = {"limit": float(prev["limit"]) if prev else 0.0, "source": "auto"}
+        out[name] = {"limit": float(prev["limit"]), "source": "auto"}
     return out
 
 
