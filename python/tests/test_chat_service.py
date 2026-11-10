@@ -6,7 +6,7 @@ os.environ["AI_ROUTER_V2_ENABLED"] = "0"
 
 from ai.chat_service import ChatService
 from ai.intent_router import IntentRouter
-from ai.validators import sanitize_spending_summary
+from ai.validators import clamp_sentences, sanitize_spending_summary
 
 
 class TestChatServiceContract(unittest.TestCase):
@@ -1467,6 +1467,31 @@ class TestChatServiceContract(unittest.TestCase):
         self.assertIsInstance(response.get("actions"), list)
         self.assertGreater(len(response["insights"]), 0)
         self.assertGreater(len(response["actions"]), 0)
+
+
+class TestClampSentences(unittest.TestCase):
+    def test_a_long_insight_ends_at_its_last_whole_sentence(self):
+        text = (
+            "Food ended over budget in 2026-10 ($747 of a $100 limit) and 2026-09. "
+            "Transport in 2026-10 ($205 of $100), Subscriptions in 2026-09 ($66 of $45), "
+            "and Entertainment in 2026-09 ($69 of $45)."
+        )
+        self.assertEqual(
+            clamp_sentences(text, 130),
+            "Food ended over budget in 2026-10 ($747 of a $100 limit) and 2026-09.",
+        )
+
+    def test_one_long_sentence_ends_at_a_whole_word(self):
+        self.assertEqual(clamp_sentences("cut food " * 30, 20), "cut food cut food…")
+
+    def test_a_short_first_sentence_isn_t_all_that_is_kept(self):
+        text = (
+            "Yes. Shopping is your largest category over the last 30 days at $935, ahead of Food."
+        )
+        self.assertEqual(clamp_sentences(text, 40), "Yes. Shopping is your largest category…")
+
+    def test_short_text_is_kept(self):
+        self.assertEqual(clamp_sentences("  Cook at home.  ", 220), "Cook at home.")
 
 
 class TestIntentRouterFallback(unittest.TestCase):
