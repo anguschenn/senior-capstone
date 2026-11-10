@@ -271,7 +271,9 @@ class ChatService:
     def _fallback_reply(self, intent, summary, message="", query_spec=None):
         """Return deterministic reply when model output is unavailable/invalid."""
         message_text = clamp_str(message or "", 4000).lower()
-        if intent in {"planning", "general"} and asks_for_advice(message or ""):
+        if intent in {"planning", "what_if"} or (
+            intent == "general" and asks_for_advice(message or "")
+        ):
             # Advice the model couldn't ground: one concrete, priced step instead of totals.
             asked = category_named(message or "", summary) if isinstance(summary, dict) else ""
             month_index = summary.get("month_index") if isinstance(summary, dict) else None
@@ -2156,6 +2158,12 @@ class ChatService:
             re.IGNORECASE,
         ):
             return prompt, ""  # a request to move money: the refusal covers every account
+        if match and re.search(
+            r"\b(card|account|routing) (number|numbers|no)\b|\b(cvv|cvc|security code)\b",
+            prompt or "",
+            re.IGNORECASE,
+        ):
+            return prompt, ""  # "what's my credit card number": the answer is about the number
         if not match or self._CARD_PAYMENT_ASK_RE.search(prompt or ""):
             # "how much did I pay toward my credit card" is about the payments themselves.
             return prompt, ""

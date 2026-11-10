@@ -407,6 +407,87 @@ class ExamAccountAnswerTests(unittest.TestCase):
         )
         self.assertNotIn("Plaid", self.ask("Can you see my spending data for May?"))
 
+    def test_tricky_asks_get_a_real_answer(self):
+        # cancelling a subscription the Subs tab knows, in any tense
+        self.assertEqual(
+            self.ask("What if I cancel Spotify?"),
+            "Spotify bills $11.99 monthly, next on 2026-07-03. Cancelling it would save about "
+            "$11.99 a month, about $144 a year.",
+        )
+        self.assertTrue(
+            self.ask("How much would I save if I cancelled Netflix?").startswith(
+                "Netflix bills $15.49 monthly"
+            )
+        )
+        # chat never has card or account numbers, whichever account is named
+        for prompt in (
+            "What's my credit card number?",
+            "What is my bank account number?",
+            "Show me my account number.",
+        ):
+            with self.subTest(prompt=prompt):
+                self.assertTrue(
+                    self.ask(prompt).startswith("Chat never sees card or account numbers")
+                )
+        # "duplicate" is not a merchant; the latest five rows have no repeat
+        for prompt in ("Do I have any duplicate charges?", "Was I charged twice for anything?"):
+            with self.subTest(prompt=prompt):
+                self.assertTrue(
+                    self.ask(prompt).startswith(
+                        "I checked only your latest 5 transactions, and none of them is the "
+                        "same charge twice."
+                    )
+                )
+        # a brand the user never paid: say so, not the whole Food total
+        self.assertTrue(
+            self.ask("How much did I spend at Starbucks?").startswith(
+                "I don't see any charges from Starbucks"
+            )
+        )
+        # 2025 is July to December, 2026 January to June 15
+        self.assertEqual(
+            self.ask("Compare this year to last year."),
+            "Spending for Overall (All Accounts): about $3,355 in 2025 (6 months) and $4,305 in "
+            "2026 so far (6 months), $950 more.",
+        )
+        # Corner Deli $10 a day: 184 days in 2025, 166 in 2026
+        self.assertTrue(
+            self.ask("Did I spend more on food this year than last year?").startswith(
+                "No. Food spending for Overall (All Accounts): about $1,840 in 2025"
+            )
+        )
+        for prompt, answer in (
+            ("Did I spend more last year than this year?", "No."),
+            ("Did I spend less last year than this year?", "Yes."),
+            ("Did I spend more in 2026 than in 2025?", "Yes."),
+            ("Is my spending higher this year than last year?", "Yes."),
+            # one merchant: Costco $150 in Jul, Sep, Nov 2025; Jan, Mar, May 2026 less a $50
+            # refund in April
+            (
+                "Did I spend more at Costco this year than last year?",
+                "No. Spending at Costco for Overall (All Accounts): about $450 in 2025 (6 months) "
+                "and $400 in 2026 so far",
+            ),
+            # pay twice a month in 2025 (6 months), once in February 2026
+            (
+                "Did I earn more this year than last year?",
+                "No. Income for Overall (All Accounts): about $30,000 in 2025",
+            ),
+        ):
+            with self.subTest(prompt=prompt):
+                self.assertTrue(self.ask(prompt).startswith(answer))
+        self.assertIn("2027 hasn't happened yet", self.ask("Compare 2027 to 2026."))
+        self.assertNotIn("Spending for", self.ask("Did I save more this year than last year?"))
+        self.assertNotIn(
+            "card or account numbers", self.ask("My account no longer syncs, what did I spend?")
+        )
+        # "this year" with named months only says which year they're in
+        self.assertTrue(
+            self.ask("Did I spend more in May than April this year?").startswith(
+                "Yes. Spending for Overall (All Accounts): $637 in 2026-05 vs $427 in 2026-04."
+            )
+        )
+
     def test_money_left_to_spend_says_what_the_budgets_cover(self):
         budgets = {
             **self.summary["budgets"],
