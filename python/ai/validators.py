@@ -7,6 +7,21 @@ def clamp_str(value, max_len):
     return value.strip()[:max_len]
 
 
+def clamp_sentences(value, max_len):
+    """Like clamp_str, but a cut text ends at its last whole sentence (or its last whole
+    word and "…" when that sentence would drop more than half), so a long model insight
+    doesn't stop mid-figure."""
+    text = clamp_str(value, max_len + 1)
+    if len(text) <= max_len:
+        return text
+    text = text[:max_len]
+    end = max(text.rfind(". "), text.rfind("! "), text.rfind("? "))
+    if end >= max_len // 2:
+        return text[: end + 1]
+    space = text.rfind(" ")
+    return (text[:space] if space > 0 else text[: max_len - 1]).rstrip(" ,;:(") + "…"
+
+
 def to_float(value, default=0.0):
     try:
         if isinstance(value, (int, float)):

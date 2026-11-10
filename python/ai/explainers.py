@@ -55,6 +55,7 @@ def build_chat_prompt(intent, message, history, context_text):
         "- reply must be a short plain-text conclusion (max 280 chars).\n"
         "- insights max 3 items; include concrete numbers only when directly present in context fields.\n"
         "- actions max 3 items; each action should be specific and time-bound (e.g., this week / next 14 days).\n"
+        "- each insight and action is one or two short sentences, under 200 characters.\n"
         "- At least one action should include an expected savings impact range when enough data exists.\n"
         "- If transfer categories appear, do not treat them as discretionary spending advice targets.\n"
         "- If context is insufficient, keep reply honest and include one action to improve data coverage.\n\n"

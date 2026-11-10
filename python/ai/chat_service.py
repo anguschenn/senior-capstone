@@ -38,7 +38,7 @@ from .time_scope_resolver import (
 from .time_scope_resolver import (
     selected_month_key as resolve_selected_month_key,
 )
-from .validators import clamp_str, sanitize_history, sanitize_spending_summary
+from .validators import clamp_sentences, clamp_str, sanitize_history, sanitize_spending_summary
 
 # Asks with one right answer from the user's data: these can be answered
 # deterministically once their period is known.
@@ -3192,11 +3192,15 @@ class ChatService:
                 )
                 if isinstance(raw_insights, list):
                     insights = [
-                        clamp_str(x, 220) for x in raw_insights if isinstance(x, str) and x.strip()
+                        clamp_sentences(x, 220)
+                        for x in raw_insights
+                        if isinstance(x, str) and x.strip()
                     ][:3]
                 if isinstance(raw_actions, list):
                     actions = [
-                        clamp_str(x, 220) for x in raw_actions if isinstance(x, str) and x.strip()
+                        clamp_sentences(x, 220)
+                        for x in raw_actions
+                        if isinstance(x, str) and x.strip()
                     ][:3]
 
                 # Small models get arithmetic wrong; drop any dollar figure not in the data.
@@ -3257,10 +3261,12 @@ class ChatService:
                     answer_source = "hybrid"
             insights = self._sanitize_insights_accuracy(insights)
             insights = [
-                clamp_str(x, 220) for x in (insights or []) if isinstance(x, str) and x.strip()
+                clamp_sentences(x, 220)
+                for x in (insights or [])
+                if isinstance(x, str) and x.strip()
             ][:3]
             actions = [
-                clamp_str(x, 220) for x in (actions or []) if isinstance(x, str) and x.strip()
+                clamp_sentences(x, 220) for x in (actions or []) if isinstance(x, str) and x.strip()
             ][:3]
             actions = [self._sanitize_claim_text(x) for x in actions]
             actions = self._enforce_action_quality(actions, summary, intent=intent, message=message)
