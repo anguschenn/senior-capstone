@@ -81,7 +81,8 @@ _provider_override = contextvars.ContextVar("provider_override", default="")
 
 @contextlib.contextmanager
 def use_provider(provider):
-    """Use this provider ("ollama" or "openrouter") for model calls inside the block."""
+    """Use this provider ("ollama", "openrouter" or "anthropic") for model calls inside
+    the block."""
     token = _provider_override.set(provider)
     try:
         yield

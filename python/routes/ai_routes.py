@@ -13,7 +13,7 @@ from config import CHAT_SERVER_SUMMARY_ENABLED
 ai_bp = Blueprint("ai", __name__)
 
 
-_MODEL_SOURCES = {"local": "ollama", "online": "openrouter"}
+_MODEL_SOURCES = {"local": "ollama", "online": "openrouter", "claude": "anthropic"}
 # The app stops waiting for a chat answer after 30 seconds. A question's model calls share
 # 25 of them (counted from when the request arrives); after that the rules answer alone.
 _CHAT_MODEL_SECONDS = 25

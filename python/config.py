@@ -47,7 +47,7 @@ PLAID_WEBHOOK_URL = _empty_to_none("PLAID_WEBHOOK_URL")
 
 # ── AI model providers ───────────────────────────────────────────────
 AI_PROVIDER = (_empty_to_none("AI_PROVIDER") or "ollama").strip().lower()
-# 1 lets the app pick the local (Ollama) or online (OpenRouter) model per chat request.
+# 1 lets the app pick the local (Ollama), online (OpenRouter) or Claude model per chat request.
 # For local testing only; leave unset on Render.
 AI_MODEL_SWITCH_ENABLED = os.getenv("AI_MODEL_SWITCH_ENABLED", "0") == "1"
 # Default to V2 router; keep env override for rollback.
