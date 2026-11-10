@@ -4740,19 +4740,39 @@ def _affordability_spec(text, summary, scope):
     )
 
 
+_UNSET_BUDGET_RE = re.compile(
+    r"\b(non[- ]?set|unset|not set|unbudgeted|no budgets?|missing budgets?|haven'?t set|"
+    r"without (a |any )?(budgets?|limits?)|"
+    r"(don'?t|doesn'?t|do not|does not) have (a |any )?(budgets?|limits?))\b"
+)
+
+
 def _budget_suggestion_spec(text, summary, scope):
-    """ "how much should I budget for food?" """
-    if not re.search(r"\b(budget|set aside|allow|spend)\b", text):
+    """ "how much should I budget for food?", "give me recommended budgets" """
+    if not re.search(r"\b(budgets?|set aside|allow|spend)\b", text):
         return None
     if not re.search(
         r"\bhow much should i\b|\bwhat should my\b.*\bbudget\b|\bgood budget\b|"
         r"\b(realistic|reasonable|sensible|good|sane) ([a-z]+ )?budget\b|"
-        r"\b(suggest|recommend|set|give me|make|create|come up with) (me )?(a |an )?"
-        r"([a-z]+ ){0,2}budget\b",
+        r"\b(suggest|recommend|set|give me|make|create|come up with) (me )?(a |an |some )?"
+        r"([a-z]+ ){0,2}budgets?\b|"
+        r"\b(recommended|suggested) budgets?\b|\bbudget (recommendation|suggestion)s?\b",
         text,
     ):
         return None
     category = _category_in(text, summary)
+    mode = ""
+    if not category:
+        # no category named: "budgets" asks for a limit per category, and "for non-set
+        # budgets" only for the categories that have none yet
+        if _UNSET_BUDGET_RE.search(text):
+            mode = "limits_unset"
+        elif re.search(
+            r"\bbudgets\b|\b(recommendation|suggestion)s\b|\bcategories\b|"
+            r"\b(each|every|per) category\b",
+            text,
+        ):
+            mode = "limits"
     return QuerySpec(
         task_type="budget_suggestion",
         metric="expenses",
@@ -4760,6 +4780,7 @@ def _budget_suggestion_spec(text, summary, scope):
         period_key=selected_month_key(summary),
         scope=scope,
         category=category,
+        reason_mode=mode,
     )
 
 
@@ -5039,13 +5060,23 @@ def _special_asks_spec(text, summary, scope):
     return None
 
 
+# "edit the shopping budget", "how do I change my budget?"; not "should I change ...",
+# which asks for advice
+_BUDGET_EDIT_RE = re.compile(
+    r"\b(edit|change|adjust|modify|update) (a |my |the |our )?([a-z&]+ ){0,2}(budgets?|limits?)\b"
+)
+
+
 def _chat_action_spec(text, summary, scope):
     """Requests to change data or the app: chat can only read."""
-    if not _ACTION_RE.search(text):
+    edits_budget = bool(_BUDGET_EDIT_RE.search(text)) and not re.match(
+        r"(should|shall|would|is it)\b", text
+    )
+    if not _ACTION_RE.search(text) and not edits_budget:
         return None
     if re.search(r"\b(chart|graph|plot)\b", text):
         mode = "action:chart"
-    elif re.search(r"\bbudget\b", text):
+    elif edits_budget or re.search(r"\bbudgets?\b", text):
         mode = "action:budget"
     elif re.search(r"\b(export|download|email)\b", text):
         mode = "action:export"
@@ -5057,7 +5088,8 @@ def _chat_action_spec(text, summary, scope):
         mode = "action:delete"
     else:
         mode = "action:other"
-    return QuerySpec(task_type="data_pointer", scope=scope, reason_mode=mode)
+    category = _category_in(text, summary) if mode == "action:budget" else ""
+    return QuerySpec(task_type="data_pointer", scope=scope, reason_mode=mode, category=category)
 
 
 def _peer_compare_spec(text, summary, scope):

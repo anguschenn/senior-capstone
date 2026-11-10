@@ -1831,23 +1831,73 @@ def _exec_affordability(query_spec, summary, scope_label):
     }
 
 
+def _usual_by_category(summary):
+    """([(category, usual monthly spend)], span) from the recent full months, biggest first
+    and without transfers. None when there are no such months or they aren't split by
+    category."""
+    keys, month_index = _recent_full_months(summary)
+    if not keys:
+        return None
+    totals = {}
+    for key in keys:
+        cats = month_index[key].get("categories")
+        if not isinstance(cats, dict):
+            return None
+        for name, amount in cats.items():
+            totals[str(name)] = totals.get(str(name), 0.0) + float(amount or 0) / len(keys)
+    ranked = sorted(
+        ((k, v) for k, v in totals.items() if v >= 10 and "transfer" not in k.lower()),
+        key=lambda kv: -kv[1],
+    )
+    return ranked, keys[-1] if len(keys) == 1 else f"{keys[-1]} to {keys[0]}"
+
+
+def _budgeted_categories(summary):
+    """Lowercased categories with a limit in the month picked in the app. None when the
+    summary has no budget block (older app versions)."""
+    budgets = summary.get("budgets") if isinstance(summary, dict) else None
+    if not isinstance(budgets, dict) or not isinstance(budgets.get("items"), list):
+        return None
+    return {str(item.get("category") or "").lower() for item in budgets["items"]}
+
+
+def _limit_hint(summary, category):
+    """A sentence (with a leading space) suggesting a limit for a category that has none,
+    from its usual spending; "" when chat can't tell what's usual."""
+    usual = _usual_by_category(summary)
+    if not usual or not category:
+        return ""
+    ranked, span = usual
+    amount = next((v for name, v in ranked if name.lower() == category.lower()), 0.0)
+    if amount <= 0:
+        return ""
+    return (
+        f" You usually spend about ${amount:.0f} a month on {category} ({span}), so about "
+        f"${amount * 0.9:.0f} (10% below that) is a realistic limit."
+    )
+
+
+def _limits_hint(summary):
+    """Like _limit_hint, for someone with no limits at all: one per main category."""
+    usual = _usual_by_category(summary)
+    if not usual or not usual[0]:
+        return ""
+    ranked, span = usual
+    lines = "; ".join(f"{name} ${amount * 0.9:.0f}" for name, amount in ranked[:5])
+    return f" A starting point, 10% below your usual ({span}): {lines}."
+
+
 def _exec_budget_suggestion(query_spec, summary, scope_label):
     category = query_spec.category
     keys, month_index = _recent_full_months(summary)
     if not keys:
         return None
-    if query_spec.reason_mode == "plan":
-        totals = {}
-        for key in keys:
-            cats = month_index[key].get("categories")
-            if not isinstance(cats, dict):
-                return None
-            for name, amount in cats.items():
-                totals[str(name)] = totals.get(str(name), 0.0) + float(amount or 0) / len(keys)
-        ranked = sorted(
-            ((k, v) for k, v in totals.items() if v >= 10 and "transfer" not in k.lower()),
-            key=lambda kv: -kv[1],
-        )[:6]
+    mode = query_spec.reason_mode
+    if mode in {"plan", "limits", "limits_unset"}:
+        usual = _usual_by_category(summary)
+        if usual is None:
+            return None
+        ranked, span = usual
         if not ranked:
             return _pointer(
                 f"Most of {scope_label}'s spending is transfers and payments, which aren't "
@@ -1855,20 +1905,48 @@ def _exec_budget_suggestion(query_spec, summary, scope_label):
                 "Pick Overall (All Accounts) in the Account scope menu above the chat.",
                 "Switch the Account scope to Overall (All Accounts).",
             )
+        lead = "A starting plan for next month, 10% below your usual"
+        insights = ["Usual = average of your recent full months for each category."]
+        action = "Enter these limits with Edit Budget on the Budget tab."
+        facts = ["month_index.categories"]
+        budgeted = _budgeted_categories(summary) if mode == "limits_unset" else None
+        if budgeted is not None:
+            # "for non-set budgets": only the categories with no limit yet
+            month = summary["budgets"].get("month") or _selected_month(summary)
+            have = [name for name, _ in ranked if name.lower() in budgeted]
+            ranked = [(name, amount) for name, amount in ranked if name.lower() not in budgeted]
+            facts = ["budgets", "month_index.categories"]
+            if not ranked:
+                return {
+                    "reply": (
+                        "Every category you regularly spend on already has a budget limit "
+                        f"in {month}."
+                    ),
+                    "insights": insights,
+                    "actions": ["Ask whether your budgets are realistic."],
+                    "missing_fields": [],
+                    "facts_used": facts,
+                    "period_resolved": span,
+                }
+            lead = "Suggested limits for the categories with no budget yet, 10% below your usual"
+            if have:
+                insights = [*insights, f"Already budgeted in {month}: {', '.join(have)}."]
+            action = "Set these limits in the Budget tab."
+        elif mode != "plan":
+            lead = "Suggested monthly limits, 10% below your usual"
+        ranked = ranked[:6]
         lines = "; ".join(
             f"{name} ${usual * 0.9:.0f} (usual ${usual:.0f})" for name, usual in ranked
         )
         total = sum(usual * 0.9 for _, usual in ranked)
-        span = keys[-1] if len(keys) == 1 else f"{keys[-1]} to {keys[0]}"
         return {
             "reply": (
-                f"A starting plan for next month, 10% below your usual ({span}): {lines}. "
-                f"That's about ${total:.0f} across these categories."
+                f"{lead} ({span}): {lines}. That's about ${total:.0f} across these categories."
             ),
-            "insights": ["Usual = average of your recent full months for each category."],
-            "actions": ["Enter these limits with Edit Budget on the Budget tab."],
+            "insights": insights,
+            "actions": [action],
             "missing_fields": [],
-            "facts_used": ["month_index.categories"],
+            "facts_used": facts,
             "period_resolved": span,
         }
     if category:
@@ -3135,10 +3213,14 @@ def _exec_data_pointer(query_spec, summary, scope_label):
             return None
         return _pointer(meaning, "Ask how much you spent or earned this month to see the numbers.")
     if mode.startswith("action:"):
-        return _pointer(
-            _ACTION_REPLIES.get(mode.split(":", 1)[1], _ACTION_REPLIES["other"]),
-            "Ask me a question about your spending instead.",
-        )
+        reply = _ACTION_REPLIES.get(mode.split(":", 1)[1], _ACTION_REPLIES["other"])
+        if mode != "action:budget":
+            return _pointer(reply, "Ask me a question about your spending instead.")
+        category = (query_spec.category or "").split(",")[0]
+        budgeted = _budgeted_categories(summary)
+        if category and budgeted is not None and category.lower() not in budgeted:
+            reply += f" {category} has no limit yet.{_limit_hint(summary, category)}"
+        return _pointer(reply, "Open the Budget tab to set or change a limit.", ["budgets"])
     if mode == "peers":
         keys, month_index = _recent_full_months(summary)
         extra = ""
@@ -4340,7 +4422,7 @@ def _budget_vs_usual(items, asked, month, summary, answer):
     chosen = [i for i in items if not asked or i["category"].lower() == asked.lower()]
     if not chosen:
         return answer(
-            f"You don't have a budget limit for {asked} in {month}.",
+            f"You don't have a budget limit for {asked} in {month}.{_limit_hint(summary, asked)}",
             f"Set a {asked} limit in the Budget tab.",
         )
     lines = []
@@ -4521,8 +4603,10 @@ def _budget_status(query_spec, summary):
             "Pick that month in the Month menu.",
         )
     if not items:
+        asked = (query_spec.category or "").split(",")[0]
+        hint = _limit_hint(summary, asked) if asked else _limits_hint(summary)
         return answer(
-            f"You haven't set any budget limits for {month}.",
+            f"You haven't set any budget limits for {month}.{hint}",
             "Set a limit for a category in the Budget tab.",
         )
 
@@ -4536,7 +4620,8 @@ def _budget_status(query_spec, summary):
         item = next((i for i in items if i["category"].lower() == asked.lower()), None)
         if item is None:
             return answer(
-                f"You don't have a budget limit for {asked} in {month}.",
+                f"You don't have a budget limit for {asked} in {month}."
+                f"{_limit_hint(summary, asked)}",
                 f"Set a {asked} limit in the Budget tab.",
             )
         spent, limit = float(item["spent"]), float(item["limit"])
