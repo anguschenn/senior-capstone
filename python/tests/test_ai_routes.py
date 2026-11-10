@@ -237,7 +237,11 @@ class ModelSwitchTests(unittest.TestCase):
         return response.get_json(), seen
 
     def test_switch_picks_the_provider_per_request(self):
-        for source, provider in (("local", "ollama"), ("online", "openrouter")):
+        for source, provider in (
+            ("local", "ollama"),
+            ("online", "openrouter"),
+            ("claude", "anthropic"),
+        ):
             with self.subTest(source=source):
                 body, seen = self._ask(True, source)
                 self.assertTrue(seen)

@@ -79,9 +79,10 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
   static const _client = AiApiClient();
   static const _store = ChatHistoryStore.instance;
 
-  /// Debug builds only: which model answers, "local" (Ollama) or "online"
-  /// (OpenRouter). Kept across panel openings while the app runs.
-  static String _modelSource = 'local';
+  /// Debug builds only: which model answers, "local" (Ollama), "online"
+  /// (OpenRouter) or "claude" (Claude API). Kept across panel openings while
+  /// the app runs.
+  static String _modelSource = 'claude';
 
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -555,8 +556,10 @@ class _AIAssistantPanelState extends State<AIAssistantPanel> {
                   margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                   value: _modelSource,
                   segments: const {
-                    'local': 'Local model',
-                    'online': 'Online model',
+                    // One word each, so all three stay on one line.
+                    'local': 'Local',
+                    'online': 'Online',
+                    'claude': 'Claude',
                   },
                   onChanged: (source) {
                     if (_sending) return;
