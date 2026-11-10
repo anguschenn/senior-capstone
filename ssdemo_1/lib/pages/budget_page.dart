@@ -1009,6 +1009,57 @@ class _BudgetPageState extends State<BudgetPage> {
   // Budget editing dialogs
   // -------------------------------------------------------------------------
 
+  /// Suggested limits for [items] in the selected month, by card title. Month
+  /// view only: the year view's limit field takes a yearly amount.
+  Future<Map<String, ({double limit, int months})>> _loadSuggestedLimits(
+    List<BudgetCategoryProgress> items,
+  ) {
+    if (viewMode != BudgetViewMode.month) return Future.value(const {});
+    final m = widget.selectedMonth;
+    return BudgetService.instance.suggestedLimits(
+      '${m.year}-${m.month.toString().padLeft(2, '0')}',
+      [for (final item in items) item.title],
+    );
+  }
+
+  /// The suggested limit for [title] under the limit field, with Use to fill
+  /// it in. Nothing while loading or with under 3 months of history.
+  Widget _limitSuggestion(
+    Future<Map<String, ({double limit, int months})>> suggestions,
+    String title,
+    TextEditingController controller,
+  ) {
+    return FutureBuilder<Map<String, ({double limit, int months})>>(
+      future: suggestions,
+      builder: (context, snapshot) {
+        final suggestion = snapshot.data?[title];
+        if (suggestion == null || suggestion.limit <= 0) {
+          return const SizedBox.shrink();
+        }
+        return Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Suggested: ${formatMoney(suggestion.limit, signed: false)}, '
+                  'based on average spending from the past '
+                  '${suggestion.months} months',
+                  style: TextStyle(fontSize: 12, color: context.colors.muted),
+                ),
+              ),
+              TextButton(
+                onPressed: () =>
+                    controller.text = suggestion.limit.toStringAsFixed(0),
+                child: const Text('Use'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   // Inline editor for a single budget row.
   Future<void> _showEditBudgetDialog(
     BuildContext context,
@@ -1017,18 +1068,27 @@ class _BudgetPageState extends State<BudgetPage> {
     final controller = TextEditingController(
       text: item.limit.toStringAsFixed(0),
     );
+    final suggestions = _loadSuggestedLimits([item]);
     await showDialog<void>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
           title: Text('Set ${item.title} Budget'),
-          content: TextField(
-            controller: controller,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(
-              prefixText: '\$',
-              labelText: 'Monthly limit',
-            ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: controller,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: const InputDecoration(
+                  prefixText: '\$',
+                  labelText: 'Monthly limit',
+                ),
+              ),
+              _limitSuggestion(suggestions, item.title, controller),
+            ],
           ),
           actions: [
             TextButton(
@@ -1064,6 +1124,7 @@ class _BudgetPageState extends State<BudgetPage> {
     final controller = TextEditingController(
       text: selected.limit.toStringAsFixed(0),
     );
+    final suggestions = _loadSuggestedLimits(editableBudgets);
     await showDialog<void>(
       context: context,
       builder: (dialogContext) {
@@ -1107,6 +1168,7 @@ class _BudgetPageState extends State<BudgetPage> {
                       labelText: 'Monthly limit',
                     ),
                   ),
+                  _limitSuggestion(suggestions, selected.title, controller),
                 ],
               ),
               actions: [

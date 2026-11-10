@@ -50,6 +50,39 @@ void main() {
     }
   });
 
+  test('historyLimits is the trimmed mean and counts its months', () {
+    Map<String, dynamic> stat(String month, double spent) => {
+      'month': month,
+      'category': 'Groceries',
+      'spent': spent,
+    };
+    final limits = BudgetService.historyLimits(
+      stats: [
+        stat('2026-07', 100),
+        stat('2026-08', 300),
+        stat('2026-09', 320),
+        stat('2026-10', 900),
+      ],
+      cardNames: ['Groceries', 'Travel'],
+      month: '2026-11',
+    );
+    // 100 and 900 are dropped: (300 + 320) / 2 = 310.
+    expect(limits['Groceries'], (limit: 310.0, months: 4));
+    expect(limits['Travel'], (limit: 0.0, months: 4));
+  });
+
+  test('historyLimits needs 3 months with spending', () {
+    final limits = BudgetService.historyLimits(
+      stats: [
+        {'month': '2026-09', 'category': 'Groceries', 'spent': 300},
+        {'month': '2026-10', 'category': 'Groceries', 'spent': 320},
+      ],
+      cardNames: ['Groceries'],
+      month: '2026-11',
+    );
+    expect(limits, isEmpty);
+  });
+
   test('previousMonths crosses the year boundary', () {
     expect(BudgetService.previousMonths('2027-02', 3), [
       '2026-11',

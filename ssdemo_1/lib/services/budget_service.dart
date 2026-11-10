@@ -198,6 +198,42 @@ class BudgetService {
     required Map<String, ({double limit, String source})> previous,
     required String month,
   }) {
+    final history = historyLimits(
+      stats: stats,
+      cardNames: cardNames,
+      month: month,
+    );
+    final out = <String, ({double limit, String source})>{};
+    for (final name in cardNames) {
+      final key = normalizeCategoryKey(name);
+      final prev = previous[key];
+      if (prev != null && prev.source == 'user') {
+        out[name] = (limit: prev.limit, source: 'user');
+        continue;
+      }
+      if (prev == null || prev.limit <= 0) {
+        out[name] = (limit: 0, source: 'auto');
+        continue;
+      }
+      final fromHistory = history[name];
+      if (fromHistory != null && fromHistory.limit > 0) {
+        out[name] = (limit: fromHistory.limit, source: 'auto');
+        continue;
+      }
+      out[name] = (limit: prev.limit, source: 'auto');
+    }
+    return out;
+  }
+
+  /// Each card's usual month before [month], by card name: the trimmed mean
+  /// of its spend over the last 6 months with any spending, rounded to $5,
+  /// and how many months that covers. Empty with fewer than 3 such months.
+  /// The same figure python/user_model.py history_limit suggests.
+  static Map<String, ({double limit, int months})> historyLimits({
+    required List<Map<String, dynamic>> stats,
+    required List<String> cardNames,
+    required String month,
+  }) {
     final cardKeys = {for (final n in cardNames) normalizeCategoryKey(n)};
     final withSpending = {
       for (final s in stats)
@@ -218,32 +254,33 @@ class BudgetService {
       totals['$m|$key'] =
           (totals['$m|$key'] ?? 0) + (double.tryParse('${s['spent']}') ?? 0);
     }
-    final out = <String, ({double limit, String source})>{};
+    if (months.length < _autoLimitMinMonths) return const {};
+    final out = <String, ({double limit, int months})>{};
     for (final name in cardNames) {
       final key = normalizeCategoryKey(name);
-      final prev = previous[key];
-      if (prev != null && prev.source == 'user') {
-        out[name] = (limit: prev.limit, source: 'user');
-        continue;
-      }
-      if (prev == null || prev.limit <= 0) {
-        out[name] = (limit: 0, source: 'auto');
-        continue;
-      }
-      if (months.length >= _autoLimitMinMonths) {
-        final spend = [
-          for (final m in months)
-            ((totals['$m|$key'] ?? 0) * 100).roundToDouble() / 100,
-        ];
-        final limit = (_trimmedMean(spend) / 5 + 0.5).floorToDouble() * 5;
-        if (limit > 0) {
-          out[name] = (limit: limit, source: 'auto');
-          continue;
-        }
-      }
-      out[name] = (limit: prev.limit, source: 'auto');
+      final spend = [
+        for (final m in months)
+          ((totals['$m|$key'] ?? 0) * 100).roundToDouble() / 100,
+      ];
+      final limit = (_trimmedMean(spend) / 5 + 0.5).floorToDouble() * 5;
+      out[name] = (limit: limit, months: months.length);
     }
     return out;
+  }
+
+  /// [historyLimits] for [monthYear]'s cards, from the signed-in user's
+  /// category_month_stats. Empty when signed out or the read fails.
+  Future<Map<String, ({double limit, int months})>> suggestedLimits(
+    String monthYear,
+    List<String> cardNames,
+  ) async {
+    final userId = AppSupabase.client.auth.currentUser?.id;
+    if (userId == null) return const {};
+    return historyLimits(
+      stats: await _historyStats(userId, monthYear),
+      cardNames: cardNames,
+      month: monthYear,
+    );
   }
 
   Future<void> upsertMonthlyBudgetByCategoryTitle({
