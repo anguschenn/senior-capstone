@@ -350,8 +350,17 @@ def _approx_term(text):
     return ""
 
 
+# "financial health", "a health check of my money": how the user's money is doing, not the
+# Health category.
+_MONEY_HEALTH_RE = re.compile(
+    r"\b(financial|financially|money|finances|finance) health(y)?\b|"
+    r"\bhealth check (of|on|for) my (money|finances|spending|accounts)\b"
+)
+
+
 def _categories_in(text, summary, include_approx=True):
     """Categories named in text, in the order written."""
+    text = _MONEY_HEALTH_RE.sub(" ", text)
     found = []
     if include_approx:
         for word, name in _APPROX_TERMS.items():
@@ -695,6 +704,19 @@ _OVERVIEW_RE = re.compile(
     r"how (?:was|did) (?:last month|this month|january|february|march|april|may|june|july|"
     r"august|september|october|november|december)(?: go)?$)\b"
 )
+# "am I doing well financially", "what's my financial health": how the money is doing as a
+# whole. Only without a budget or category, so "am I doing ok with my food budget" stays a
+# budget question.
+_MONEY_STATE_RE = re.compile(
+    r"\b(am i doing (well|good|ok|okay|alright|all right|fine|bad|badly|great)|"
+    r"how well am i doing|"
+    r"what do you think (about|of) my (finances|money|spending|financial situation|situation)|"
+    r"(is|how is|how s|what s|what is) my (money|financial|finance|finances) situation"
+    r"( ok| okay| good| fine| alright)?$|"
+    r"financial health|financially healthy|(money|finances|financial) health|"
+    r"health check (of|on|for) my (money|finances|spending|accounts)|financial check ?up|"
+    r"how (is|s) (this|the|my) month going)\b"
+)
 _OTHER_PERSON_RE = re.compile(
     r"\b(?:how much|what) did (?!i\b|we\b|you\b)(my [a-z]+|[a-z]+) (spend|spent|earn|make)\b"
 )
@@ -739,6 +761,10 @@ _HOW_IT_WORKS_RE = re.compile(
     r"\bcan i trust (you|this|these|that|your|the|it)\b|"
     r"\b(do|did) you (use|call|run) (ai|an ai|a model|an llm|chatgpt|gpt|a language model)\b|"
     r"\bare you (an? )?(ai|llm|chatgpt|gpt|language model)\b|"
+    r"\bare you (using|powered by|running on) (ai|an ai|a model|an llm|chatgpt|gpt|"
+    r"a language model|machine learning)\b|"
+    r"\bis (this|it|that|the chat) (an? )?(ai|llm|chatgpt|gpt|bot|chatbot)\b|"
+    r"\bwhat (ai|model|llm|language model) (do you use|are you using|is this|is it|are you)\b|"
     r"\bdo you (make (things|numbers|stuff) up|hallucinate)\b"
 )
 # Asks about something other than the user's money: "what's the weather today"
@@ -904,6 +930,18 @@ def _boundary_spec(text, scope):
         r"\b(private|privacy|secure|security|safe|who can see my data|my data stored)\b", text
     )
     if privacy and re.search(r"\b(data|info|information|account|accounts)\b", text):
+        return QuerySpec(task_type="data_pointer", scope=scope, reason_mode="privacy")
+    if re.search(
+        # "do you store my bank information"; "can you see my bank account balance" isn't one
+        r"\b(do|does|will|can|could) (you|the app|smartspend|chat|this app) (store|save|keep|"
+        r"see|access|share|sell|read)\b",
+        text,
+    ) and re.search(
+        r"\b(my data|personal data|my info|my information|personal information|password|"
+        r"passwords|login|logins|credentials|bank details|bank info|bank information|bank data|"
+        r"personal details)\b",
+        text,
+    ):
         return QuerySpec(task_type="data_pointer", scope=scope, reason_mode="privacy")
     words = text.split()
     if (
@@ -1096,6 +1134,25 @@ def _outside_summary_spec(text, summary, scope):
             )
     if _SUBSCRIPTION_LIST_RE.search(text) and not _AMOUNT_ASK_RE.search(text):
         return QuerySpec(task_type="data_pointer", scope=scope, reason_mode="subscriptions")
+    budgets = summary.get("budgets") if isinstance(summary, dict) else None
+    if (
+        re.search(r"\bhow much (more )?(can|could) i (still )?spend\b|\bleft to spend\b", text)
+        and not re.search(
+            r"\b(save|saving|keep|have left|on|at|for|last|next|previous|week|year|daily|a day|"
+            r"per day|each day)\b",
+            text,
+        )
+        and isinstance(budgets, dict)
+        and budgets.get("items")
+    ):
+        # "how much can I still spend this month": the Budget tab's "Left to spend"
+        return QuerySpec(
+            task_type="data_pointer",
+            scope=scope,
+            reason_mode="budget_status",
+            period_type="unknown",
+            compare_to="left",
+        )
     if (
         _BUDGET_STATUS_RE.search(text)
         and not _ADVICE_RE.search(text)
@@ -1280,9 +1337,22 @@ _TOO_MUCH_RE = re.compile(
 
 def _pace_check(text, summary, scope):
     """ "Did I spend too much on eating out?": this month against the user's usual."""
+    predict = re.search(
+        r"\b(outlook|projection|projected|forecast|predict|prediction|estimate|estimated)\b", text
+    )
     forecast = (
-        _FORECAST_RE.search(text) or re.search(r"\b(outlook|projection|projected|forecast)\b", text)
-    ) and re.search(r"\b(this month|end of (the )?month)\b", text)
+        (_FORECAST_RE.search(text) or predict)
+        and re.search(r"\b(this month|end of (the )?month)\b", text)
+    ) or (
+        # "predict my spending" with no period: this month's projection
+        predict
+        and re.search(r"\b(spend|spending|expenses)\b", text)
+        and not re.search(
+            r"\b(last|next|previous|week|weekend|year|today|yesterday|20\d\d|january|february|"
+            r"march|april|may|june|july|august|september|october|november|december)\b",
+            text,
+        )
+    )
     over_amount = re.search(
         r"\b(will|am|going to|gonna) (i )?(go|be|end up|going to go|going to be|on track to go|"
         r"stay|keep it|remain)? ?"
@@ -3313,7 +3383,12 @@ def _parse_query(message, summary, history=None):
         if spec is not None:
             return spec
 
-    if _OVERVIEW_RE.search(text) and not _ADVICE_RE.search(text):
+    money_state = (
+        _MONEY_STATE_RE.search(text)
+        and not _BUDGET_STATUS_RE.search(text)
+        and not _category_in(text, summary)
+    )
+    if (_OVERVIEW_RE.search(text) or money_state) and not _ADVICE_RE.search(text):
         return QuerySpec(
             task_type="month_overview",
             metric="net",
@@ -4338,6 +4413,23 @@ def _savings_goal_spec(text, summary, scope):
             period_key=selected_month_key(summary),
             scope=scope,
             compare_to=goal.group(1),
+        )
+    spread = re.search(
+        r"\b(?:in|over|within)(?: the next)? (\d{1,2}|two|three|four|five|six) months\b", text
+    )
+    months = 0
+    if spread:
+        word = spread.group(1)
+        months = int(word) if word.isdigit() else _NUMBER_WORDS[word]
+    if months >= 2:
+        # "save $1000 in 3 months" is about $333 a month, not $1000 a month
+        return QuerySpec(
+            task_type="savings_goal",
+            metric="expenses",
+            period_type="month",
+            period_key=str(round(int(goal.group(1)) / months)),
+            scope=scope,
+            compare_to=f"{goal.group(1)}:{months}",
         )
     return QuerySpec(
         task_type="savings_goal",
@@ -6338,7 +6430,10 @@ def _app_info_spec(text, summary, scope):
         return QuerySpec(task_type="data_pointer", scope=scope, reason_mode="about")
     if re.search(
         r"\brecommend (a |an |me )?(credit card|card|bank|loan|insurance|stock|fund|app)\b|"
-        r"\bwhich (credit card|bank|loan) should i\b|\bbest credit card\b",
+        r"\bwhich (credit card|bank|loan) should i\b|\bbest credit card\b|"
+        r"\bshould i (get|open|apply for|sign up for|take out|switch to) (a |an |another |new )*"
+        r"(credit card|card|loan|mortgage|bank account|savings account|checking account|"
+        r"insurance|personal loan|car loan|bank)\b",
         text,
     ):
         return QuerySpec(task_type="data_pointer", scope=scope, reason_mode="products")

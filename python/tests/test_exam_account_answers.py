@@ -342,6 +342,66 @@ class ExamAccountAnswerTests(unittest.TestCase):
         self.assertIn("your spending is ahead of income by $", reply)
         self.assertNotIn("$-", reply)
 
+    def test_broad_questions_answer_from_the_data(self):
+        # how the money is doing: the month's overview, not the Health category
+        for prompt in (
+            "Am I doing well financially?",
+            "What do you think about my finances?",
+            "Is my money situation okay?",
+            "What's my financial health?",
+            "Give me a quick health check of my money.",
+            "How is this month going?",
+        ):
+            with self.subTest(prompt=prompt):
+                reply = self.ask(prompt)
+                self.assertTrue(
+                    reply.startswith(
+                        "For 2026-06 so far, Overall (All Accounts) has income of $5,000, "
+                        "expenses of $307"
+                    ),
+                    reply,
+                )
+                self.assertNotIn("Health", reply)
+        self.assertIn("Health", self.ask("How much did I spend on health last month?"))
+        for prompt in ("Predict my spending.", "Estimate my spending this month"):
+            with self.subTest(prompt=prompt):
+                self.assertIn("on pace for about $615", self.ask(prompt))
+        self.assertTrue(
+            self.ask(
+                "I want to save $1000 in 3 months. How much should I cut each month?"
+            ).startswith("$1,000 over 3 months is about $333 a month. Saving $333 a month")
+        )
+        self.assertIn("never does the math", self.ask("Are you using AI?"))
+        self.assertIn(
+            "can't recommend specific financial products", self.ask("Should I get a credit card?")
+        )
+        self.assertIn(
+            "Your bank login goes to Plaid", self.ask("Do you store my bank information?")
+        )
+        self.assertNotIn("Plaid", self.ask("Can you see my spending data for May?"))
+
+    def test_money_left_to_spend_says_what_the_budgets_cover(self):
+        budgets = {
+            **self.summary["budgets"],
+            "items": [{"category": "Food", "spent": 150.0, "limit": 100.0}],
+            "spent_total": 307.0,
+        }
+        reply = self.service.handle_chat(
+            {
+                "prompt": "How much can I still spend this month?",
+                "history": [],
+                "spending_summary": {**self.summary, "budgets": budgets},
+            },
+            user_id="u",
+        )["reply"]
+        self.assertTrue(
+            reply.startswith(
+                "For 2026-06 you've spent $307 of your $100 budget, so you're $207 over. "
+                "Your budgets only cover Food"
+            ),
+            reply,
+        )
+
     def test_making_a_purchase_is_spending(self):
         self.assertTrue(
             self.ask("Did I make any purchases at Costco in April?").startswith(
