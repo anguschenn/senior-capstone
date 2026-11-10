@@ -249,7 +249,9 @@ class _BudgetPageState extends State<BudgetPage> {
         spendingSummary: widget.spendingSummary,
         budgetProgress: budgetProgressPayload,
         viewMode: viewMode.name,
-        simplified: true,
+        // The model words the summary from the forecast the code worked out; with no
+        // model the server uses its rule wording.
+        simplified: false,
       );
       setState(() {
         _aiSuggestion = suggestion;

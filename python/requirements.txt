@@ -6,3 +6,4 @@ supabase
 certifi
 gunicorn
 PyJWT[crypto]
+anthropic>=2.7,<3

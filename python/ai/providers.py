@@ -9,6 +9,9 @@ from urllib.error import HTTPError
 
 from config import (
     AI_PROVIDER,
+    ANTHROPIC_API_KEY,
+    ANTHROPIC_EFFORT,
+    ANTHROPIC_MODEL,
     OLLAMA_HOST,
     OLLAMA_MODEL,
     OPENROUTER_API_KEY,
@@ -21,10 +24,11 @@ from config import (
 # The app gives up on an answer after 30 seconds, so a model call stops at 20 and the
 # question gets its rules-only answer instead of a timeout error in the app.
 _DEFAULT_TIMEOUT_SECONDS = 20
-# After a call times out, model calls fail at once for a minute, so a question that would
-# ask a slow model twice (reword, then classify) still answers before the app gives up.
+# After a call times out, that provider's calls fail at once for a minute, so a question
+# that would ask a slow model twice (reword, then classify) still answers before the app
+# gives up. Kept per provider, so one slow model doesn't pause the others.
 _SLOW_PAUSE_SECONDS = 60
-_slow_until = 0.0
+_slow_until = {}
 # Keep the local model loaded between questions; reloading it adds seconds to the next one.
 _OLLAMA_KEEP_ALIVE = "30m"
 # Set by answer_within(): when the current request's model calls must be done.
@@ -87,14 +91,17 @@ def use_provider(provider):
 
 def _provider_name():
     provider = (_provider_override.get() or AI_PROVIDER or "ollama").strip().lower()
-    if provider not in {"ollama", "openrouter"}:
+    if provider not in {"ollama", "openrouter", "anthropic"}:
         raise RuntimeError(f"Unsupported AI_PROVIDER: {provider}")
     return provider
 
 
 def _provider_model():
-    provider = _provider_name()
-    return OPENROUTER_MODEL if provider == "openrouter" else OLLAMA_MODEL
+    return {
+        "ollama": OLLAMA_MODEL,
+        "openrouter": OPENROUTER_MODEL,
+        "anthropic": ANTHROPIC_MODEL,
+    }[_provider_name()]
 
 
 def _post_ollama(endpoint, body):
@@ -227,6 +234,59 @@ def _generate_openrouter_reply(prompt, generation_config=None):
     return text
 
 
+# Thinking counts toward max_tokens, so the small caps the prompts set for Ollama would
+# cut Claude off mid-answer; the prompts themselves ask for short replies.
+_ANTHROPIC_MIN_MAX_TOKENS = 4096
+# Models that can re-run a declined request on another model server-side; Haiku can't,
+# and sending the parameter to it fails the request.
+_FALLBACK_MODEL_PREFIXES = ("claude-opus-5", "claude-fable-5", "claude-sonnet-5-5")
+_anthropic_client = None
+
+
+def _anthropic_messages():
+    """The Claude Messages API. The SDK is imported on first use, so the other providers
+    work without it; retries are off because a retry would run past the question's time."""
+    global _anthropic_client
+    if _anthropic_client is None:
+        import anthropic
+
+        _anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY, max_retries=0)
+    return _anthropic_client.with_options(timeout=_call_timeout()).beta.messages
+
+
+def _generate_anthropic_reply(prompt, generation_config=None):
+    if not ANTHROPIC_API_KEY:
+        raise RuntimeError("ANTHROPIC_API_KEY is required for the Claude model")
+    import anthropic
+
+    requested = 0
+    if isinstance(generation_config, dict):
+        requested = int(
+            generation_config.get("maxOutputTokens") or generation_config.get("max_tokens") or 0
+        )
+    fallback = {}
+    if ANTHROPIC_MODEL.startswith(_FALLBACK_MODEL_PREFIXES):
+        # A declined request is run again on the model Anthropic picks for that kind of
+        # decline, inside the same call.
+        fallback = {"betas": ["server-side-fallback-2026-07-01"], "fallbacks": "default"}
+    try:
+        response = _anthropic_messages().create(
+            model=ANTHROPIC_MODEL,
+            max_tokens=max(requested, _ANTHROPIC_MIN_MAX_TOKENS),
+            output_config={"effort": ANTHROPIC_EFFORT},
+            messages=[{"role": "user", "content": prompt}],
+            **fallback,
+        )
+    except anthropic.APITimeoutError as error:
+        raise TimeoutError("Claude didn't answer in time") from error
+    if response.stop_reason == "refusal":
+        raise RuntimeError("Claude declined to answer")
+    text = "\n".join(block.text for block in response.content if block.type == "text").strip()
+    if not text:
+        raise RuntimeError("Claude returned blank reply")
+    return text
+
+
 def _timed_out(error):
     """Whether a urlopen error is a timeout (on connect it comes wrapped in a URLError)."""
     return isinstance(error, TimeoutError) or isinstance(
@@ -235,17 +295,18 @@ def _timed_out(error):
 
 
 def generate_llm_reply(prompt, generation_config=None):
-    global _slow_until
-    if time.monotonic() < _slow_until:
-        raise RuntimeError("The model timed out a moment ago; answering without it for now")
     provider = _provider_name()
+    if time.monotonic() < _slow_until.get(provider, 0.0):
+        raise RuntimeError("The model timed out a moment ago; answering without it for now")
     try:
         if provider == "openrouter":
             return _generate_openrouter_reply(prompt, generation_config=generation_config)
+        if provider == "anthropic":
+            return _generate_anthropic_reply(prompt, generation_config=generation_config)
         return _generate_ollama_reply(prompt, generation_config=generation_config)
     except (TimeoutError, urllib.error.URLError) as error:
         if _timed_out(error):
-            _slow_until = time.monotonic() + _SLOW_PAUSE_SECONDS
+            _slow_until[provider] = time.monotonic() + _SLOW_PAUSE_SECONDS
         raise
 
 
