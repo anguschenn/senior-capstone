@@ -70,6 +70,12 @@ OPENROUTER_MODEL = _empty_to_none("OPENROUTER_MODEL") or "openai/gpt-4o-mini"
 OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
 OPENROUTER_HTTP_REFERER = _empty_to_none("OPENROUTER_HTTP_REFERER")
 OPENROUTER_APP_TITLE = _empty_to_none("OPENROUTER_APP_TITLE")
+ANTHROPIC_API_KEY = _empty_to_none("ANTHROPIC_API_KEY")
+# Tried on the advice questions (2026-11-10): Opus, Sonnet and Haiku all answer in about
+# 4 seconds; Opus gave the clearest advice. claude-haiku-5-5 is the low-cost choice.
+ANTHROPIC_MODEL = _empty_to_none("ANTHROPIC_MODEL") or "claude-opus-5-5"
+# Chat answers are short and a question has 25 seconds for all its model calls.
+ANTHROPIC_EFFORT = (_empty_to_none("ANTHROPIC_EFFORT") or "low").strip().lower()
 
 # ── Backend API auth ─────────────────────────────────────────────────
 INTERNAL_API_KEY = _empty_to_none("INTERNAL_API_KEY")

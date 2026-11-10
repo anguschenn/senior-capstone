@@ -1,5 +1,6 @@
 import json
 import unittest
+from types import SimpleNamespace
 from unittest import mock
 
 from ai import providers
@@ -76,7 +77,7 @@ class SlowModelTests(unittest.TestCase):
     def setUp(self):
         for patch in (
             mock.patch.object(providers, "AI_PROVIDER", "ollama"),
-            mock.patch.object(providers, "_slow_until", 0.0),
+            mock.patch.object(providers, "_slow_until", {}),
         ):
             patch.start()
             self.addCleanup(patch.stop)
@@ -164,6 +165,123 @@ class OpenRouterRequestTests(unittest.TestCase):
         self.assertEqual(reply, "ok")
         self.assertEqual(len(sent), 2)
         self.assertNotIn("reasoning", sent[1])
+
+
+class _FakeClaude:
+    """Stands in for anthropic.Anthropic: records the timeout and the request."""
+
+    def __init__(self, reply="ok", stop_reason="end_turn", error=None):
+        self.timeouts = []
+        self.requests = []
+        self._reply, self._stop_reason, self._error = reply, stop_reason, error
+        self.beta = SimpleNamespace(messages=SimpleNamespace(create=self._create))
+
+    def with_options(self, timeout=None):
+        self.timeouts.append(timeout)
+        return self
+
+    def _create(self, **request):
+        self.requests.append(request)
+        if self._error:
+            raise self._error
+        return SimpleNamespace(
+            stop_reason=self._stop_reason,
+            content=[
+                SimpleNamespace(type="thinking", thinking=""),
+                SimpleNamespace(type="text", text=self._reply),
+            ],
+        )
+
+
+class ClaudeRequestTests(unittest.TestCase):
+    def setUp(self):
+        for patch in (
+            mock.patch.object(providers, "AI_PROVIDER", "anthropic"),
+            mock.patch.object(providers, "ANTHROPIC_API_KEY", "test-key"),
+            mock.patch.object(providers, "_slow_until", {}),
+        ):
+            patch.start()
+            self.addCleanup(patch.stop)
+
+    def _ask(self, client, generation_config=None):
+        with mock.patch.object(providers, "_anthropic_client", client):
+            return providers.generate_llm_reply("hi", generation_config=generation_config)
+
+    def test_request_uses_the_configured_model_with_room_to_think(self):
+        client = _FakeClaude()
+        reply = self._ask(client, {"temperature": 0.0, "maxOutputTokens": 260})
+        self.assertEqual(reply, "ok")
+        (request,) = client.requests
+        self.assertEqual(request["model"], providers.ANTHROPIC_MODEL)
+        self.assertEqual(request["max_tokens"], 4096)
+        self.assertEqual(request["output_config"], {"effort": providers.ANTHROPIC_EFFORT})
+        self.assertEqual(request["messages"], [{"role": "user", "content": "hi"}])
+        # current Claude models reject sampling settings
+        self.assertNotIn("temperature", request)
+
+    def test_only_models_with_server_side_fallback_ask_for_it(self):
+        for model, expected in (
+            ("claude-haiku-5-5", False),
+            ("claude-sonnet-5-5", True),
+            ("claude-opus-5-5", True),
+        ):
+            with self.subTest(model=model), mock.patch.object(providers, "ANTHROPIC_MODEL", model):
+                client = _FakeClaude()
+                self._ask(client)
+                (request,) = client.requests
+                self.assertEqual(request["model"], model)
+                self.assertEqual(request.get("fallbacks"), "default" if expected else None)
+                self.assertEqual(
+                    request.get("betas"),
+                    ["server-side-fallback-2026-07-01"] if expected else None,
+                )
+
+    def test_a_call_gets_what_is_left_of_the_question_s_time(self):
+        client = _FakeClaude()
+        now = [1000.0]
+        with (
+            mock.patch.object(providers.time, "monotonic", lambda: now[0]),
+            providers.answer_within(25),
+        ):
+            now[0] += 15
+            self._ask(client)
+        self.assertEqual(client.timeouts, [10])
+
+    def test_a_refusal_falls_back_to_the_rules_answer(self):
+        with self.assertRaises(RuntimeError):
+            self._ask(_FakeClaude(reply="", stop_reason="refusal"))
+
+    def test_a_timeout_skips_the_model_for_a_while(self):
+        import anthropic
+        import httpx2
+
+        request = httpx2.Request("POST", "https://api.anthropic.com/v1/messages")
+        client = _FakeClaude(error=anthropic.APITimeoutError(request=request))
+        with self.assertRaises(TimeoutError):
+            self._ask(client)
+        with self.assertRaises(RuntimeError):
+            self._ask(client)
+        self.assertEqual(len(client.requests), 1)
+
+    def test_a_slow_local_model_does_not_pause_claude(self):
+        # the app's model switch can pick Claude right after the local model timed out
+        providers._slow_until["ollama"] = providers.time.monotonic() + 60
+        self.assertEqual(self._ask(_FakeClaude()), "ok")
+
+    def test_no_key_means_no_call(self):
+        client = _FakeClaude()
+        with (
+            mock.patch.object(providers, "ANTHROPIC_API_KEY", None),
+            self.assertRaises(RuntimeError),
+        ):
+            self._ask(client)
+        self.assertEqual(client.requests, [])
+
+    def test_health_reports_claude(self):
+        self.assertEqual(
+            providers.current_llm_info(),
+            {"provider": "anthropic", "model": providers.ANTHROPIC_MODEL},
+        )
 
 
 if __name__ == "__main__":
