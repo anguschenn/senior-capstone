@@ -220,6 +220,25 @@ class HiddenAccountTests(unittest.TestCase):
         self.assertEqual(history["2026-09"]["items"][0]["limit"], 20.0)
         self.assertEqual(history["2026-08"]["items"], [])
 
+    def test_usual_limits_are_the_budget_tab_s_suggested_figures(self):
+        # one month of history: the Budget tab suggests nothing, so chat gets nothing
+        self.assertNotIn("usual_limits", self._summary())
+        # lunches of $100, $200 and $300 in the three months before: usual month $200
+        earlier = [
+            {
+                **self.ROWS[-1],
+                "plaid_transaction_id": f"lunch-{month}",
+                "date": f"2026-{month}-05",
+                "amount": amount,
+            }
+            for month, amount in (("07", 100), ("08", 200), ("09", 300))
+        ]
+        with mock.patch.object(type(self), "ROWS", self.ROWS + earlier):
+            usual = self._summary()["usual_limits"]
+        self.assertEqual(
+            usual, {"months": ["2026-07", "2026-08", "2026-09"], "limits": {"Food": 200.0}}
+        )
+
     def test_a_failed_read_of_past_budgets_leaves_them_out(self):
         self.assertNotIn("budget_history", self._summary(past_budgets=None))
 

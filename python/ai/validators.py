@@ -415,6 +415,21 @@ def sanitize_spending_summary(summary):
             and isinstance(block.get("items"), list)
         }
 
+    usual = summary.get("usual_limits")
+    if isinstance(usual, dict) and isinstance(usual.get("limits"), dict):
+        cleaned["usual_limits"] = {
+            "months": [
+                str(m)
+                for m in (usual.get("months") or [])[:12]
+                if re.match(r"^20\d{2}-\d{2}$", str(m))
+            ],
+            "limits": {
+                clamp_str(str(name), 64): to_float(limit)
+                for name, limit in list(usual["limits"].items())[:40]
+                if to_float(limit) > 0
+            },
+        }
+
     merchants = summary.get("merchant_index")
     if isinstance(merchants, dict):
         cleaned["merchant_index"] = {}

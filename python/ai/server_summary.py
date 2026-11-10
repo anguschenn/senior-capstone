@@ -31,6 +31,7 @@ from budget_progress import (
     build_budget_progress,
     classify_rows,
     is_credit_card_payment_row,
+    normalize_category_key,
     row_kind,
     user_category_for_row,
 )
@@ -875,7 +876,14 @@ def _load(
 def summary_for(user_id: str, context: dict, tx_rows=None) -> dict:
     """Build (or reuse) the summary for a parsed context. Raises on database errors; the
     caller falls back to the app-sent summary."""
-    from user_model import fetch_budget_rows, fetch_budget_rows_by_month, previous_months
+    from user_model import (
+        build_category_month_stats,
+        card_history,
+        fetch_budget_rows,
+        fetch_budget_rows_by_month,
+        history_limit,
+        previous_months,
+    )
 
     hidden = context.get("hidden_account_ids") or []
     key = (user_id, tuple(context["account_ids"]), tuple(hidden), context["month"])
@@ -895,6 +903,7 @@ def summary_for(user_id: str, context: dict, tx_rows=None) -> dict:
     txs = build_transactions(rows, account_meta, rules, account_ids or None, decisions)
     progress = []
     past_progress = None
+    usual_limits = None
     if not context["all_year"]:
         # Budgets cover every linked account, whichever one is selected (as in the app).
         kinds = classify_rows(rows, rules, decisions=decisions)
@@ -906,6 +915,20 @@ def summary_for(user_id: str, context: dict, tx_rows=None) -> dict:
             context["month"],
             kinds=kinds,
         )
+        # Each budget card's usual month, worked out exactly as the Budget tab's suggested
+        # limits are (user_model.build_suggestions), so chat suggests the same figures.
+        cards = [str(b["category"]) for b in progress]
+        history = card_history(
+            build_category_month_stats(rows, rules, kinds=kinds), cards, context["month"]
+        )
+        usual_limits = {
+            "months": history["months"],
+            "limits": {
+                name: limit
+                for name in cards
+                if (limit := history_limit(history["spend"].get(normalize_category_key(name), [])))
+            },
+        }
         earlier = previous_months(context["month"], BUDGET_HISTORY_MONTHS)
         past_rows = fetch_budget_rows_by_month(user_id, earlier[0], earlier[-1])
         if past_rows is not None:
@@ -948,6 +971,8 @@ def summary_for(user_id: str, context: dict, tx_rows=None) -> dict:
             }
             for month, month_progress in past_progress.items()
         }
+    if usual_limits and usual_limits["limits"]:
+        summary["usual_limits"] = usual_limits
     summary["merchant_index"], summary["category_counts"] = spending_detail(txs)
     summary["income_index"] = income_detail(txs)
     subscriptions = fetch_subscriptions(user_id)
