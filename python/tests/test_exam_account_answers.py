@@ -3,6 +3,7 @@ Monday 2026-06-15) for calendar weeks, a named year's months, tied months, a sho
 since a month, and money received from one payer. Expected numbers are sums over the
 fixture's rows."""
 
+import copy
 import unittest
 
 import exam_fixture
@@ -406,6 +407,72 @@ class ExamAccountAnswerTests(unittest.TestCase):
             "Your bank login goes to Plaid", self.ask("Do you store my bank information?")
         )
         self.assertNotIn("Plaid", self.ask("Can you see my spending data for May?"))
+
+    def test_budget_asks_get_a_suggested_limit(self):
+        # limits here: Food $305, Shopping $300, Transport $65; usual = March to May
+        self.assertEqual(
+            self.ask("Give me recommended budgets for June."),
+            "Suggested monthly limits, 10% below your usual (2026-03 to 2026-05): Shopping $489 "
+            "(usual $543); Food $276 (usual $307); Transport $54 (usual $60); Entertainment $27 "
+            "(usual $30); Subscriptions $25 (usual $27). That's about $871 across these "
+            "categories.",
+        )
+        self.assertEqual(
+            self.ask("Can you suggest budgets for me?"),
+            self.ask("Give me recommended budgets for June."),
+        )
+        # only the categories with no limit yet
+        self.assertEqual(
+            self.ask("Give me recommended budgets for non-set budgets based on history."),
+            "Suggested limits for the categories with no budget yet, 10% below your usual "
+            "(2026-03 to 2026-05): Entertainment $27 (usual $30); Subscriptions $25 (usual $27). "
+            "That's about $52 across these categories.",
+        )
+        # a category with no limit gets one suggested instead of only "you don't have one"
+        hint = (
+            " You usually spend about $30 a month on Entertainment (2026-03 to 2026-05), so "
+            "about $27 (10% below that) is a realistic limit."
+        )
+        self.assertEqual(
+            self.ask("What is my entertainment budget?"),
+            f"You don't have a budget limit for Entertainment in 2026-06.{hint}",
+        )
+        cant = "I can't change budgets from chat. Use Edit Budget on the Budget tab."
+        self.assertEqual(
+            self.ask("Edit my entertainment budget."),
+            f"{cant} Entertainment has no limit yet.{hint}",
+        )
+        for prompt in ("Edit the shopping budget for June.", "How do I edit my budget?"):
+            with self.subTest(prompt=prompt):
+                self.assertEqual(self.ask(prompt), cant)
+        # the older "budget plan" wording is unchanged
+        self.assertTrue(
+            self.ask("Give me a budget plan for next month.").startswith(
+                "A starting plan for next month, 10% below your usual"
+            )
+        )
+
+    def test_with_no_budgets_set_chat_suggests_limits(self):
+        summary = copy.deepcopy(self.summary)
+        summary["budgets"]["items"] = []
+
+        def ask(prompt):
+            return self.service.handle_chat(
+                {"prompt": prompt, "history": [], "spending_summary": summary}, user_id="u"
+            )["reply"]
+
+        self.assertEqual(
+            ask("Am I over budget?"),
+            "You haven't set any budget limits for 2026-06. A starting point, 10% below your "
+            "usual (2026-03 to 2026-05): Shopping $489; Food $276; Transport $54; Entertainment "
+            "$27; Subscriptions $25.",
+        )
+        self.assertEqual(
+            ask("How much is left in my food budget?"),
+            "You haven't set any budget limits for 2026-06. You usually spend about $307 a "
+            "month on Food (2026-03 to 2026-05), so about $276 (10% below that) is a realistic "
+            "limit.",
+        )
 
     def test_tricky_asks_get_a_real_answer(self):
         # cancelling a subscription the Subs tab knows, in any tense
