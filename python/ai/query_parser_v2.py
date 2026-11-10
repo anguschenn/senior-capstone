@@ -759,13 +759,17 @@ _HOW_IT_WORKS_RE = re.compile(
     r"\b(is|are) (this|that|these|those|your|the)( (answers?|numbers?|figures?|data|amounts?|"
     r"totals?|information))? (accurate|correct|right|reliable|trustworthy|real)\b|"
     r"\bcan i trust (you|this|these|that|your|the|it)\b|"
-    r"\b(do|did) you (use|call|run) (ai|an ai|a model|an llm|chatgpt|gpt|a language model)\b|"
+    r"\bwhat (ai|model|llm|language model) (do you use|are you using|is this|is it|are you)\b|"
+    r"\bdo you (make (things|numbers|stuff) up|hallucinate)\b"
+)
+# Yes-or-no asks about AI: "are you using AI", "is this a bot"
+_USES_AI_RE = re.compile(
+    r"\b(do|did|does) (you|chat|the app|smartspend) (use|call|run) (ai|an ai|a model|an llm|"
+    r"chatgpt|gpt|a language model)\b|"
     r"\bare you (an? )?(ai|llm|chatgpt|gpt|language model)\b|"
     r"\bare you (using|powered by|running on) (ai|an ai|a model|an llm|chatgpt|gpt|"
     r"a language model|machine learning)\b|"
-    r"\bis (this|it|that|the chat) (an? )?(ai|llm|chatgpt|gpt|bot|chatbot)\b|"
-    r"\bwhat (ai|model|llm|language model) (do you use|are you using|is this|is it|are you)\b|"
-    r"\bdo you (make (things|numbers|stuff) up|hallucinate)\b"
+    r"\bis (this|it|that|the chat) (an? )?(ai|llm|chatgpt|gpt|bot|chatbot)\b"
 )
 # Asks about something other than the user's money: "what's the weather today"
 _OFF_TOPIC_RE = re.compile(
@@ -777,6 +781,8 @@ _OFF_TOPIC_RE = re.compile(
 
 def _boundary_spec(text, scope):
     """Asks that are outside what this assistant should answer from the user's data."""
+    if _USES_AI_RE.search(text):
+        return QuerySpec(task_type="data_pointer", scope=scope, reason_mode="uses_ai")
     if _HOW_IT_WORKS_RE.search(text):
         return QuerySpec(task_type="data_pointer", scope=scope, reason_mode="how_it_works")
     if _OFF_TOPIC_RE.search(text):

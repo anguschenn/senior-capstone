@@ -708,7 +708,15 @@ def _exec_pace_check(query_spec, summary, scope_label):
             f"{verdict}"
         ),
         "insights": [f"Usual = average of the {len(history)} full months before {target}."],
-        "actions": ["Ask for tips to cut this category if it is above usual."],
+        "actions": [
+            (
+                f"Ask for tips to cut {category} spending."
+                if usual > 0 and projected > usual * 1.1
+                else f"Ask how {category} compares with last month."
+            )
+            if category
+            else f"Ask which category was highest in {target}."
+        ],
         "missing_fields": [],
         "facts_used": ["month_index.categories" if category else "month_index.expenses"],
         "period_resolved": target,
@@ -2406,11 +2414,13 @@ def _exec_day_span(query_spec, summary, scope_label):
         synced = _synced_through(summary)
         if synced and start > synced:
             # "this weekend" when the bank's latest transactions are from Thursday
-            return _pointer(
+            reply = (
                 f"Your latest synced transaction is from {synced}, so I don't see any spending "
-                f"from {start} to {end} yet.",
-                "Ask again after your next bank sync.",
+                f"from {start} to {end} yet."
             )
+            if not query_spec.category:
+                reply += _latest_synced_week(days, synced, scope_label)
+            return _pointer(reply, "Ask again after your next bank sync.")
         # Days can hold only deposits or transfers in, which aren't spending.
         return _pointer(
             f"I don't see any spending for {scope_label} from {start} to {end}.",
@@ -2693,11 +2703,11 @@ def _exec_rate_math(query_spec, summary, scope_label):
 _GLOSSARY = {
     "net_worth": (
         "Net worth is what your connected accounts hold minus what you owe on them (cards, "
-        "loans). The Home tab shows it."
+        "loans). The Wallet tab shows it."
     ),
     "net_worth_negative": (
         "Net worth goes negative when balances owed on connected cards or loans are larger "
-        "than the cash in your connected accounts. Chat can't see balances; the Home tab "
+        "than the cash in your connected accounts. Chat can't see balances; the Wallet tab "
         "shows the figure."
     ),
     "cash_flow": (
@@ -3154,6 +3164,14 @@ def _exec_data_pointer(query_spec, summary, scope_label):
             "income from the accounts you've connected.",
             "Ask: How much did I spend this month?",
         )
+    if mode == "uses_ai":
+        return _pointer(
+            "Yes, partly. An AI model reads unusual wording and writes advice, but it never "
+            "does the math: every amount comes from your bank transactions, synced through "
+            "Plaid, and code on the server adds them up. Any advice sentence with an amount "
+            "that isn't in your data is removed.",
+            "Ask: How do you calculate these numbers?",
+        )
     if mode == "how_it_works":
         return _pointer(
             "Every amount comes from your bank transactions, synced through Plaid. Code on the "
@@ -3185,8 +3203,9 @@ def _exec_data_pointer(query_spec, summary, scope_label):
         )
     if mode == "add_bank":
         return _pointer(
-            "Use Add Bank on the Home tab to connect another account.",
-            "Open Home and tap Add Bank.",
+            "Use the + button at the top of the Wallet tab, or Add Bank in Settings, to connect "
+            "another account.",
+            "Open Wallet and tap +.",
         )
     if mode == "privacy":
         return _pointer(
@@ -3521,9 +3540,9 @@ def _exec_data_pointer(query_spec, summary, scope_label):
         )
     if mode == "balance":
         return _pointer(
-            "Chat doesn't get your account balances. The Home tab shows your net worth "
+            "Chat doesn't get your account balances. The Wallet tab shows your net worth "
             "across connected accounts.",
-            "Open Home to see your net worth.",
+            "Open Wallet to see your net worth.",
         )
     if mode == "investing":
         keys, month_index = _recent_full_months(summary)
@@ -4864,6 +4883,23 @@ def _exec_what_if_cancel(query_spec, summary, scope_label):
     }
 
 
+def _latest_synced_week(days, synced, scope_label):
+    """ " In the 7 days up to then (...), X spent about $N." or "" if those days aren't known."""
+    first = (date_cls.fromisoformat(synced) - timedelta(days=6)).isoformat()
+    if first < min(days):
+        return ""
+    spent = sum(
+        float(row.get("expenses", 0) or 0)
+        for key, row in days.items()
+        if isinstance(row, dict) and first <= key <= synced
+    )
+    if spent < 0.5:
+        return ""
+    return (
+        f" In the 7 days up to then ({first} to {synced}), {scope_label} spent about ${spent:.0f}."
+    )
+
+
 def _synced_through(summary):
     """The date of the latest transaction the summary counts ("2026-11-05"), else ""."""
     coverage = summary.get("data_coverage") if isinstance(summary, dict) else None
@@ -4897,10 +4933,15 @@ def _exec_amount_day(query_spec, summary, scope_label):
             f"across {count} {noun}."
         )
     elif _synced_through(summary) and target > _synced_through(summary):
+        synced = _synced_through(summary)
         reply = (
-            f"Your latest synced transaction is from {_synced_through(summary)}, so I don't see "
-            f"any spending on {target} yet."
+            f"Your latest synced transaction is from {synced}, so I don't see any spending on "
+            f"{target} yet."
         )
+        last = days.get(synced) if isinstance(days.get(synced), dict) else {}
+        last_spent = float(last.get("expenses", 0) or 0)
+        if last_spent >= 0.5 and not query_spec.category:
+            reply += f" On {synced}, {scope_label} spent about ${last_spent:.2f}."
     else:
         reply = f"I don't see any recorded spending on {target} for {scope_label}."
     return {

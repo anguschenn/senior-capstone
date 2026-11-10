@@ -3263,8 +3263,13 @@ class ChatService:
             reply_text = self._fallback_reply(
                 intent, summary, message=message, query_spec=query_spec
             )
-            insights = ["Data coverage is limited, so this is a conservative suggestion."]
-            actions = ["Refresh transactions, then ask again for a more precise answer."]
+            # Says how this answer was made; the data itself is fine, the model just didn't answer.
+            insights = [
+                "Worked out from your spending totals with a fixed rule, not the AI model."
+                if summary
+                else "Worked out with a fixed rule, not the AI model."
+            ]
+            actions = ["Ask about one category or month for more detail."]
             citations = ["rule_fallback"]
 
         self._debug_route_log(
