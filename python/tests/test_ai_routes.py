@@ -4,6 +4,7 @@ from unittest import mock
 from route_helpers import VALID_TOKEN, app_client, headers
 
 import app_factory
+from ai import providers
 from routes import ai_routes
 
 
@@ -43,6 +44,36 @@ class ChatQuestionLogTests(unittest.TestCase):
         self.assertEqual(len(recorded), 1)
         self.assertEqual(recorded[0][0], "hello")
         self.assertEqual(recorded[0][1]["reply"], response.get_json()["reply"])
+
+
+class ChatTimeBudgetTests(unittest.TestCase):
+    def test_a_chat_question_s_model_calls_share_one_deadline(self):
+        deadlines = []
+
+        def provider(prompt, generation_config=None):
+            deadlines.append(providers._deadline.get())
+            raise RuntimeError("model unavailable")
+
+        started = providers.time.monotonic()
+        with app_client(generate_reply=provider) as client:
+            response = client.post(
+                "/api/ai/chat",
+                json={
+                    "prompt": "How can I save more money?",
+                    "history": [],
+                    "spending_summary": {},
+                },
+                headers=headers(VALID_TOKEN),
+            )
+        finished = providers.time.monotonic()
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(deadlines)
+        self.assertEqual(len(set(deadlines)), 1)
+        # 25 seconds from when the request arrived
+        self.assertGreaterEqual(deadlines[0], started + 25)
+        self.assertLessEqual(deadlines[0], finished + 25)
+        # and it's cleared once the request is answered
+        self.assertEqual(providers._deadline.get(), 0.0)
 
 
 class ChatServerSummaryTests(unittest.TestCase):

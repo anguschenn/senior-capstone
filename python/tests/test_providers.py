@@ -106,6 +106,33 @@ class SlowModelTests(unittest.TestCase):
         error = providers.urllib.error.URLError(ConnectionRefusedError("refused"))
         self.assertEqual(self._ask(error), [20, 20])
 
+    def test_a_question_s_model_calls_share_one_budget(self):
+        # Each call answers just under its limit, so no single call times out; together
+        # three of them would still run past the app's 30 seconds.
+        now = [1000.0]
+        calls = []
+
+        def fake_urlopen(req, timeout=None, **_kwargs):
+            calls.append(round(timeout))
+            now[0] += timeout - 1
+            return _Response({"response": "ok"})
+
+        with (
+            mock.patch.object(providers.time, "monotonic", lambda: now[0]),
+            mock.patch.object(providers.urllib.request, "urlopen", fake_urlopen),
+            providers.answer_within(25),
+        ):
+            self.assertEqual(providers.generate_llm_reply("reword"), "ok")
+            self.assertEqual(providers.generate_llm_reply("classify"), "ok")
+            with self.assertRaises(RuntimeError):
+                providers.generate_llm_reply("advice")
+        self.assertEqual(calls, [20, 6])
+        self.assertLess(now[0] - 1000.0, 25)
+        # outside a request a call gets its full 20 seconds again
+        with mock.patch.object(providers.urllib.request, "urlopen", fake_urlopen):
+            providers.generate_llm_reply("hi")
+        self.assertEqual(calls[-1], 20)
+
 
 class OpenRouterRequestTests(unittest.TestCase):
     def _run(self, fail_first_with=None):

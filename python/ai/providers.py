@@ -1,3 +1,5 @@
+import contextlib
+import contextvars
 import json
 import time
 import urllib.error
@@ -24,6 +26,34 @@ _SLOW_PAUSE_SECONDS = 60
 _slow_until = 0.0
 # Keep the local model loaded between questions; reloading it adds seconds to the next one.
 _OLLAMA_KEEP_ALIVE = "30m"
+# Set by answer_within(): when the current request's model calls must be done.
+_deadline = contextvars.ContextVar("model_deadline", default=0.0)
+# A call with less time than this left isn't started; it couldn't finish anyway.
+_MIN_CALL_SECONDS = 3
+
+
+@contextlib.contextmanager
+def answer_within(seconds):
+    """Model calls inside the block share one time budget. One chat question can call the
+    model three times (reword, classify, advice), so 20 seconds each could still run past
+    the app's 30; once the budget is spent, calls fail at once and the rules answer."""
+    token = _deadline.set(time.monotonic() + seconds)
+    try:
+        yield
+    finally:
+        _deadline.reset(token)
+
+
+def _call_timeout():
+    """Seconds the next model call may take: 20, or what's left of the request's budget."""
+    deadline = _deadline.get()
+    if not deadline:
+        return _DEFAULT_TIMEOUT_SECONDS
+    left = deadline - time.monotonic()
+    if left < _MIN_CALL_SECONDS:
+        raise RuntimeError("This request has no time left for a model call")
+    return min(_DEFAULT_TIMEOUT_SECONDS, left)
+
 
 _OPENROUTER_MAX_RETRIES = 2
 
@@ -47,7 +77,7 @@ def _post_ollama(endpoint, body):
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=_DEFAULT_TIMEOUT_SECONDS) as response:
+    with urllib.request.urlopen(req, timeout=_call_timeout()) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
@@ -148,7 +178,7 @@ def _generate_openrouter_reply(prompt, generation_config=None):
             method="POST",
         )
         try:
-            with urllib.request.urlopen(req, timeout=_DEFAULT_TIMEOUT_SECONDS) as response:
+            with urllib.request.urlopen(req, timeout=_call_timeout()) as response:
                 raw = response.read().decode("utf-8")
                 parsed = json.loads(raw)
             break
