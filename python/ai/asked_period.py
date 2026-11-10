@@ -190,7 +190,13 @@ def asked_period(text, summary):
                 months=tuple(months),
                 ends=(months[0], months[-1]),
             )
-    if _THIS_YEAR_RE.search(text):
+    if (
+        _THIS_YEAR_RE.search(text)
+        and not month_mentions(text)
+        and not re.search(r"\b(last|previous|past) year\b|\b20\d{2}\b", text)
+    ):
+        # "october than september this year": the year only says which October;
+        # "this year vs last year" is two whole years
         return AskedPeriod(
             kind="months",
             label="for this year",

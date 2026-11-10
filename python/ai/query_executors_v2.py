@@ -2372,7 +2372,7 @@ def _exec_day_span(query_spec, summary, scope_label):
         return _pointer(
             f"I only get daily totals from {min(days)} on, so I can't add up {start} to {end}. "
             "Activity lists the transactions for those dates.",
-            "Open Activity and filter to those dates.",
+            "Open Activity and pick that month to see those dates.",
         )
     total = 0.0
     count = 0
@@ -3164,6 +3164,36 @@ def _exec_data_pointer(query_spec, summary, scope_label):
             "income from the accounts you've connected.",
             "Ask: How much did I spend this month?",
         )
+    if mode == "compare_years":
+        return _compare_years(query_spec, summary, scope_label)
+    if mode == "account_number":
+        return _pointer(
+            "Chat never sees card or account numbers; your bank login and account details stay "
+            "with Plaid. The Wallet tab shows each account's last 4 digits.",
+            "Open Wallet to see which accounts are connected.",
+        )
+    if mode == "duplicates":
+        recent = [r for r in summary.get("recent_transactions") or [] if isinstance(r, dict)]
+        seen, twice = set(), []
+        for row in recent:
+            amount = round(float(row.get("amount", 0) or 0), 2)
+            key = (row.get("date"), str(row.get("name", "")).strip().lower(), amount)
+            if amount > 0 and key in seen:
+                twice.append(f"{row.get('name')} ${amount:.2f} on {row.get('date')}")
+            seen.add(key)
+        if twice:
+            reply = (
+                f"In your latest {len(recent)} transactions, these show up twice with the same "
+                f"amount on the same day: {'; '.join(twice)}. That can be a real double charge "
+                "or two separate purchases."
+            )
+        else:
+            reply = (
+                f"I checked only your latest {len(recent)} transactions, and none of them is the "
+                "same charge twice. Chat can't check older charges one by one; Activity lists "
+                "every charge."
+            )
+        return _pointer(reply, "Search Activity for a merchant to see all its charges.")
     if mode == "uses_ai":
         return _pointer(
             "Yes, partly. An AI model reads unusual wording and writes advice, but it never "
@@ -3939,7 +3969,7 @@ def _subscription_answer(query_spec, subs):
         if len(subs) == 1:
             return answer(
                 f"Of your subscriptions, there's only one active: {line(subs[0])}.",
-                "Open the Subs tab to cancel or confirm it.",
+                "Open the Subs tab to confirm it is a subscription.",
             )
         if len(tied) > 1:
             names = f"{', '.join(s['name'] for s in tied[:-1])} and {tied[-1]['name']}"
@@ -3956,17 +3986,17 @@ def _subscription_answer(query_spec, subs):
             )
             if len(ranked) > 1:
                 reply += f" Next: {line(ranked[1])}."
-        return answer(reply, "Open the Subs tab to cancel or confirm one.")
+        return answer(reply, "Open the Subs tab to confirm which ones are subscriptions.")
     if query_spec.compare_to == "total":
         return answer(
             f"Your {len(subs)} active subscription{'' if len(subs) == 1 else 's'} come to about "
             f"${monthly:,.2f} a month: " + "; ".join(line(s) for s in subs) + ".",
-            "Open the Subs tab to cancel or confirm one.",
+            "Open the Subs tab to confirm which ones are subscriptions.",
         )
     return answer(
         f"You have {len(subs)} active subscription{'' if len(subs) == 1 else 's'}, about "
         f"${monthly:,.2f} a month: " + "; ".join(line(s) for s in subs) + ".",
-        "Open the Subs tab to cancel or confirm one.",
+        "Open the Subs tab to confirm which ones are subscriptions.",
     )
 
 
@@ -4847,6 +4877,29 @@ def _exec_what_if_cancel(query_spec, summary, scope_label):
     name = (query_spec.category or "").strip().lower()
     if len(name) < 3:
         return None
+    # The Subs tab's recurring charges know the amount and cycle; recent rows only
+    # cover the last few days.
+    subs = summary.get("subscriptions")
+    for sub in subs if isinstance(subs, list) else []:
+        if not isinstance(sub, dict) or name not in str(sub.get("name", "")).lower():
+            continue
+        amount = float(sub.get("amount", 0) or 0)
+        frequency = str(sub.get("frequency", "") or "").lower()
+        if amount <= 0 or frequency not in _PER_MONTH:
+            continue
+        monthly = amount * _PER_MONTH[frequency]
+        nxt = f", next on {sub['next_charge']}" if sub.get("next_charge") else ""
+        return {
+            "reply": (
+                f"{sub['name']} bills ${amount:.2f} {frequency}{nxt}. Cancelling it would save "
+                f"about ${monthly:,.2f} a month, about ${monthly * 12:,.0f} a year."
+            ),
+            "insights": ["From the Subs tab's recurring charges."],
+            "actions": [f"Cancel it with {sub['name']} directly; the app can't cancel it for you."],
+            "missing_fields": [],
+            "facts_used": ["subscriptions"],
+            "period_resolved": "",
+        }
     recent = summary.get("recent_transactions")
     if not isinstance(recent, list):
         return None
@@ -4880,6 +4933,98 @@ def _exec_what_if_cancel(query_spec, summary, scope_label):
         "missing_fields": [],
         "facts_used": ["recent_transactions"],
         "period_resolved": "recent",
+    }
+
+
+def _compare_years(query_spec, summary, scope_label):
+    """Spending in two years, or which of them has no data."""
+    month_index = summary.get("month_index") if isinstance(summary.get("month_index"), dict) else {}
+    if not month_index:
+        return None
+    older, newer = query_spec.period_key.split(",")
+    income = query_spec.metric == "income"
+    stores = []
+    if query_spec.period_type == "merchant":
+        index = summary.get("merchant_index")
+        stores = matching_merchants(query_spec.category, index) if isinstance(index, dict) else []
+        if not stores:
+            return None
+    names = (
+        []
+        if income or stores
+        else [n.strip() for n in (query_spec.category or "").split(",") if n.strip()]
+    )
+    if income:
+        subject = "income"
+    elif stores:
+        subject = f"spending at {' and '.join(stores) if len(stores) <= 2 else stores[0]}"
+    elif names:
+        subject = " and ".join(names) + " spending"
+    else:
+        subject = "spending"
+
+    def year_total(year):
+        rows = [row for key, row in month_index.items() if str(key).startswith(f"{year}-")]
+        if not rows:
+            return None, 0
+        if income:
+            values = [float(row.get("income", 0) or 0) for row in rows]
+        elif stores:
+            values = [
+                float(cell.get("spent", 0) or 0)
+                for store in stores
+                for month, cell in (summary["merchant_index"][store].get("months") or {}).items()
+                if str(month).startswith(f"{year}-") and isinstance(cell, dict)
+            ]
+        elif names:
+            values = [sum(_month_amount(row, n) or 0.0 for n in names) for row in rows]
+        else:
+            values = [float(row.get("expenses", 0) or 0) for row in rows]
+        return sum(values), len(rows)
+
+    def so_far(year):
+        return " so far" if int(year) == date_cls.today().year else ""
+
+    new_total, new_months = year_total(newer)
+    old_total, old_months = year_total(older)
+    start = min(month_index)
+    if old_total is None or new_total is None:
+        missing = older if old_total is None else newer
+        if int(missing) > date_cls.today().year:
+            return _pointer(
+                f"{missing} hasn't happened yet, so there's nothing to compare.",
+                "Ask to compare this year with last year.",
+            )
+        have, total, months = (
+            (newer, new_total, new_months) if old_total is None else (older, old_total, old_months)
+        )
+        reply = (
+            f"Your data starts in {start}, so there's nothing recorded for {missing} to compare."
+        )
+        if total is not None:
+            reply += (
+                f" In {have}{so_far(have)}, {subject} for {scope_label} is about ${total:,.0f} "
+                f"({months} months)."
+            )
+        return _pointer(reply, f"Ask to compare two months from {start} on.")
+    diff = new_total - old_total
+    direction = "more" if diff > 0 else "less"
+    answer = ""
+    if query_spec.compare_to in {"more", "less"}:
+        # the question puts the later year first: "more this year than last year"
+        yes = diff > 0 if query_spec.compare_to == "more" else diff < 0
+        answer = "Yes. " if yes else "No. "
+    return {
+        "reply": (
+            f"{answer}{subject[0].upper() + subject[1:]} for {scope_label}: about ${old_total:,.0f} in {older} "
+            f"({old_months} months) and ${new_total:,.0f} in {newer}{so_far(newer)} "
+            f"({new_months} months), ${abs(diff):,.0f} {direction}."
+        ),
+        "insights": ["Years with fewer months of data have smaller totals."],
+        "actions": ["Ask to compare the same month in both years."],
+        "missing_fields": [],
+        "facts_used": ["month_index.income" if income else "month_index.expenses"],
+        "period_resolved": f"{older} to {newer}",
     }
 
 

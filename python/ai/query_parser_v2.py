@@ -458,7 +458,7 @@ _CUT_DOLLARS_RE = re.compile(
     r"|\b(?:spent|spend|spending)\s+(\d{1,6})\s+dollars\s+less\b"
 )
 _CANCEL_RE = re.compile(
-    r"\b(cancel|stop|stopped|drop|quit|end)\s+(?:paying for\s+|my\s+)?([a-z0-9][a-z0-9 .*]{1,40}?)(?:\s*,|\s+how\b|\s+what\b|\s+would\b|$)"
+    r"\b(cancel|cancelled|canceled|cancelling|canceling|stop|stopped|drop|quit|end)\s+(?:paying for\s+|my\s+)?([a-z0-9][a-z0-9 .*]{1,40}?)(?:\s*,|\s+how\b|\s+what\b|\s+would\b|$)"
 )
 
 
@@ -785,6 +785,20 @@ def _boundary_spec(text, scope):
         return QuerySpec(task_type="data_pointer", scope=scope, reason_mode="uses_ai")
     if _HOW_IT_WORKS_RE.search(text):
         return QuerySpec(task_type="data_pointer", scope=scope, reason_mode="how_it_works")
+    if re.search(
+        r"\b(card|account|routing|bank account|social security|ssn) (number|numbers|no)\b"
+        r"(?! longer)|"
+        r"\b(cvv|cvc|security code)\b",
+        text,
+    ):
+        return QuerySpec(task_type="data_pointer", scope=scope, reason_mode="account_number")
+    if re.search(
+        r"\b(duplicate|duplicated|double) (charge|charges|charged|payment|payments|"
+        r"transaction|transactions|billing)\b|\b(charged|billed|paid)( me)? twice\b|"
+        r"\bany duplicates\b",
+        text,
+    ):
+        return QuerySpec(task_type="data_pointer", scope=scope, reason_mode="duplicates")
     if _OFF_TOPIC_RE.search(text):
         return QuerySpec(task_type="data_pointer", scope=scope, reason_mode="off_topic")
     capabilities = re.search(
@@ -2965,6 +2979,18 @@ def _merchant_asked(spec, message, summary):
             # "did I spend anything at walmart": a store not in the data is a No, not
             # the month's total
             term = named_at
+        elif (
+            not term
+            and spec.task_type in {"category_spending", "amount_lookup"}
+            and isinstance(summary, dict)
+            and isinstance(summary.get("merchant_index"), dict)
+            and summary["merchant_index"]
+            and _approx_term(text) in _MERCHANT_TERMS
+            and not _category_in(text, summary, include_approx=False)
+        ):
+            # "how much did I spend at starbucks" with no Starbucks charges: say so, not
+            # the whole Food total
+            term = _approx_term(text)
         if not term or (
             spec.task_type
             not in {"category_spending", "amount_lookup", "compare_periods", "day_span"}
@@ -3328,6 +3354,46 @@ def _parse_query_v2(message, summary, history=None):
     return spec
 
 
+def _compared_years(text):
+    """ "2025,2026" for "compare this year to last year" or "2026 vs 2025", else ""."""
+    if not re.search(
+        r"\b(compare|compared|comparison|vs|versus|than|difference|differ|change|changed)\b",
+        text,
+    ) or re.search(
+        # "october 2026 vs october 2025" compares months, not years
+        r"\b(january|february|march|april|may|june|july|august|september|october|november|"
+        r"december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec|q[1-4]|quarter|month|"
+        r"months|week|weeks)\b",
+        text,
+    ):
+        return ""
+    this_year = date_cls.today().year
+    years = {int(y) for y in re.findall(r"\b(20\d{2})\b", text)}
+    if re.search(r"\bthis year\b", text):
+        years.add(this_year)
+    if re.search(r"\b(last|previous|past) year\b", text):
+        years.add(this_year - 1)
+    if len(years) != 2:
+        return ""
+    older, newer = sorted(years)
+    return f"{older},{newer}"
+
+
+def _years_yes_no(text, years):
+    """ "more" or "less" for "did I spend more/less <later year> than <earlier year>", the
+    word flipped when the earlier year comes first; "" for other asks."""
+    word = re.search(r"\b(more|less|higher|lower|bigger|smaller|fewer)\b", text)
+    if not word or not re.match(r"^(did|do|have|has|was|were|am|is|are)\b", text):
+        return ""
+    asked = "more" if word.group(1) in {"more", "higher", "bigger"} else "less"
+    older, newer = years.split(",")
+    later = re.search(rf"\bthis year\b|\b{newer}\b", text)
+    earlier = re.search(rf"\b(last|previous|past) year\b|\b{older}\b", text)
+    if later and earlier and earlier.start() < later.start():
+        return "less" if asked == "more" else "more"
+    return asked
+
+
 def _parse_query(message, summary, history=None):
     text = _normalize(message)
     if not text:
@@ -3376,6 +3442,37 @@ def _parse_query(message, summary, history=None):
     boundary = _boundary_spec(text, scope)
     if boundary is not None:
         return boundary
+    years = _compared_years(text)
+    if re.search(r"\b(save|saved|saving|savings)\b", text):
+        years = ""  # savings is income minus spending; other rules answer it
+    merchant = ""
+    if years:
+        # "more at costco this year than last year" is about one merchant
+        at = re.search(r"\b(?:at|from) ([a-z0-9][a-z0-9 .&'-]{1,30})", text)
+        named = _AFTER_NAME_RE.sub("", at.group(1)).strip() if at else ""
+        brand = next((t for t in _MERCHANT_TERMS if re.search(rf"\b{t}\b", text)), "")
+        if named and _has_merchant(named, summary):
+            merchant = named
+        elif brand and _has_merchant(brand, summary):
+            merchant = brand
+        elif brand:
+            years = ""  # a brand the user never paid: the merchant answer says so
+    if years:
+        return QuerySpec(
+            task_type="data_pointer",
+            scope=scope,
+            reason_mode="compare_years",
+            period_key=years,
+            period_type="merchant" if merchant else "",
+            category=merchant or ",".join(_categories_in(text, summary, include_approx=False)),
+            metric=(
+                "income"
+                if re.search(r"\b(earn|earned|income|make|made|paid|salary|got paid)\b", text)
+                else "expenses"
+            ),
+            # "did I spend more this year than last year": answer yes or no first
+            compare_to=_years_yes_no(text, years),
+        )
 
     for builder in (
         _special_asks_spec,
