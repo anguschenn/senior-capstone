@@ -5,7 +5,9 @@ from types import SimpleNamespace
 from unittest import mock
 
 import auth
+import supabase_repo
 from app_factory import create_app
+from routes import ai_routes
 
 API_KEY = "test-internal-api-key"
 VALID_TOKEN = "valid-supabase-token"
@@ -24,11 +26,12 @@ def fake_get_user(token):
 
 
 @contextlib.contextmanager
-def app_client(generate_reply=None):
+def app_client(generate_reply=None, linked_bank=True):
     """Yield a Flask test client with the API key set and Supabase auth mocked.
 
     generate_reply replaces the LLM provider handed to the services; it defaults to an
     autospec of the real provider so a wrong call signature fails like it does in prod.
+    linked_bank is what the linked-bank lookup answers for every user.
     """
     import app_factory
 
@@ -38,14 +41,17 @@ def app_client(generate_reply=None):
         mock.patch.object(auth, "INTERNAL_API_KEY", API_KEY),
         mock.patch.object(auth.supabase.auth, "get_user", side_effect=fake_get_user),
         mock.patch.object(app_factory, "generate_llm_reply", generate_reply),
+        mock.patch.object(supabase_repo, "has_linked_bank", return_value=linked_bank),
     ):
         auth._rate_buckets.clear()
+        ai_routes._linked_users.clear()
         app = create_app()
         app.testing = True
         app.config["question_log"] = None  # never write to the real database from tests
         app.config["chat_service"].rewrite_cache = None
         yield app.test_client()
         auth._rate_buckets.clear()
+        ai_routes._linked_users.clear()
 
 
 def headers(token=None, **extra):

@@ -4,6 +4,7 @@ from unittest import mock
 from route_helpers import VALID_TOKEN, app_client, headers
 
 import app_factory
+import supabase_repo
 from ai import providers
 from routes import ai_routes
 
@@ -212,6 +213,111 @@ class QuestionLogTableTests(unittest.TestCase):
         (row,) = db.tables["chat_question_log"]
         self.assertEqual(row["question"], "Can I afford a [amount] phone?")
         self.assertEqual(row["outcome"], "answered")
+
+
+class NoLinkedBankTests(unittest.TestCase):
+    """An account with no bank connected gets no model call from any AI route."""
+
+    # a category over its limit, so the forecast has something for the model to word
+    _PROGRESS = [{"category": "Food", "spent": 195, "limit": 100, "ratio": 1.95}]
+
+    def _provider(self):
+        return mock.create_autospec(app_factory.generate_llm_reply, return_value="Dining Out")
+
+    def _chat(self, client, prompt="How can I spend less on food?"):
+        return client.post(
+            "/api/ai/chat",
+            json={"prompt": prompt, "history": [], "spending_summary": {}},
+            headers=headers(VALID_TOKEN),
+        )
+
+    def test_chat_asks_for_a_bank_instead_of_answering(self):
+        provider = self._provider()
+        recorded = []
+        with app_client(generate_reply=provider, linked_bank=False) as client:
+            client.application.config["question_log"] = lambda p, r: recorded.append(p)
+            for prompt in ("How much did I spend this month?", "How can I spend less on food?"):
+                with self.subTest(prompt=prompt):
+                    response = self._chat(client, prompt)
+                    self.assertEqual(response.status_code, 200)
+                    body = response.get_json()
+                    self.assertTrue(body["reply"].startswith("Connect a bank account first."))
+                    self.assertEqual(
+                        body["actions"], ["Open Wallet and tap +, or use Add Bank in Settings."]
+                    )
+                    self.assertEqual(body["context_source"], "no_linked_bank")
+        provider.assert_not_called()
+        self.assertEqual(recorded, [])
+
+    def test_chat_works_right_after_a_bank_is_linked(self):
+        # "no" isn't remembered: the next question looks again
+        provider = self._provider()
+        with app_client(generate_reply=provider, linked_bank=False) as client:
+            self.assertEqual(self._chat(client).get_json()["context_source"], "no_linked_bank")
+            supabase_repo.has_linked_bank.return_value = True
+            self.assertNotEqual(self._chat(client).get_json()["context_source"], "no_linked_bank")
+
+    def test_a_linked_user_is_looked_up_once(self):
+        with app_client() as client:
+            for _ in range(3):
+                self.assertNotEqual(
+                    self._chat(client, "hello").get_json()["context_source"], "no_linked_bank"
+                )
+            self.assertEqual(supabase_repo.has_linked_bank.call_count, 1)
+
+    def test_a_failed_lookup_does_not_lock_anyone_out(self):
+        with app_client() as client:
+            supabase_repo.has_linked_bank.side_effect = RuntimeError("database down")
+            body = self._chat(client, "hello").get_json()
+        self.assertNotEqual(body["context_source"], "no_linked_bank")
+
+    def test_budget_analysis_uses_the_rule_wording(self):
+        provider = self._provider()
+        with app_client(generate_reply=provider, linked_bank=False) as client:
+            response = client.post(
+                "/api/ai/budget_suggest",
+                json={"view_mode": "month", "budget_progress": self._PROGRESS, "simplified": False},
+                headers=headers(VALID_TOKEN),
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["context_source"], "deterministic_simplified")
+        provider.assert_not_called()
+
+    def test_predict_uses_the_rule_wording(self):
+        provider = self._provider()
+        with app_client(generate_reply=provider, linked_bank=False) as client:
+            response = client.post(
+                "/api/ai/predict",
+                json={"type": "budget_overrun_forecast", "budget_progress": self._PROGRESS},
+                headers=headers(VALID_TOKEN),
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.get_json()["fallback_used"])
+        provider.assert_not_called()
+
+    def test_category_suggestion_is_empty(self):
+        provider = self._provider()
+        with app_client(generate_reply=provider, linked_bank=False) as client:
+            response = client.post(
+                "/api/ai/suggest_category",
+                json={"merchant_name": "Starbucks", "transaction_name": "STARBUCKS #123"},
+                headers=headers(VALID_TOKEN),
+            )
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()
+        self.assertEqual(body["suggested_category"], "")
+        self.assertEqual(body["context_source"], "no_linked_bank")
+        provider.assert_not_called()
+
+    def test_with_a_bank_the_model_is_asked(self):
+        provider = self._provider()
+        with app_client(generate_reply=provider) as client:
+            client.post(
+                "/api/ai/predict",
+                json={"type": "budget_overrun_forecast", "budget_progress": self._PROGRESS},
+                headers=headers(VALID_TOKEN),
+            )
+        provider.assert_called()
 
 
 if __name__ == "__main__":
