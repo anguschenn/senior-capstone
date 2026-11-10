@@ -1486,6 +1486,20 @@ def _exec_month_extreme(query_spec, summary, scope_label):
 
 def _exec_savings_goal(query_spec, summary, scope_label):
     """Which 20% category cuts add up to a monthly savings goal."""
+    spread = re.match(r"^(\d+):(\d+)$", query_spec.compare_to or "")
+    if spread:
+        # "save $1000 in 3 months": answer for the monthly share, and say so first
+        result = _exec_savings_goal(
+            dataclasses.replace(query_spec, compare_to=""), summary, scope_label
+        )
+        if isinstance(result, dict) and result.get("reply"):
+            total, months = int(spread.group(1)), int(spread.group(2))
+            result = {
+                **result,
+                "reply": f"${total:,} over {months} months is about ${total / months:,.0f} a "
+                f"month. {result['reply']}",
+            }
+        return result
     try:
         goal = float(query_spec.period_key)
     except (TypeError, ValueError):
@@ -3176,10 +3190,11 @@ def _exec_data_pointer(query_spec, summary, scope_label):
         )
     if mode == "privacy":
         return _pointer(
-            "To answer, the app sends a summary of your own accounts (monthly and category "
-            "totals and your latest few transactions) to its server, and some questions are "
-            "passed to an AI model. Chat never sees bank logins or account numbers. For how "
-            "data is stored, ask the app's team.",
+            "Your bank login goes to Plaid, not to the app. The app keeps your synced "
+            "transactions in its own database so it can show them; to answer, chat reads "
+            "monthly and category totals and your latest few transactions from there, and some "
+            "questions are passed to an AI model. Chat never sees bank logins or account "
+            "numbers.",
             "Ask about your spending any time.",
         )
     if mode == "approx_cut":
@@ -4529,6 +4544,17 @@ def _budget_status(query_spec, summary):
             f"budget, so "
             + (f"${left:,.0f} is left to spend." if left >= 0 else f"you're ${-left:,.0f} over.")
         )
+        budgeted = sum(float(i["spent"]) for i in items)
+        if float(spent_total) - budgeted >= 1 and len(items) <= 3:
+            # "$1,019 of your $100 budget" reads as an error when the one budget is Food.
+            cats = [i["category"] for i in items]
+            names = (
+                " and ".join(cats) if len(cats) <= 2 else f"{', '.join(cats[:-1])} and {cats[-1]}"
+            )
+            reply += (
+                f" Your budgets only cover {names}, and like the Budget tab this counts "
+                f"all of the month's spending against them."
+            )
         if over:
             reply += (
                 " Over budget: "
