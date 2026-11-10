@@ -686,6 +686,12 @@ class TestChatServiceContract(unittest.TestCase):
         self.assertIsInstance(response["actions"], list)
         self.assertGreater(len(response["insights"]), 0)
         self.assertGreater(len(response["actions"]), 0)
+        # the model failed, not the data: don't tell the user their data is thin
+        self.assertEqual(
+            response["insights"],
+            ["Worked out with a fixed rule, not the AI model."],
+        )
+        self.assertNotIn("Refresh", " ".join(response["actions"]))
 
     def test_chat_does_not_use_server_snapshot_when_summary_missing(self):
         def generate_reply(_prompt, generation_config=None):
