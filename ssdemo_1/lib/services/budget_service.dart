@@ -37,10 +37,10 @@ class BudgetService {
     return out;
   }
 
-  /// Creates [monthYear]'s missing budget rows. A limit the user set last
-  /// month carries forward; otherwise the limit comes from spending history
-  /// (category_month_stats, see [autoLimits]); otherwise last month's limit.
-  /// Existing rows are never changed.
+  /// Creates [monthYear]'s missing budget rows. A limit from last month
+  /// carries forward (the user's as is, the app's recalculated from spending
+  /// history, see [autoLimits]); a category with no limit last month starts
+  /// at 0. Existing rows are never changed.
   Future<void> ensureMonthlyBudgetRows(
     List<CategoryOption> categories,
     String monthYear,
@@ -184,10 +184,12 @@ class BudgetService {
   }
 
   /// Limits for a new month's rows, by card name: the user's own limit from
-  /// last month as is ('user'); else the trimmed mean (highest and lowest
-  /// month dropped) of the card's spend over the last 6 months with any
-  /// spending, at least 3, rounded to $5 ('auto'); else last month's limit;
-  /// else 0. [previous] is keyed by normalized name. Mirrors
+  /// last month as is ('user'). A card with no limit last month stays at 0
+  /// ('auto'): the backend suggests a limit to accept instead of budgeting
+  /// out of nowhere. A limit the app set carries on as the trimmed mean
+  /// (highest and lowest month dropped) of the card's spend over the last 6
+  /// months with any spending, at least 3, rounded to $5 ('auto'); else as
+  /// last month's limit. [previous] is keyed by normalized name. Mirrors
   /// python/user_model.py auto_limits: both run
   /// python/tests/data/budget_auto_limit_contract.json.
   static Map<String, ({double limit, String source})> autoLimits({
@@ -224,6 +226,10 @@ class BudgetService {
         out[name] = (limit: prev.limit, source: 'user');
         continue;
       }
+      if (prev == null || prev.limit <= 0) {
+        out[name] = (limit: 0, source: 'auto');
+        continue;
+      }
       if (months.length >= _autoLimitMinMonths) {
         final spend = [
           for (final m in months)
@@ -235,7 +241,7 @@ class BudgetService {
           continue;
         }
       }
-      out[name] = (limit: prev?.limit ?? 0, source: 'auto');
+      out[name] = (limit: prev.limit, source: 'auto');
     }
     return out;
   }

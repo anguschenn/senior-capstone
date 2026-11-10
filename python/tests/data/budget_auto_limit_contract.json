@@ -2,7 +2,7 @@
   "description": "Shared by python/tests/test_user_model.py and ssdemo_1/test/services/budget_auto_limit_contract_test.dart: limits for a new month's budget rows (user_model.auto_limits / BudgetService.autoLimits). `previous` is keyed by normalized card name.",
   "cases": [
     {
-      "description": "history, carried user limits, folding into Other, rounding",
+      "description": "history for limits the app set, carried user limits, no limit last month stays $0, folding into Other, rounding",
       "month": "2026-11",
       "cards": [
         "Food",
@@ -162,11 +162,11 @@
           "source": "user"
         },
         "Transport": {
-          "limit": 50.0,
+          "limit": 0.0,
           "source": "auto"
         },
         "Health": {
-          "limit": 5.0,
+          "limit": 0.0,
           "source": "auto"
         },
         "Other": {
@@ -230,7 +230,12 @@
       "cards": [
         "Food"
       ],
-      "previous": {},
+      "previous": {
+        "food": {
+          "limit": 100,
+          "source": "auto"
+        }
+      },
       "stats": [
         {
           "month": "2026-07",
@@ -261,6 +266,93 @@
       "expected": {
         "Food": {
           "limit": 240.0,
+          "source": "auto"
+        }
+      }
+    },
+    {
+      "description": "no limit last month ($0 the app left, or no row): stays $0 even with history",
+      "stats": [
+        {
+          "month": "2026-07",
+          "category": "Food",
+          "spent": 100
+        },
+        {
+          "month": "2026-09",
+          "category": "Food",
+          "spent": 232.4
+        },
+        {
+          "month": "2026-11",
+          "category": "Food",
+          "spent": 250
+        },
+        {
+          "month": "2026-12",
+          "category": "Food",
+          "spent": 300
+        },
+        {
+          "month": "2026-06",
+          "category": "Food",
+          "spent": 999
+        }
+      ],
+      "cards": [
+        "Food"
+      ],
+      "previous": {
+        "food": {
+          "limit": 0,
+          "source": "auto"
+        }
+      },
+      "month": "2027-01",
+      "expected": {
+        "Food": {
+          "limit": 0.0,
+          "source": "auto"
+        }
+      }
+    },
+    {
+      "description": "no row at all last month: stays $0 even with history",
+      "stats": [
+        {
+          "month": "2026-07",
+          "category": "Food",
+          "spent": 100
+        },
+        {
+          "month": "2026-09",
+          "category": "Food",
+          "spent": 232.4
+        },
+        {
+          "month": "2026-11",
+          "category": "Food",
+          "spent": 250
+        },
+        {
+          "month": "2026-12",
+          "category": "Food",
+          "spent": 300
+        },
+        {
+          "month": "2026-06",
+          "category": "Food",
+          "spent": 999
+        }
+      ],
+      "cards": [
+        "Food"
+      ],
+      "previous": {},
+      "month": "2027-01",
+      "expected": {
+        "Food": {
+          "limit": 0.0,
           "source": "auto"
         }
       }
