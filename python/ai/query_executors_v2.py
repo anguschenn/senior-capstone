@@ -1831,10 +1831,9 @@ def _exec_affordability(query_spec, summary, scope_label):
     }
 
 
-def _usual_by_category(summary):
-    """([(category, usual monthly spend)], span) from the recent full months, biggest first
-    and without transfers. None when there are no such months or they aren't split by
-    category."""
+def _average_by_category(summary):
+    """({category: average monthly spend}, span) over the recent full months. None when
+    there are none or they aren't split by category."""
     keys, month_index = _recent_full_months(summary)
     if not keys:
         return None
@@ -1845,11 +1844,70 @@ def _usual_by_category(summary):
             return None
         for name, amount in cats.items():
             totals[str(name)] = totals.get(str(name), 0.0) + float(amount or 0) / len(keys)
+    return totals, keys[-1] if len(keys) == 1 else f"{keys[-1]} to {keys[0]}"
+
+
+def _usual_month_by_category(summary):
+    """({category: usual month}, span) the way the Budget tab suggests limits
+    (user_model.history_limit): over the up to 6 months before the selected one that have
+    spending, each category's average with its highest and lowest month left out, rounded
+    to $5. None with fewer than 3 such months."""
+    from user_model import HISTORY_MONTHS, history_limit
+
+    server = summary.get("usual_limits")
+    if isinstance(server, dict) and server.get("limits") and server.get("months"):
+        # worked out on the server from the same rows as the Budget tab's suggestions
+        months = server["months"]
+        return dict(server["limits"]), f"{months[0]} to {months[-1]}"
+    month_index = summary.get("month_index") if isinstance(summary.get("month_index"), dict) else {}
+    keys, month = [], _selected_month(summary)
+    for _ in range(HISTORY_MONTHS):
+        month = _prev_month_key(month) if month else None
+        if not month:
+            break
+        cats = month_index[month].get("categories") if month in month_index else None
+        if isinstance(cats, dict) and any(float(v or 0) > 0 for v in cats.values()):
+            keys.append(month)
+    keys.reverse()
+    usual = {}
+    for name in sorted({str(n) for key in keys for n in month_index[key]["categories"]}):
+        spend = [round(float(month_index[k]["categories"].get(name, 0) or 0), 2) for k in keys]
+        limit = history_limit(spend)
+        if limit:
+            usual[name] = float(limit)
+    if not usual:
+        return None
+    return usual, f"{keys[0]} to {keys[-1]}"
+
+
+def _suggested_limits(summary):
+    """([(category, limit, usual)], span, tab): a suggested monthly limit per category,
+    biggest first, without transfers and small amounts. With enough history these are the
+    Budget tab's own numbers (tab True, limit == usual); otherwise 10% below the average of
+    the recent full months. None when neither can be worked out."""
+    usual = _usual_month_by_category(summary)
+    tab = usual is not None
+    if not tab:
+        usual = _average_by_category(summary)
+        if usual is None:
+            return None
+    amounts, span = usual
     ranked = sorted(
-        ((k, v) for k, v in totals.items() if v >= 10 and "transfer" not in k.lower()),
-        key=lambda kv: -kv[1],
+        (
+            (name, amount if tab else amount * 0.9, amount)
+            for name, amount in amounts.items()
+            if amount >= 10 and "transfer" not in name.lower()
+        ),
+        key=lambda row: -row[2],
     )
-    return ranked, keys[-1] if len(keys) == 1 else f"{keys[-1]} to {keys[0]}"
+    return ranked, span, tab
+
+
+_USUAL_MONTH_NOTE = (
+    "Usual month = your average with the highest and lowest month left out, the same "
+    "figure the Budget tab suggests."
+)
+_AVERAGE_NOTE = "Usual = average of your recent full months for each category."
 
 
 def _budgeted_categories(summary):
@@ -1862,29 +1920,36 @@ def _budgeted_categories(summary):
 
 
 def _limit_hint(summary, category):
-    """A sentence (with a leading space) suggesting a limit for a category that has none,
-    from its usual spending; "" when chat can't tell what's usual."""
-    usual = _usual_by_category(summary)
-    if not usual or not category:
+    """A sentence (with a leading space) suggesting a limit for a category that has none;
+    "" when chat can't tell what's usual for it."""
+    suggested = _suggested_limits(summary)
+    if not suggested or not category:
         return ""
-    ranked, span = usual
-    amount = next((v for name, v in ranked if name.lower() == category.lower()), 0.0)
-    if amount <= 0:
+    ranked, span, tab = suggested
+    row = next((r for r in ranked if r[0].lower() == category.lower()), None)
+    if row is None:
         return ""
+    _, limit, usual = row
+    if tab:
+        return (
+            f" Your usual month for {category} is about ${limit:,.0f} ({span}), a realistic "
+            "limit to start with."
+        )
     return (
-        f" You usually spend about ${amount:.0f} a month on {category} ({span}), so about "
-        f"${amount * 0.9:.0f} (10% below that) is a realistic limit."
+        f" You usually spend about ${usual:,.0f} a month on {category} ({span}), so about "
+        f"${limit:,.0f} (10% below that) is a realistic limit."
     )
 
 
 def _limits_hint(summary):
     """Like _limit_hint, for someone with no limits at all: one per main category."""
-    usual = _usual_by_category(summary)
-    if not usual or not usual[0]:
+    suggested = _suggested_limits(summary)
+    if not suggested or not suggested[0]:
         return ""
-    ranked, span = usual
-    lines = "; ".join(f"{name} ${amount * 0.9:.0f}" for name, amount in ranked[:5])
-    return f" A starting point, 10% below your usual ({span}): {lines}."
+    ranked, span, tab = suggested
+    lines = "; ".join(f"{name} ${limit:,.0f}" for name, limit, _ in ranked[:5])
+    how = "your usual month for each category" if tab else "10% below your usual"
+    return f" A starting point, {how} ({span}): {lines}."
 
 
 def _exec_budget_suggestion(query_spec, summary, scope_label):
@@ -1893,11 +1958,11 @@ def _exec_budget_suggestion(query_spec, summary, scope_label):
     if not keys:
         return None
     mode = query_spec.reason_mode
+    suggested = _suggested_limits(summary)
     if mode in {"plan", "limits", "limits_unset"}:
-        usual = _usual_by_category(summary)
-        if usual is None:
+        if suggested is None:
             return None
-        ranked, span = usual
+        ranked, span, tab = suggested
         if not ranked:
             return _pointer(
                 f"Most of {scope_label}'s spending is transfers and payments, which aren't "
@@ -1905,16 +1970,17 @@ def _exec_budget_suggestion(query_spec, summary, scope_label):
                 "Pick Overall (All Accounts) in the Account scope menu above the chat.",
                 "Switch the Account scope to Overall (All Accounts).",
             )
-        lead = "A starting plan for next month, 10% below your usual"
-        insights = ["Usual = average of your recent full months for each category."]
+        how = "your usual month for each category" if tab else "10% below your usual"
+        lead = f"A starting plan for next month, {how}"
+        insights = [_USUAL_MONTH_NOTE if tab else _AVERAGE_NOTE]
         action = "Enter these limits with Edit Budget on the Budget tab."
         facts = ["month_index.categories"]
         budgeted = _budgeted_categories(summary) if mode == "limits_unset" else None
         if budgeted is not None:
             # "for non-set budgets": only the categories with no limit yet
             month = summary["budgets"].get("month") or _selected_month(summary)
-            have = [name for name, _ in ranked if name.lower() in budgeted]
-            ranked = [(name, amount) for name, amount in ranked if name.lower() not in budgeted]
+            have = [row[0] for row in ranked if row[0].lower() in budgeted]
+            ranked = [row for row in ranked if row[0].lower() not in budgeted]
             facts = ["budgets", "month_index.categories"]
             if not ranked:
                 return {
@@ -1928,27 +1994,42 @@ def _exec_budget_suggestion(query_spec, summary, scope_label):
                     "facts_used": facts,
                     "period_resolved": span,
                 }
-            lead = "Suggested limits for the categories with no budget yet, 10% below your usual"
+            lead = f"Suggested limits for the categories with no budget yet, {how}"
             if have:
                 insights = [*insights, f"Already budgeted in {month}: {', '.join(have)}."]
             action = "Set these limits in the Budget tab."
         elif mode != "plan":
-            lead = "Suggested monthly limits, 10% below your usual"
+            lead = f"Suggested monthly limits, {how}"
         ranked = ranked[:6]
         lines = "; ".join(
-            f"{name} ${usual * 0.9:.0f} (usual ${usual:.0f})" for name, usual in ranked
+            f"{name} ${limit:,.0f}" if tab else f"{name} ${limit:.0f} (usual ${usual:.0f})"
+            for name, limit, usual in ranked
         )
-        total = sum(usual * 0.9 for _, usual in ranked)
+        total = sum(limit for _, limit, _ in ranked)
+        money = f"${total:,.0f}" if tab else f"${total:.0f}"
         return {
-            "reply": (
-                f"{lead} ({span}): {lines}. That's about ${total:.0f} across these categories."
-            ),
+            "reply": f"{lead} ({span}): {lines}. That's about {money} across these categories.",
             "insights": insights,
             "actions": [action],
             "missing_fields": [],
             "facts_used": facts,
             "period_resolved": span,
         }
+    if category and suggested and suggested[2]:
+        row = next((r for r in suggested[0] if r[0].lower() == category.lower()), None)
+        if row is not None:
+            limit, span = row[1], suggested[1]
+            return {
+                "reply": (
+                    f"Your usual month for {row[0]} is about ${limit:,.0f} ({span}). A budget "
+                    "of about that much is a realistic start."
+                ),
+                "insights": [_USUAL_MONTH_NOTE],
+                "actions": [f"Set {row[0]} to about ${limit:,.0f} in the Budget tab."],
+                "missing_fields": [],
+                "facts_used": ["month_index.categories"],
+                "period_resolved": span,
+            }
     if category:
         values = [_month_amount(month_index[k], category) for k in keys]
         if any(v is None for v in values):

@@ -409,29 +409,39 @@ class ExamAccountAnswerTests(unittest.TestCase):
         self.assertNotIn("Plaid", self.ask("Can you see my spending data for May?"))
 
     def test_budget_asks_get_a_suggested_limit(self):
-        # limits here: Food $305, Shopping $300, Transport $65; usual = March to May
-        self.assertEqual(
-            self.ask("Give me recommended budgets for June."),
-            "Suggested monthly limits, 10% below your usual (2026-03 to 2026-05): Shopping $489 "
-            "(usual $543); Food $276 (usual $307); Transport $54 (usual $60); Entertainment $27 "
-            "(usual $30); Subscriptions $25 (usual $27). That's about $871 across these "
-            "categories.",
+        # limits here: Food $305, Shopping $300, Transport $65. The suggestion is the Budget
+        # tab's "usual month": December to May with the highest and lowest left out, to $5.
+        plan = (
+            "your usual month for each category (2025-12 to 2026-05): Food $310; Shopping $135; "
+            "Transport $60; Entertainment $30; Subscriptions $25. That's about $560 across "
+            "these categories."
         )
         self.assertEqual(
-            self.ask("Can you suggest budgets for me?"),
-            self.ask("Give me recommended budgets for June."),
+            self.ask("Give me recommended budgets for June."), f"Suggested monthly limits, {plan}"
+        )
+        self.assertEqual(
+            self.ask("Can you suggest budgets for me?"), f"Suggested monthly limits, {plan}"
+        )
+        self.assertEqual(
+            self.ask("Give me a budget plan for next month."),
+            f"A starting plan for next month, {plan}",
         )
         # only the categories with no limit yet
         self.assertEqual(
             self.ask("Give me recommended budgets for non-set budgets based on history."),
-            "Suggested limits for the categories with no budget yet, 10% below your usual "
-            "(2026-03 to 2026-05): Entertainment $27 (usual $30); Subscriptions $25 (usual $27). "
-            "That's about $52 across these categories.",
+            "Suggested limits for the categories with no budget yet, your usual month for each "
+            "category (2025-12 to 2026-05): Entertainment $30; Subscriptions $25. That's about "
+            "$55 across these categories.",
+        )
+        self.assertEqual(
+            self.ask("Recommend a budget for shopping."),
+            "Your usual month for Shopping is about $135 (2025-12 to 2026-05). A budget of "
+            "about that much is a realistic start.",
         )
         # a category with no limit gets one suggested instead of only "you don't have one"
         hint = (
-            " You usually spend about $30 a month on Entertainment (2026-03 to 2026-05), so "
-            "about $27 (10% below that) is a realistic limit."
+            " Your usual month for Entertainment is about $30 (2025-12 to 2026-05), a realistic "
+            "limit to start with."
         )
         self.assertEqual(
             self.ask("What is my entertainment budget?"),
@@ -445,33 +455,49 @@ class ExamAccountAnswerTests(unittest.TestCase):
         for prompt in ("Edit the shopping budget for June.", "How do I edit my budget?"):
             with self.subTest(prompt=prompt):
                 self.assertEqual(self.ask(prompt), cant)
-        # the older "budget plan" wording is unchanged
-        self.assertTrue(
-            self.ask("Give me a budget plan for next month.").startswith(
-                "A starting plan for next month, 10% below your usual"
-            )
-        )
+
+    def _ask_with(self, summary, prompt):
+        return self.service.handle_chat(
+            {"prompt": prompt, "history": [], "spending_summary": summary}, user_id="u"
+        )["reply"]
 
     def test_with_no_budgets_set_chat_suggests_limits(self):
         summary = copy.deepcopy(self.summary)
         summary["budgets"]["items"] = []
-
-        def ask(prompt):
-            return self.service.handle_chat(
-                {"prompt": prompt, "history": [], "spending_summary": summary}, user_id="u"
-            )["reply"]
-
         self.assertEqual(
-            ask("Am I over budget?"),
-            "You haven't set any budget limits for 2026-06. A starting point, 10% below your "
-            "usual (2026-03 to 2026-05): Shopping $489; Food $276; Transport $54; Entertainment "
-            "$27; Subscriptions $25.",
+            self._ask_with(summary, "Am I over budget?"),
+            "You haven't set any budget limits for 2026-06. A starting point, your usual month "
+            "for each category (2025-12 to 2026-05): Food $310; Shopping $135; Transport $60; "
+            "Entertainment $30; Subscriptions $25.",
         )
         self.assertEqual(
-            ask("How much is left in my food budget?"),
-            "You haven't set any budget limits for 2026-06. You usually spend about $307 a "
-            "month on Food (2026-03 to 2026-05), so about $276 (10% below that) is a realistic "
-            "limit.",
+            self._ask_with(summary, "How much is left in my food budget?"),
+            "You haven't set any budget limits for 2026-06. Your usual month for Food is about "
+            "$310 (2025-12 to 2026-05), a realistic limit to start with.",
+        )
+
+    def test_the_server_s_usual_limits_are_used_as_given(self):
+        # the server works these out from the same rows as the Budget tab's suggestions
+        summary = copy.deepcopy(self.summary)
+        summary["usual_limits"] = {
+            "months": ["2026-03", "2026-04", "2026-05"],
+            "limits": {"Food": 320.0, "Dining": 45.0},
+        }
+        self.assertEqual(
+            self._ask_with(summary, "Give me recommended budgets for June."),
+            "Suggested monthly limits, your usual month for each category (2026-03 to "
+            "2026-05): Food $320; Dining $45. That's about $365 across these categories.",
+        )
+
+    def test_with_little_history_the_suggestion_is_below_the_average(self):
+        # fewer than 3 earlier months: the Budget tab suggests nothing, chat still helps
+        summary = copy.deepcopy(self.summary)
+        summary["month_index"] = {
+            month: row for month, row in summary["month_index"].items() if month >= "2026-04"
+        }
+        self.assertIn(
+            "(10% below that) is a realistic start",
+            self._ask_with(summary, "Recommend a budget for shopping."),
         )
 
     def test_tricky_asks_get_a_real_answer(self):
