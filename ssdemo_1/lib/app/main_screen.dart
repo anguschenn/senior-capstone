@@ -371,6 +371,7 @@ class _MainScreenState extends State<MainScreen> {
         scopeNote: oneAccount ? 'Budgets cover all accounts' : null,
         transactions: household.transactions,
         reviewedCategoryByTxId: c.reviewedCategoryByTxId,
+        subscriptions: confirmedSubscriptions,
         onAsk: _openAsk,
       ),
       SubscriptionsPage(

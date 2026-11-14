@@ -434,6 +434,7 @@ class BudgetService {
     required Map<String, String> reviewedCategoryByTxId,
     Map<String, double>? yearLimitByCategoryId,
     Map<String, Set<int>>? yearMonthsByCategoryId,
+    Set<String>? confirmedSubscriptionMerchants,
   }) {
     final spentByCategoryName = <String, double>{};
     final counted = <String>{};
@@ -456,6 +457,7 @@ class BudgetService {
       final bucket = _categoryService.budgetBucketForRawTransaction(
         row,
         reviewedCategoryByTxId,
+        confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
       );
       final bucketKey = normalizeCategoryKey(bucket);
       spentByCategoryName[bucketKey] =
@@ -506,8 +508,9 @@ class BudgetService {
     List<AppTransaction> txs,
     DateTime now,
     bool yearly,
-    Map<String, String> reviewedCategoryByTxId,
-  ) {
+    Map<String, String> reviewedCategoryByTxId, {
+    Set<String>? confirmedSubscriptionMerchants,
+  }) {
     const preset = kPresetBudgetCategories;
     final spentMap = <String, double>{for (final p in preset) p: 0};
     for (final tx in txs) {
@@ -520,6 +523,7 @@ class BudgetService {
       final bucket = _categoryService.budgetBucketFor(
         tx,
         reviewedCategoryByTxId,
+        confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
       );
       spentMap[bucket] = (spentMap[bucket] ?? 0) + tx.expenseAmount;
     }
@@ -540,8 +544,9 @@ class BudgetService {
   buildZeroLimitProgressFromPresetCategoriesAllTime(
     List<AppTransaction> txs,
     DateTime now,
-    Map<String, String> reviewedCategoryByTxId,
-  ) {
+    Map<String, String> reviewedCategoryByTxId, {
+    Set<String>? confirmedSubscriptionMerchants,
+  }) {
     const preset = kPresetBudgetCategories;
     final spentMap = <String, double>{for (final p in preset) p: 0};
     for (final tx in txs) {
@@ -549,6 +554,7 @@ class BudgetService {
       final bucket = _categoryService.budgetBucketFor(
         tx,
         reviewedCategoryByTxId,
+        confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
       );
       spentMap[bucket] = (spentMap[bucket] ?? 0) + tx.expenseAmount;
     }
@@ -573,6 +579,7 @@ class BudgetService {
     required bool yearly,
     required bool allTime,
     required Map<String, String> reviewedCategoryByTxId,
+    Set<String>? confirmedSubscriptionMerchants,
   }) {
     if (template.isEmpty) return const <BudgetCategoryProgress>[];
     final spentByCategory = <String, double>{};
@@ -593,6 +600,7 @@ class BudgetService {
       final bucket = _categoryService.budgetBucketFor(
         tx,
         reviewedCategoryByTxId,
+        confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
       );
       final key = normalizeCategoryKey(bucket);
       spentByCategory[key] = (spentByCategory[key] ?? 0) + tx.expenseAmount;

@@ -38,6 +38,7 @@ class BudgetPage extends StatefulWidget {
     this.scopeNote,
     this.transactions = const [],
     this.reviewedCategoryByTxId = const {},
+    this.subscriptions = const [],
     this.onAsk,
     this.insightsVersion = 0,
   });
@@ -65,6 +66,10 @@ class BudgetPage extends StatefulWidget {
   /// Visible transactions, for the per-category breakdown on each card.
   final List<AppTransaction> transactions;
   final Map<String, String> reviewedCategoryByTxId;
+
+  /// Confirmed subscriptions, so the breakdown agrees with the Subscriptions page
+  /// about which merchants are subscriptions.
+  final List<DetectedSubscription> subscriptions;
 
   /// Opens the AI with a question filled in (the ✦ chips).
   final void Function({String? prompt, String? contextLabel})? onAsk;
@@ -822,6 +827,10 @@ class _BudgetPageState extends State<BudgetPage> {
     final cardKeys = {
       for (final item in activeBudgetProgress) normalizeCategoryKey(item.title),
     };
+    final confirmedSubscriptionMerchants =
+        CategoryService.confirmedSubscriptionMerchantsFrom(
+          widget.subscriptions,
+        );
     final out = <String, List<AppTransaction>>{};
     for (final tx in widget.transactions) {
       if (tx.expenseAmount == 0) continue;
@@ -836,6 +845,7 @@ class _BudgetPageState extends State<BudgetPage> {
       final bucket = CategoryService.instance.budgetBucketFor(
         tx,
         widget.reviewedCategoryByTxId,
+        confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
       );
       final key = BudgetService.cardKeyForBucket(
         normalizeCategoryKey(bucket),

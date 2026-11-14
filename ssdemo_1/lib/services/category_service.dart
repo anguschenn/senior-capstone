@@ -25,17 +25,69 @@ class CategoryService {
     return v.isEmpty ? '_' : v;
   }
 
+  /// Mirrors budget_progress.py's normalize_merchant / subscription_detector.py's
+  /// normalize_merchant: lowercase, drop a trailing inc/llc/ltd/corp/.com, strip
+  /// punctuation, collapse whitespace. Used to match a transaction against the
+  /// subscriptions table's merchant identity.
+  static String normalizeMerchant(String name) {
+    var value = name.trim().toLowerCase();
+    value = value.replaceFirst(
+      RegExp(r'\s*(inc\.?|llc\.?|ltd\.?|corp\.?|co\.?|\.com)$'),
+      '',
+    );
+    value = value.replaceAll(RegExp(r'[^\w\s]'), ' ');
+    value = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return value;
+  }
+
+  /// Normalized merchant names of the user's active, confirmed subscriptions -- the
+  /// same set the Subscriptions page's "Confirmed" section shows.
+  static Set<String> confirmedSubscriptionMerchantsFrom(
+    List<DetectedSubscription> subscriptions,
+  ) {
+    return {
+      for (final s in subscriptions)
+        if (!s.needsConfirmation) normalizeMerchant(s.merchant),
+    };
+  }
+
+  /// Same, from the raw subscription rows a sync reads before they're parsed into
+  /// DetectedSubscription (SyncService.buildResult, which already filters is_active).
+  static Set<String> confirmedSubscriptionMerchantsFromRows(
+    List<Map<String, dynamic>> subscriptionRows,
+  ) {
+    final out = <String>{};
+    for (final row in subscriptionRows) {
+      if (row['needs_confirmation'] == true) continue;
+      final merchant = ((row['merchant_name'] as String?) ?? '').trim();
+      if (merchant.isEmpty) continue;
+      out.add(normalizeMerchant(merchant));
+    }
+    return out;
+  }
+
+  bool _matchesConfirmedSubscription(
+    String text,
+    Set<String>? confirmedSubscriptionMerchants,
+  ) {
+    if (confirmedSubscriptionMerchants == null ||
+        confirmedSubscriptionMerchants.isEmpty) {
+      return false;
+    }
+    final normText = normalizeMerchant(text);
+    return confirmedSubscriptionMerchants.any(
+      (m) => m.isNotEmpty && normText.contains(m),
+    );
+  }
+
+  // "Subscriptions" is deliberately not reachable here or from PFC alone (removed: a
+  // keyword/PFC match had no requirement the merchant ever recurred, so a one-off
+  // purchase from a subscription-type brand got miscounted). The only way to land in
+  // Subscriptions now is the confirmed-subscriptions check in _strongSignalOverride, or
+  // the user's own pick -- both guaranteed to agree with the Subscriptions page.
   String _keywordFallbackCategory(String merchantName, String transactionName) {
     final text = '${merchantName.trim()} ${transactionName.trim()}'
         .toLowerCase();
-    if (text.contains('openai') ||
-        text.contains('chatgpt') ||
-        text.contains('spotify') ||
-        text.contains('netflix') ||
-        text.contains('apple.com/bill') ||
-        text.contains('youtube premium')) {
-      return 'Subscriptions';
-    }
     if (text.contains('starbucks') ||
         text.contains('mcdonald') ||
         text.contains('doordash') ||
@@ -58,11 +110,21 @@ class CategoryService {
     required String pfcDetailed,
     required String merchantName,
     required String transactionName,
+    Set<String>? confirmedSubscriptionMerchants,
   }) {
     final primary = pfcPrimary.toLowerCase();
     final detailed = pfcDetailed.toLowerCase();
     final text = '${merchantName.trim()} ${transactionName.trim()}'
         .toLowerCase();
+
+    // The user's own subscriptions table already proved this merchant is an active,
+    // confirmed recurring charge -- that beats any keyword/PFC guess below.
+    if (_matchesConfirmedSubscription(text, confirmedSubscriptionMerchants)) {
+      return const CategoryDecision(
+        category: 'Subscriptions',
+        confidence: 'high',
+      );
+    }
 
     // High-confidence payment/transfer classes from provider signals.
     if (detailed.contains('loan_payments_credit_card_payment') ||
@@ -91,15 +153,6 @@ class CategoryService {
         text.contains('venmo')) {
       return const CategoryDecision(
         category: 'Fees & Transfers',
-        confidence: 'high',
-      );
-    }
-    if (text.contains('openai') ||
-        text.contains('chatgpt') ||
-        text.contains('spotify') ||
-        text.contains('netflix')) {
-      return const CategoryDecision(
-        category: 'Subscriptions',
         confidence: 'high',
       );
     }
@@ -190,12 +243,14 @@ class CategoryService {
     required String pfcDetailed,
     String merchantName = '',
     String transactionName = '',
+    Set<String>? confirmedSubscriptionMerchants,
   }) {
     final strong = _strongSignalOverride(
       pfcPrimary: pfcPrimary,
       pfcDetailed: pfcDetailed,
       merchantName: merchantName,
       transactionName: transactionName,
+      confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
     );
     if (strong != null) return strong;
 
@@ -286,10 +341,20 @@ class CategoryService {
   /// Resolves a transaction into a budget bucket, preferring manual overrides.
   String budgetBucketFor(
     AppTransaction tx,
-    Map<String, String> reviewedCategoryByTxId,
-  ) {
+    Map<String, String> reviewedCategoryByTxId, {
+    Set<String>? confirmedSubscriptionMerchants,
+  }) {
     final reviewed = reviewedCategoryByTxId[tx.id];
     if (reviewed != null && reviewed.isNotEmpty) return reviewed;
+    final merchantName = tx.rawMerchantName.isNotEmpty
+        ? tx.rawMerchantName
+        : tx.name;
+    if (_matchesConfirmedSubscription(
+      '$merchantName ${tx.name}',
+      confirmedSubscriptionMerchants,
+    )) {
+      return 'Subscriptions';
+    }
     return budgetCategoryFromPfc(
       pfcDetailed: tx.category,
       pfcPrimary: tx.primaryCategory,
@@ -299,11 +364,21 @@ class CategoryService {
   /// Same mapping but for raw Supabase rows before model conversion.
   String budgetBucketForRawTransaction(
     Map<String, dynamic> row,
-    Map<String, String> reviewedCategoryByTxId,
-  ) {
+    Map<String, String> reviewedCategoryByTxId, {
+    Set<String>? confirmedSubscriptionMerchants,
+  }) {
     final txId = ((row['plaid_transaction_id'] as String?) ?? '').trim();
     final reviewed = reviewedCategoryByTxId[txId];
     if (reviewed != null && reviewed.isNotEmpty) return reviewed;
+    final merchantName =
+        ((row['name'] as String?) ?? (row['merchant_name'] as String?) ?? '')
+            .trim();
+    if (_matchesConfirmedSubscription(
+      merchantName,
+      confirmedSubscriptionMerchants,
+    )) {
+      return 'Subscriptions';
+    }
     return budgetCategoryFromPfc(
       pfcDetailed:
           ((row['pfc_detailed'] as String?) ??

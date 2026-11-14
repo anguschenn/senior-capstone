@@ -11,6 +11,7 @@ from pywebpush import WebPushException, webpush
 from budget_progress import (
     classify_by_pfc_signals,
     classify_rows,
+    fetch_confirmed_subscription_merchants,
     fetch_decisions,
     is_p2p_inflow,
     user_category_for_row,
@@ -207,7 +208,10 @@ def pending_transaction_review_events(user_id: str) -> list[dict]:
     rows = fetch_all_transactions(user_id)
     rules = fetch_rules(user_id)
     decisions = fetch_decisions(user_id)
-    kinds = classify_rows(rows, rules, decisions=decisions)
+    confirmed_subscriptions = fetch_confirmed_subscription_merchants(user_id)
+    kinds = classify_rows(
+        rows, rules, decisions=decisions, confirmed_subscription_merchants=confirmed_subscriptions
+    )
     events = []
     for row in rows:
         transaction_id = str(row.get("plaid_transaction_id") or "").strip()
@@ -223,6 +227,7 @@ def pending_transaction_review_events(user_id: str) -> list[dict]:
             str(row.get("pfc_detailed") or row.get("category") or "").strip(),
             str(row.get("name") or row.get("merchant_name") or "").strip(),
             str(row.get("name") or "").strip(),
+            confirmed_subscription_merchants=confirmed_subscriptions,
         )
         if confidence != "low" and category != "Other":
             continue

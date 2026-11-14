@@ -440,6 +440,10 @@ class MainScreenController extends ChangeNotifier {
             : CategoryService.instance.budgetBucketFor(
                 tx,
                 const <String, String>{},
+                confirmedSubscriptionMerchants:
+                    CategoryService.confirmedSubscriptionMerchantsFrom(
+                      liveSubscriptions,
+                    ),
               ));
     if (currentCategory.trim() == category.trim()) {
       return;
@@ -474,7 +478,14 @@ class MainScreenController extends ChangeNotifier {
     if (tx != null) {
       final category =
           reviewedCategoryByTxId[txId] ??
-          CategoryService.instance.budgetBucketFor(tx, reviewedCategoryByTxId);
+          CategoryService.instance.budgetBucketFor(
+            tx,
+            reviewedCategoryByTxId,
+            confirmedSubscriptionMerchants:
+                CategoryService.confirmedSubscriptionMerchantsFrom(
+                  liveSubscriptions,
+                ),
+          );
       final ruleUserId = AuthService.instance.currentUserId;
       // Money from a person is decided one payment at a time: the same
       // friend may pay back a meal now and a ride next time, so no rule.
@@ -910,12 +921,15 @@ class MainScreenController extends ChangeNotifier {
 
   void _rebuildBudgetProgress() {
     final now = DateTime.now();
+    final confirmedSubscriptionMerchants =
+        CategoryService.confirmedSubscriptionMerchantsFrom(liveSubscriptions);
     liveBudgetProgress = BudgetService.instance
         .buildZeroLimitProgressFromPresetCategories(
           liveTransactions,
           now,
           false,
           reviewedCategoryByTxId,
+          confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
         );
     liveBudgetProgressYear = BudgetService.instance
         .buildZeroLimitProgressFromPresetCategories(
@@ -923,12 +937,14 @@ class MainScreenController extends ChangeNotifier {
           now,
           true,
           reviewedCategoryByTxId,
+          confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
         );
     liveBudgetProgressAll = BudgetService.instance
         .buildZeroLimitProgressFromPresetCategoriesAllTime(
           liveTransactions,
           now,
           reviewedCategoryByTxId,
+          confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
         );
   }
 

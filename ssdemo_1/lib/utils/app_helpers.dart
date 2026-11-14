@@ -207,13 +207,6 @@ String budgetCategoryFromPfc({
       key.contains('dental')) {
     return 'Health';
   }
-  if (key.contains('software') ||
-      key.contains('subscription') ||
-      key.contains('streaming') ||
-      key.contains('saas') ||
-      key.contains('cloud')) {
-    return 'Subscriptions';
-  }
   if (key.contains('food') ||
       key.contains('drink') ||
       key.contains('restaurant')) {

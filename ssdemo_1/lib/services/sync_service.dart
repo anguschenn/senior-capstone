@@ -391,6 +391,10 @@ class SyncService {
     final txRows = raw.txRows;
     final accountsRows = raw.accountsRows;
     final userCategories = raw.categories;
+    final confirmedSubscriptionMerchants =
+        CategoryService.confirmedSubscriptionMerchantsFromRows(
+          raw.subscriptionRows,
+        );
     final rememberedRules = {
       for (final e in raw.rememberedRules.entries)
         e.key: CategoryDecision(
@@ -462,6 +466,7 @@ class SyncService {
                     '')
                 .trim(),
         transactionName: ((txRows[i]['name'] as String?) ?? '').trim(),
+        confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
       );
       // Money in that counts as income reads as Income; the review queue
       // still offers it when the signals were weak (a friend paying back a
@@ -567,6 +572,7 @@ class SyncService {
       now: now,
       yearly: false,
       reviewedCategoryByTxId: effectiveReviewedCategoryByTxId,
+      confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
     );
     final budgetProgressYear = BudgetService.instance.buildProgressFromRows(
       budgetRows: budgetRowsList,
@@ -581,6 +587,7 @@ class SyncService {
       yearMonthsByCategoryId: raw.yearBudgetRows.isEmpty
           ? null
           : BudgetService.yearMonthsByCategoryId(raw.yearBudgetRows),
+      confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
     );
     final effectiveBudgetProgress = budgetProgress.isNotEmpty
         ? budgetProgress
@@ -589,6 +596,7 @@ class SyncService {
             now,
             false,
             effectiveReviewedCategoryByTxId,
+            confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
           );
     final effectiveBudgetProgressYear = budgetProgressYear.isNotEmpty
         ? budgetProgressYear
@@ -597,12 +605,14 @@ class SyncService {
             now,
             true,
             effectiveReviewedCategoryByTxId,
+            confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
           );
     final effectiveBudgetProgressAll = BudgetService.instance
         .buildZeroLimitProgressFromPresetCategoriesAllTime(
           deduped,
           now,
           effectiveReviewedCategoryByTxId,
+          confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
         );
 
     return SyncResult(

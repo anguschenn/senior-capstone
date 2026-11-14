@@ -5,6 +5,7 @@ import '../models/finance/financial_snapshot.dart';
 import '../utils/app_helpers.dart';
 import 'ai_summary_service.dart';
 import 'budget_service.dart';
+import 'category_service.dart';
 
 class FinancialSnapshotService {
   const FinancialSnapshotService._();
@@ -51,6 +52,10 @@ class FinancialSnapshotService {
               .where((tx) => selectedAccountIds.contains(tx.accountId))
               .toList();
     final visibleSubscriptions = controller.liveSubscriptions;
+    final confirmedSubscriptionMerchants =
+        CategoryService.confirmedSubscriptionMerchantsFrom(
+          controller.liveSubscriptions,
+        );
     // Budgets are set for the household, not per account: progress always
     // counts every account, whichever one is selected.
     final budgetTransactions = controller.liveTransactions;
@@ -98,6 +103,7 @@ class FinancialSnapshotService {
       yearly: false,
       allTime: false,
       reviewedCategoryByTxId: controller.reviewedCategoryByTxId,
+      confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
     );
     final visibleBudgetProgress = useServerBudgetProgress
         ? [
@@ -131,6 +137,7 @@ class FinancialSnapshotService {
             yearly: isAllYearOption(focusMonth),
             allTime: false,
             reviewedCategoryByTxId: controller.reviewedCategoryByTxId,
+            confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
           );
     final visibleBudgetProgressYear = _rebaseProgressFromTemplate(
       template: controller.liveBudgetProgressYear,
@@ -139,6 +146,7 @@ class FinancialSnapshotService {
       yearly: true,
       allTime: false,
       reviewedCategoryByTxId: controller.reviewedCategoryByTxId,
+      confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
     );
     final visibleBudgetProgressAll = _rebaseProgressFromTemplate(
       template: controller.liveBudgetProgressAll,
@@ -147,6 +155,7 @@ class FinancialSnapshotService {
       yearly: false,
       allTime: true,
       reviewedCategoryByTxId: controller.reviewedCategoryByTxId,
+      confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
     );
 
     double visibleIncome = 0;
@@ -264,6 +273,7 @@ class FinancialSnapshotService {
     required bool yearly,
     required bool allTime,
     required Map<String, String> reviewedCategoryByTxId,
+    Set<String>? confirmedSubscriptionMerchants,
   }) {
     if (template.isNotEmpty) {
       return BudgetService.instance.rebasedProgressFromTemplate(
@@ -273,6 +283,7 @@ class FinancialSnapshotService {
         yearly: yearly,
         allTime: allTime,
         reviewedCategoryByTxId: reviewedCategoryByTxId,
+        confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
       );
     }
     if (allTime) {
@@ -281,6 +292,7 @@ class FinancialSnapshotService {
             txs,
             focusMonth,
             reviewedCategoryByTxId,
+            confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
           );
     }
     return BudgetService.instance.buildZeroLimitProgressFromPresetCategories(
@@ -288,6 +300,7 @@ class FinancialSnapshotService {
       focusMonth,
       yearly,
       reviewedCategoryByTxId,
+      confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
     );
   }
 

@@ -74,6 +74,10 @@ Map<String, String> _ruleCategories(List<Map<String, dynamic>> rows) {
 Map<String, String> _reviewedCategories(List<Map<String, dynamic>> rows) {
   final service = CategoryService.instance;
   final userCategories = _ruleCategories(rows);
+  final confirmedSubscriptionMerchants =
+      (_fixture['confirmed_subscription_merchants'] as List?)
+          ?.cast<String>()
+          .toSet();
   final out = <String, String>{};
   for (final row in rows) {
     final tx = AppTransaction.fromMap(row);
@@ -94,6 +98,7 @@ Map<String, String> _reviewedCategories(List<Map<String, dynamic>> rows) {
                             '')
                         .trim(),
                 transactionName: ((row['name'] as String?) ?? '').trim(),
+                confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
               )
               .category;
   }

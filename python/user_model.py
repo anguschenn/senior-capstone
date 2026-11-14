@@ -22,6 +22,7 @@ from budget_progress import (
     Decided,
     build_budget_progress,
     classify_rows,
+    fetch_confirmed_subscription_merchants,
     fetch_decisions,
     fetch_hidden_account_ids,
     normalize_category_key,
@@ -584,13 +585,19 @@ def refresh_user_model(user_id: str, today: dt.date | None = None, history_month
         rules = fetch_rules(user_id)
         names = fetch_category_names(user_id)
         decisions = fetch_decisions(user_id)
+        confirmed_subscriptions = fetch_confirmed_subscription_merchants(user_id)
     except Exception as error:
         print(f"user model skipped for user {user_id}: {type(error).__name__}")
         return result
     result["tx_rows"] = tx_rows
     # Classify once: stats, last month's history and this month's progress all read the
     # same rows with the same rules.
-    kinds = classify_rows(tx_rows, rules, decisions=decisions)
+    kinds = classify_rows(
+        tx_rows,
+        rules,
+        decisions=decisions,
+        confirmed_subscription_merchants=confirmed_subscriptions,
+    )
     stats = build_category_month_stats(tx_rows, rules, kinds=kinds)
 
     try:
