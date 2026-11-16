@@ -224,6 +224,7 @@ class _MainScreenState extends State<MainScreen> {
         body: CashFlowPage(
           transactions: snapshot.transactions,
           budgetProgress: snapshot.budgetProgress,
+          reviewedCategoryByTxId: c.reviewedCategoryByTxId,
           selectedMonth: c.selectedMonth,
           monthOptions: _monthOptions(c.liveTransactions),
           onMonthChanged: c.selectMonth,
