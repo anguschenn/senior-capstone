@@ -41,11 +41,13 @@ The transaction review rule excludes transactions with an existing user category
 
 The monthly script queues a previous-month report once per user and month. An hourly scheduler can run it at 9 AM America/New_York on the first day of each month; the queue's unique event key prevents later hourly runs from duplicating that report.
 
-### 4. Backend sends and Chrome displays
+### 4. Backend groups, sends, and Chrome displays
 
 The backend uses the VAPID private key and the subscription's encryption keys to send a Web Push request to the Chrome endpoint. The service worker handles the `push` event and asks the browser to display a system notification.
 
-Clicking the notification navigates to the app on the same origin. App deep-link handling selects the relevant section (Budget, Transactions, Subscriptions, or Cash Flow for the monthly report). Cross-origin notification destinations are ignored.
+The delivery queue still stores and updates one row per event. During dispatch, pending rows are grouped by notification kind and sent with a count; up to 500 pending rows are considered per dispatch. The service worker uses one stable notification tag per kind, so later pushes replace the existing system notification and increase its count. Different kinds remain separate. This also consolidates same-kind notifications already displayed by an older service-worker version.
+
+Clicking a notification navigates to the app on the same origin. App deep-link handling opens the matching section: transaction reviews open Wallet and the Review Transactions sheet after transaction data is ready; budget alerts open Budget; subscription reviews open Subs; monthly reports open Cash Flow. This works whether the app was already open or had to be opened by the click. Cross-origin notification destinations are ignored.
 
 ## Supabase storage and access control
 
@@ -73,12 +75,12 @@ The migration has **not** been applied to the live Supabase project by this code
 - `python/requirements.txt` — adds `pywebpush` for VAPID-authenticated Web Push.
 - `python/app_factory.py` — registers push routes and permits `DELETE` in CORS for unsubscribe requests.
 - `python/routes/push_routes.py` — authenticated endpoints for public push configuration, subscription save, and unsubscribe.
-- `python/push_notifications.py` — validates Chrome subscriptions, detects eligible events, queues idempotently, sends encrypted pushes, retries failures, and removes expired subscriptions.
+- `python/push_notifications.py` — validates Chrome subscriptions, detects eligible events, queues idempotently, groups pending pushes by kind without combining their database rows, retries failures, and removes expired subscriptions.
 - `python/sync_jobs.py` — processes notification candidates after post-sync derived-state updates.
 - `python/user_model.py` — returns candidates when budget alerts are newly detected, reopened, or escalated.
 - `python/scripts/generate_vapid_keys.py` — generates a VAPID key pair for backend configuration.
 - `python/scripts/send_monthly_reports.py` — hourly cron entry point for monthly reports and queued-delivery retries.
-- `python/tests/test_push_notifications.py` — tests subscription validation, review rules, budget event queue behavior, key generation, and report timing.
+- `python/tests/test_push_notifications.py` — tests subscription validation, review rules, grouped payload counts, budget event queue behavior, key generation, and report timing.
 - `python/tests/test_push_routes.py` — tests push route authentication, public-only config, validation, and subscription save.
 - `python/tests/test_route_inventory.py` — includes the new API routes in the expected route set.
 
@@ -86,13 +88,18 @@ The migration has **not** been applied to the live Supabase project by this code
 
 - `ssdemo_1/lib/core/config/api_config.dart` — defines the push API URLs.
 - `ssdemo_1/lib/pages/settings_page.dart` — adds the opt-in control and notification status/error feedback.
-- `ssdemo_1/lib/app/main_screen.dart` — connects Settings actions and handles notification-click destinations.
+- `ssdemo_1/lib/app/main_screen.dart` — connects Settings actions and routes notification clicks, opening transaction review after data is ready.
+- `ssdemo_1/lib/app/notification_destination.dart` — maps notification kinds to their app tabs.
+- `ssdemo_1/lib/pages/home_page.dart` — shares the Review Transactions sheet entry point between Wallet and notification routing.
 - `ssdemo_1/lib/services/push_notification_service.dart` — coordinates permission, backend configuration, subscription persistence, and unsubscribe.
 - `ssdemo_1/lib/services/push_notifications_web.dart` — browser interop for the JavaScript push bridge.
 - `ssdemo_1/lib/services/push_notifications_stub.dart` — non-web implementation that reports browser push as unsupported.
 - `ssdemo_1/web/index.html` — loads the browser push bridge.
 - `ssdemo_1/web/push_notifications.js` — registers the service worker and calls browser notification/push APIs.
 - `ssdemo_1/web/push/sw.js` — displays background push notifications and safely handles notification clicks.
+- `ssdemo_1/test/app/notification_destination_test.dart` — checks notification-to-tab routing.
+- `ssdemo_1/test/pages/notification_review_sheet_test.dart` — checks the transaction review sheet entry point.
+- `ssdemo_1/test/web/push_notifications_service_worker_test.js` — tests same-kind aggregation, counts, and click behavior with the app open or closed.
 
 ### Related budget display correction
 
@@ -164,16 +171,14 @@ The script sends the monthly report only when its current local time is the firs
 
 ## Testing
 
-### Automated checks completed during implementation
+### Automated checks completed for the aggregation and routing change
 
-- Push notification and route tests: 16 passed in the last focused run.
-- User-model tests: 25 passed.
-- Route inventory tests: 3 passed.
-- Budget snapshot regression tests: 11 passed.
-- Flutter analysis of the changed snapshot files passed.
-- Browser JavaScript syntax checks passed before the final budget-display-only change.
+- `node --test ssdemo_1\test\web\push_notifications_service_worker_test.js` — 6 passed, including 100 concurrent same-kind pushes, separate kinds, legacy notifications, and clicks with the app open and closed.
+- `Set-Location ssdemo_1; flutter test` — 209 passed.
+- Targeted `flutter analyze` on the changed Dart files — no issues.
+- `Set-Location python; .\venv\windows\Scripts\python.exe -m unittest discover -s tests` — 438 passed.
 
-The full Python suite had one unrelated date-sensitive AI-summary test failure in its run; the focused push, user-model, and route tests passed. Real Web Push was not exercised against a live Supabase database and subscribed Chrome browser in that automated run.
+These automated tests do not send a real Web Push request to a subscribed Chrome browser or exercise live Supabase delivery.
 
 ### Manual smoke test
 
@@ -189,6 +194,8 @@ The full Python suite had one unrelated date-sensitive AI-summary test failure i
 7. Click it and confirm the app opens the intended section.
 8. Disable Browser notifications in app Settings and confirm the current browser subscription is removed from the backend and unsubscribed in the browser.
 
+To check aggregation specifically, use a test account with 100 unresolved low-confidence or uncategorized transactions. Verify that `notification_deliveries` still has a separate row for each event, while Chrome shows one notification titled **“100 transactions need review”**. Click it once with the app already open and once after closing the app; both should open Wallet's Review Transactions sheet. A budget-alert group and a subscription-review group should remain separate notifications.
+
 Do not use a real user's financial transactions as test data if you can instead use a test account. Avoid sharing the notification endpoint, encryption keys, VAPID private key, Supabase service-role key, or user transaction details.
 
 ## Current limitations and behavior to expect
@@ -199,7 +206,7 @@ Do not use a real user's financial transactions as test data if you can instead 
 - **Monthly timing:** monthly reports require the external hourly cron job. Without that scheduler, they are not generated automatically.
 - **Network and OS controls:** Chrome permission, Windows notification settings, focus/quiet modes, browser policies, and device connectivity can suppress or delay visible notifications.
 - **Push is best effort:** network/provider errors are retried up to five delivery attempts. Expired endpoints (HTTP 404/410) are removed. A push service does not guarantee that a device visibly displays every message.
-- **Queue and subscription caps:** delivery processing is bounded per run, and the backend keeps a maximum of 20 subscriptions per user for delivery. Subscription/review candidate scans are bounded to 500 records.
+- **Queue and subscription caps:** dispatch considers at most 500 pending delivery rows per run and groups matching kinds within that batch. The backend keeps a maximum of 20 subscriptions per user for delivery. Subscription/review candidate scans are bounded to 500 records.
 - **Already-sent events are not replayed:** the queue is idempotent per user/event. Registering another browser later does not replay delivery records already marked sent.
 - **Background operation requires hosted infrastructure:** local Chrome on `localhost` can use service workers and notifications, but background push delivery depends on the browser provider and a reachable backend. Production requires HTTPS and the correctly configured backend.
 - **No live deployment was changed:** the migration has not been applied to Supabase, VAPID keys have not been generated/configured by this code change, and no production cron job was created.

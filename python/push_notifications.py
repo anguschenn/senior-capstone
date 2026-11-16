@@ -26,7 +26,7 @@ from user_model import fetch_all_transactions, fetch_rules
 
 logger = logging.getLogger(__name__)
 _MAX_SUBSCRIPTIONS_PER_USER = 20
-_MAX_PENDING_DELIVERIES = 50
+_MAX_PENDING_DELIVERIES = 500
 _MAX_DELIVERY_ATTEMPTS = 5
 _CLAIM_TIMEOUT = dt.timedelta(minutes=5)
 
@@ -285,6 +285,19 @@ def _send_to_subscription(subscription: dict, payload: str) -> tuple[bool, bool]
         return False, False
 
 
+def _push_payload(delivery: dict, count: int = 1) -> str:
+    return json.dumps(
+        {
+            "title": delivery["title"],
+            "body": delivery["body"],
+            "url": delivery["url"],
+            "kind": delivery.get("kind") or "notification",
+            "count": count,
+            "tag": str(delivery["id"]),
+        }
+    )
+
+
 def dispatch_pending_notifications(user_id: str) -> None:
     """Deliver queued events once to the user's active Chrome subscriptions."""
     if not push_enabled():
@@ -307,13 +320,14 @@ def dispatch_pending_notifications(user_id: str) -> None:
 
     deliveries = (
         supabase.table("notification_deliveries")
-        .select("id,event_key,title,body,url,attempts")
+        .select("id,event_key,kind,title,body,url,attempts")
         .eq("user_id", user_id)
         .eq("status", "pending")
         .order("created_at")
         .limit(_MAX_PENDING_DELIVERIES)
         .execute()
     ).data or []
+    claimed_by_kind: dict[str, list[tuple[dict, int]]] = {}
     for delivery in deliveries:
         attempts = int(delivery.get("attempts") or 0) + 1
         claimed = (
@@ -334,14 +348,12 @@ def dispatch_pending_notifications(user_id: str) -> None:
         if not claimed:
             continue
 
-        payload = json.dumps(
-            {
-                "title": delivery["title"],
-                "body": delivery["body"],
-                "url": delivery["url"],
-                "tag": str(delivery["id"]),
-            }
-        )
+        kind = str(delivery.get("kind") or "notification")
+        claimed_by_kind.setdefault(kind, []).append((delivery, attempts))
+
+    for group in claimed_by_kind.values():
+        delivery = group[-1][0]
+        payload = _push_payload(delivery, count=len(group))
         delivered = False
         invalid_ids = []
         for subscription in subscriptions:
@@ -354,25 +366,26 @@ def dispatch_pending_notifications(user_id: str) -> None:
                 "user_id", user_id
             ).execute()
 
-        if delivered:
-            supabase.table("notification_deliveries").update(
-                {"status": "sent", "sent_at": _now_iso(), "claimed_at": None}
-            ).eq("id", delivery["id"]).execute()
-            if delivery.get("event_key"):
-                _mark_budget_alert_notified(user_id, delivery["event_key"])
-        elif attempts >= _MAX_DELIVERY_ATTEMPTS:
-            supabase.table("notification_deliveries").update(
-                {
-                    "status": "failed",
-                    "claimed_at": None,
-                    "last_error": "Push delivery failed after maximum attempts",
-                }
-            ).eq("id", delivery["id"]).execute()
-        else:
-            supabase.table("notification_deliveries").update(
-                {
-                    "status": "pending",
-                    "claimed_at": None,
-                    "last_error": "No active push endpoint accepted the notification",
-                }
-            ).eq("id", delivery["id"]).execute()
+        for delivery, attempts in group:
+            if delivered:
+                supabase.table("notification_deliveries").update(
+                    {"status": "sent", "sent_at": _now_iso(), "claimed_at": None}
+                ).eq("id", delivery["id"]).execute()
+                if delivery.get("event_key"):
+                    _mark_budget_alert_notified(user_id, delivery["event_key"])
+            elif attempts >= _MAX_DELIVERY_ATTEMPTS:
+                supabase.table("notification_deliveries").update(
+                    {
+                        "status": "failed",
+                        "claimed_at": None,
+                        "last_error": "Push delivery failed after maximum attempts",
+                    }
+                ).eq("id", delivery["id"]).execute()
+            else:
+                supabase.table("notification_deliveries").update(
+                    {
+                        "status": "pending",
+                        "claimed_at": None,
+                        "last_error": "No active push endpoint accepted the notification",
+                    }
+                ).eq("id", delivery["id"]).execute()

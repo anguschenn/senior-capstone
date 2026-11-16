@@ -2,7 +2,9 @@ import base64
 import contextlib
 import datetime as dt
 import io
+import json
 import unittest
+from types import SimpleNamespace
 from unittest import mock
 
 from cryptography.hazmat.primitives import serialization
@@ -107,6 +109,120 @@ class TransactionReviewNotificationTests(unittest.TestCase):
 
         self.assertEqual([event["event_key"] for event in events], ["transaction-review:tx-low"])
         self.assertEqual(events[0]["url"], "/?notification=transaction_review")
+
+
+class PushPayloadTests(unittest.TestCase):
+    def test_includes_notification_kind_for_browser_grouping(self):
+        payload = push_notifications._push_payload(
+            {
+                "id": "delivery-1",
+                "kind": "transaction_review",
+                "title": "SmartSpend needs your input",
+                "body": "A transaction needs a category review.",
+                "url": "/?notification=transaction_review",
+            },
+            count=100,
+        )
+
+        self.assertEqual(
+            json.loads(payload),
+            {
+                "title": "SmartSpend needs your input",
+                "body": "A transaction needs a category review.",
+                "url": "/?notification=transaction_review",
+                "kind": "transaction_review",
+                "count": 100,
+                "tag": "delivery-1",
+            },
+        )
+
+
+class PushDispatchAggregationTests(unittest.TestCase):
+    def test_dispatches_one_counted_push_and_marks_all_matching_rows_sent(self):
+        deliveries = [
+            {
+                "id": f"delivery-{index}",
+                "kind": "transaction_review",
+                "title": "SmartSpend needs your input",
+                "body": "A transaction needs a category review.",
+                "url": "/?notification=transaction_review",
+                "attempts": 0,
+            }
+            for index in range(120)
+        ]
+        updates = []
+
+        class Query:
+            def __init__(self, table):
+                self.table = table
+                self.filters = {}
+                self.update_values = None
+                self.selection = None
+
+            def select(self, fields):
+                self.selection = fields
+                return self
+
+            def update(self, values):
+                self.update_values = values
+                return self
+
+            def eq(self, field, value):
+                self.filters[field] = value
+                return self
+
+            def lt(self, field, value):
+                self.filters[field] = value
+                return self
+
+            def order(self, field):
+                return self
+
+            def limit(self, value):
+                self.limit_value = value
+                return self
+
+            def execute(self):
+                if self.table == "push_subscriptions":
+                    return SimpleNamespace(
+                        data=[
+                            {
+                                "id": "subscription-1",
+                                "endpoint": "https://push.example",
+                                "p256dh": "key",
+                                "auth": "auth",
+                            }
+                        ]
+                    )
+                if self.selection and self.selection.startswith("id,event_key,kind"):
+                    return SimpleNamespace(data=deliveries)
+                if self.update_values:
+                    status = self.update_values.get("status")
+                    delivery_id = self.filters.get("id")
+                    if status == "sending" and delivery_id:
+                        return SimpleNamespace(data=[{"id": delivery_id}])
+                    if status == "sent":
+                        updates.append((delivery_id, status))
+                return SimpleNamespace(data=[])
+
+        database = mock.MagicMock()
+        database.table.side_effect = lambda name: Query(name)
+        with (
+            mock.patch.object(push_notifications, "push_enabled", return_value=True),
+            mock.patch.object(push_notifications, "supabase", database),
+            mock.patch.object(
+                push_notifications,
+                "_send_to_subscription",
+                return_value=(True, False),
+            ) as send,
+        ):
+            push_notifications.dispatch_pending_notifications("user-1")
+
+        send.assert_called_once()
+        payload = json.loads(send.call_args.args[1])
+        self.assertEqual(payload["kind"], "transaction_review")
+        self.assertEqual(payload["count"], 120)
+        self.assertEqual(len(updates), 120)
 
 
 class PendingBudgetNotificationTests(unittest.TestCase):

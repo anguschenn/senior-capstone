@@ -7,6 +7,7 @@ import '../constants/app_constants.dart';
 import '../controllers/main_screen_controller.dart';
 import '../core/config/api_config.dart';
 import '../core/config/env_config.dart';
+import 'notification_destination.dart';
 import '../models/app_models.dart';
 import '../pages/budget_page.dart';
 import '../pages/cash_flow_page.dart';
@@ -35,6 +36,7 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   final _ctrl = MainScreenController();
+  bool _pendingNotificationReview = false;
 
   List<DateTime> _monthOptions(List<AppTransaction> txs) {
     final monthsWithData = <DateTime>{};
@@ -64,24 +66,25 @@ class _MainScreenState extends State<MainScreen> {
   void _openNotificationDestination() {
     final query = Uri.base.queryParameters;
     final notification = query['notification'];
-    switch (notification) {
-      case 'budget':
-        _ctrl.selectTab(2);
-      case 'transaction_review':
-        _ctrl.selectTab(1);
-      case 'subscription_review':
-        _ctrl.selectTab(3);
-      case 'monthly_report':
-        final month = query['month'];
-        final match = month == null
-            ? null
-            : RegExp(r'^(\d{4})-(0[1-9]|1[0-2])$').firstMatch(month);
-        if (match != null) {
-          _ctrl.selectMonth(
-            DateTime(int.parse(match[1]!), int.parse(match[2]!)),
-          );
-        }
-        _openFlow();
+    final tabIndex = notificationTabIndexFor(notification);
+    if (tabIndex != null) {
+      if (notification == 'transaction_review') {
+        _pendingNotificationReview = true;
+      }
+      _ctrl.selectTab(tabIndex);
+      _maybeOpenNotificationReview();
+      return;
+    }
+
+    if (notification == 'monthly_report') {
+      final month = query['month'];
+      final match = month == null
+          ? null
+          : RegExp(r'^(\d{4})-(0[1-9]|1[0-2])$').firstMatch(month);
+      if (match != null) {
+        _ctrl.selectMonth(DateTime(int.parse(match[1]!), int.parse(match[2]!)));
+      }
+      _openFlow();
     }
   }
 
@@ -93,7 +96,43 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _onControllerChange() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() {});
+    _maybeOpenNotificationReview();
+  }
+
+  void _maybeOpenNotificationReview() {
+    if (!_pendingNotificationReview ||
+        _ctrl.loadingFirstData ||
+        _ctrl.syncStatus == 'No data loaded yet') {
+      return;
+    }
+
+    _pendingNotificationReview = false;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final c = _ctrl;
+      final transactions = FinancialSnapshotService.instance
+          .build(c, targetMonth: c.selectedMonth)
+          .transactions;
+      showReviewTransactionsSheet(
+        context: context,
+        transactions: pendingReviewTransactions(
+          transactions: transactions,
+          manualReviewedTxIds: c.manualReviewedTxIds,
+          confirmedReviewTxIds: c.confirmedReviewTxIds,
+          lowConfidenceReviewTxIds: c.lowConfidenceReviewTxIds,
+        ),
+        accountOptions: c.liveAccountOptions,
+        reviewedCategoryByTxId: c.reviewedCategoryByTxId,
+        onTransactionCategorySelected: c.onTransactionCategorySelected,
+        onReviewConfirm: c.confirmReviewedCategory,
+        onLinkPayback: _linkPayback,
+        aiCategorySuggestUri: ApiConfig.instance.aiCategorySuggestUri,
+        apiKey: EnvConfig.instance.backendApiKey,
+        accessToken: AuthService.instance.currentAccessToken,
+      );
+    });
   }
 
   double _monthlySubscriptionTotal(List<DetectedSubscription> subs) =>
