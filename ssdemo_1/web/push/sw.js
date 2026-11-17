@@ -94,6 +94,10 @@ async function showGroupedNotification(message) {
   });
 }
 
+// A new version takes over at once instead of waiting for the old one's
+// pages to close (it controls none: the app at / is outside its scope).
+self.addEventListener('install', () => self.skipWaiting());
+
 self.addEventListener('push', (event) => {
   let message = {};
   try {

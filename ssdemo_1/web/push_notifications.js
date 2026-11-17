@@ -59,6 +59,16 @@
     navigator.serviceWorker.startMessages();
   }
 
+  // Pick up a newly deployed push/sw.js on every load. Chrome only checks by
+  // itself when the worker runs a day after its last check, so a fix to it
+  // otherwise waited for a manual update in DevTools.
+  if (supported()) {
+    navigator.serviceWorker
+      .getRegistration(new URL('push/', document.baseURI).href)
+      .then((reg) => reg && reg.update())
+      .catch(() => {});
+  }
+
   window.SmartSpendPush = {
     onNotificationOpened: (handler) => {
       openHandler = handler;
