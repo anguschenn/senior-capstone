@@ -401,6 +401,8 @@ class _MainScreenState extends State<MainScreen> {
         budgetProgressYear: snapshot.budgetProgressYear,
         budgetProgressAll: snapshot.budgetProgressAll,
         onUpdateBudgetLimit: c.updateBudgetLimit,
+        onAddCustomCategory: (name, limit) =>
+            c.addCustomCategory(name, monthlyLimit: limit),
         aiBudgetSuggestApiUri: ApiConfig.instance.aiBudgetSuggestUri,
         apiKey: EnvConfig.instance.backendApiKey,
         accessToken: AuthService.instance.currentAccessToken,

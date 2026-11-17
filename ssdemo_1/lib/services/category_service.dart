@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../core/config/supabase_client.dart';
 import '../constants/app_constants.dart';
 import '../models/app_models.dart';
@@ -13,6 +15,27 @@ class CategoryDecision {
 class CategoryService {
   const CategoryService._();
   static const instance = CategoryService._();
+
+  /// The user's own categories, by name, set by MainScreenController after
+  /// every load. The transaction category picker shows them as choices.
+  static final customCategoryNames = ValueNotifier<List<String>>(const []);
+
+  /// Whether [name] is one of the app's own categories (kReviewCategories).
+  static bool isBuiltInCategory(String name) {
+    final key = normalizeCategoryKey(name);
+    return kReviewCategories.any((c) => normalizeCategoryKey(c) == key);
+  }
+
+  /// [categories]' names that aren't built in, once each, in order.
+  static List<String> customNamesFrom(List<CategoryOption> categories) {
+    final seen = <String>{};
+    return [
+      for (final c in categories)
+        if (!isBuiltInCategory(c.name) &&
+            seen.add(normalizeCategoryKey(c.name)))
+          c.name.trim(),
+    ];
+  }
 
   // Built once: _norm runs for every transaction on each sync.
   static final _separators = RegExp(r'[_\s]+');
@@ -293,6 +316,31 @@ class CategoryService {
     final resolved = hits.last;
     final confidence = hits.length >= 3 ? 'high' : 'mid';
     return CategoryDecision(category: resolved, confidence: confidence);
+  }
+
+  /// The user's category named [name] (any spelling), created if missing.
+  /// The same row backs a transaction's category and its budget card.
+  Future<CategoryOption> createCustomCategory(
+    String userId,
+    String name,
+  ) async {
+    final trimmed = name.trim();
+    final key = normalizeCategoryKey(trimmed);
+    final rows = await AppSupabase.client
+        .from('categories')
+        .select('id,name')
+        .or('user_id.eq.$userId,user_id.is.null');
+    for (final row in (rows as List).whereType<Map<String, dynamic>>()) {
+      if (normalizeCategoryKey('${row['name'] ?? ''}') == key) {
+        return CategoryOption(id: '${row['id']}', name: '${row['name']}');
+      }
+    }
+    final inserted = await AppSupabase.client
+        .from('categories')
+        .insert({'user_id': userId, 'name': trimmed, 'is_custom': true})
+        .select('id,name')
+        .single();
+    return CategoryOption(id: '${inserted['id']}', name: '${inserted['name']}');
   }
 
   Future<List<CategoryOption>> ensureBaseCategories(String userId) async {

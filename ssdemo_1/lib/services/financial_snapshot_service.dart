@@ -293,6 +293,7 @@ class FinancialSnapshotService {
             focusMonth,
             reviewedCategoryByTxId,
             confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
+            customCategories: CategoryService.customCategoryNames.value,
           );
     }
     return BudgetService.instance.buildZeroLimitProgressFromPresetCategories(
@@ -301,6 +302,7 @@ class FinancialSnapshotService {
       yearly,
       reviewedCategoryByTxId,
       confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
+      customCategories: CategoryService.customCategoryNames.value,
     );
   }
 

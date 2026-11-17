@@ -4,6 +4,8 @@ import '../app/app_theme.dart';
 import '../constants/app_constants.dart';
 import '../models/app_models.dart';
 import '../services/ai_api_client.dart';
+import '../services/category_service.dart';
+import 'formatters.dart';
 import '../widgets/common/ui.dart';
 
 // Re-export formatters so existing imports keep working.
@@ -279,7 +281,10 @@ Future<void> showTransactionCategoryPicker({
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  ...kReviewCategories.map((category) {
+                  ...[
+                    ...kReviewCategories,
+                    ...CategoryService.customCategoryNames.value,
+                  ].map((category) {
                     final isSelected = selectedCategory == category;
                     final tone = colorForDetailedCategory(category);
                     final c = sheetContext.colors;
@@ -494,6 +499,20 @@ Future<void> _askAiForCategory({
   }
 }
 
+/// [typed] trimmed, spelled like the category it already names, if any
+/// ("food" is Food), so the same category never appears twice.
+String existingCategoryName(String typed) {
+  final trimmed = typed.trim();
+  final key = normalizeCategoryKey(trimmed);
+  for (final name in [
+    ...kReviewCategories,
+    ...CategoryService.customCategoryNames.value,
+  ]) {
+    if (normalizeCategoryKey(name) == key) return name;
+  }
+  return trimmed;
+}
+
 Future<void> _showCustomCategoryDialog({
   required BuildContext context,
   required void Function(String category) onCustomCategoryEntered,
@@ -520,7 +539,7 @@ Future<void> _showCustomCategoryDialog({
           ),
           TextButton(
             onPressed: () {
-              final categoryName = controller.text.trim();
+              final categoryName = existingCategoryName(controller.text);
               if (categoryName.isNotEmpty) {
                 Navigator.of(dialogContext).pop();
                 onCustomCategoryEntered(categoryName);

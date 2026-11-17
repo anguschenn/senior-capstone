@@ -413,6 +413,7 @@ class MainScreenController extends ChangeNotifier {
     liveBudgetProgressAll = const [];
     liveBudgetLimitsByMonth = const {};
     liveCategoryOptions = const [];
+    CategoryService.customCategoryNames.value = const [];
     liveAccountOptions = const [];
     serverBudgetProgress = null;
     serverBudgetProgressMonth = null;
@@ -459,6 +460,77 @@ class MainScreenController extends ChangeNotifier {
     _reclassify();
     _rebuildBudgetProgress();
     _notifyListenersSafe();
+    // A name typed in the picker's Custom field becomes a category of its
+    // own, with a budget card.
+    if (!CategoryService.isBuiltInCategory(category) &&
+        !_hasCategoryNamed(category)) {
+      unawaited(addCustomCategory(category));
+    }
+  }
+
+  bool _hasCategoryNamed(String name) {
+    final key = normalizeCategoryKey(name);
+    return liveCategoryOptions.any((c) => normalizeCategoryKey(c.name) == key);
+  }
+
+  /// Saves [name] as one of the user's categories: a choice for any
+  /// transaction and a budget card from the selected month on (later months
+  /// carry it forward like any other card). [monthlyLimit] sets this month's
+  /// limit; without it the card starts at \$0. Returns why it failed, or null.
+  Future<String?> addCustomCategory(String name, {double? monthlyLimit}) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return 'Enter a category name.';
+    if (CategoryService.isBuiltInCategory(trimmed)) {
+      return '$trimmed is already a category.';
+    }
+    final userId = AuthService.instance.currentUserId;
+    final monthYear = monthKeyOf(normalizedMonthOption(selectedMonth));
+    final CategoryOption option;
+    try {
+      option = await CategoryService.instance.createCustomCategory(
+        userId,
+        trimmed,
+      );
+      if (monthlyLimit != null && monthlyLimit > 0) {
+        await BudgetService.instance.upsertMonthlyBudgetByCategoryTitle(
+          userId: userId,
+          categoryTitle: option.name,
+          monthlyLimit: monthlyLimit,
+          monthYear: monthYear,
+        );
+      } else {
+        await BudgetService.instance.ensureMonthlyBudgetRows(
+          [option],
+          monthYear,
+          userId,
+        );
+      }
+    } catch (e) {
+      return 'Could not save the category: $e';
+    }
+    if (_isDisposed) return null;
+    if (!_hasCategoryNamed(option.name)) {
+      liveCategoryOptions = [...liveCategoryOptions, option];
+      CategoryService.customCategoryNames.value =
+          CategoryService.customNamesFrom(liveCategoryOptions);
+    }
+    syncStatus = 'Category ${option.name} added.';
+    _notifyListenersSafe();
+    try {
+      _refreshGen++;
+      final result = await _sync.refreshFromSupabase(
+        reviewedCategoryByTxId,
+        selectedMonth,
+      );
+      if (_isDisposed) return null;
+      _applySyncResult(result);
+      unawaited(_refreshServerBudgetProgress());
+      unawaited(_refreshInsights());
+    } catch (e) {
+      syncStatus = 'Category added, but refresh failed: $e';
+    }
+    _notifyListenersSafe();
+    return null;
   }
 
   Future<void> confirmReviewedCategory(String txId) async {
@@ -822,6 +894,9 @@ class MainScreenController extends ChangeNotifier {
     liveBudgetProgressAll = result.budgetProgressAll;
     liveBudgetLimitsByMonth = result.budgetLimitsByMonth;
     liveCategoryOptions = result.categoryOptions;
+    CategoryService.customCategoryNames.value = CategoryService.customNamesFrom(
+      result.categoryOptions,
+    );
     liveAccountOptions = result.accountOptions;
     liveStats = result.stats;
     // Only the user's own picks carry over; everything else is the fresh
@@ -930,6 +1005,9 @@ class MainScreenController extends ChangeNotifier {
           false,
           reviewedCategoryByTxId,
           confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
+          customCategories: CategoryService.customNamesFrom(
+            liveCategoryOptions,
+          ),
         );
     liveBudgetProgressYear = BudgetService.instance
         .buildZeroLimitProgressFromPresetCategories(
@@ -938,6 +1016,9 @@ class MainScreenController extends ChangeNotifier {
           true,
           reviewedCategoryByTxId,
           confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
+          customCategories: CategoryService.customNamesFrom(
+            liveCategoryOptions,
+          ),
         );
     liveBudgetProgressAll = BudgetService.instance
         .buildZeroLimitProgressFromPresetCategoriesAllTime(
@@ -945,6 +1026,9 @@ class MainScreenController extends ChangeNotifier {
           now,
           reviewedCategoryByTxId,
           confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
+          customCategories: CategoryService.customNamesFrom(
+            liveCategoryOptions,
+          ),
         );
   }
 

@@ -510,8 +510,9 @@ class BudgetService {
     bool yearly,
     Map<String, String> reviewedCategoryByTxId, {
     Set<String>? confirmedSubscriptionMerchants,
+    List<String> customCategories = const [],
   }) {
-    const preset = kPresetBudgetCategories;
+    final preset = [...kPresetBudgetCategories, ...customCategories];
     final spentMap = <String, double>{for (final p in preset) p: 0};
     for (final tx in txs) {
       if (tx.expenseAmount == 0) continue;
@@ -546,8 +547,9 @@ class BudgetService {
     DateTime now,
     Map<String, String> reviewedCategoryByTxId, {
     Set<String>? confirmedSubscriptionMerchants,
+    List<String> customCategories = const [],
   }) {
-    const preset = kPresetBudgetCategories;
+    final preset = [...kPresetBudgetCategories, ...customCategories];
     final spentMap = <String, double>{for (final p in preset) p: 0};
     for (final tx in txs) {
       if (tx.expenseAmount == 0) continue;

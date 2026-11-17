@@ -597,6 +597,7 @@ class SyncService {
             false,
             effectiveReviewedCategoryByTxId,
             confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
+            customCategories: CategoryService.customNamesFrom(userCategories),
           );
     final effectiveBudgetProgressYear = budgetProgressYear.isNotEmpty
         ? budgetProgressYear
@@ -606,6 +607,7 @@ class SyncService {
             true,
             effectiveReviewedCategoryByTxId,
             confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
+            customCategories: CategoryService.customNamesFrom(userCategories),
           );
     final effectiveBudgetProgressAll = BudgetService.instance
         .buildZeroLimitProgressFromPresetCategoriesAllTime(
@@ -613,6 +615,7 @@ class SyncService {
           now,
           effectiveReviewedCategoryByTxId,
           confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
+          customCategories: CategoryService.customNamesFrom(userCategories),
         );
 
     return SyncResult(

@@ -28,6 +28,7 @@ class BudgetPage extends StatefulWidget {
     required this.budgetProgressYear,
     required this.budgetProgressAll,
     required this.onUpdateBudgetLimit,
+    this.onAddCustomCategory,
     required this.aiBudgetSuggestApiUri,
     required this.apiKey,
     this.accessToken,
@@ -49,6 +50,11 @@ class BudgetPage extends StatefulWidget {
   final List<BudgetCategoryProgress> budgetProgressAll;
   final Future<void> Function(String budgetId, double monthlyLimit)
   onUpdateBudgetLimit;
+
+  /// Creates a category of the user's own with this month's limit, the same
+  /// category transactions can be put in. Returns why it failed, or null.
+  final Future<String?> Function(String name, double? monthlyLimit)?
+  onAddCustomCategory;
   final Uri aiBudgetSuggestApiUri;
   final String apiKey;
 
@@ -1213,42 +1219,105 @@ class _BudgetPageState extends State<BudgetPage> {
     );
   }
 
-  // Placeholder UI for future custom category creation.
+  // Adds a category of the user's own, with a budget card from this month on.
   Future<void> _showCustomCategoryDialog(BuildContext context) async {
-    final controller = TextEditingController();
+    final onAdd = widget.onAddCustomCategory;
+    if (onAdd == null) return;
+    final nameController = TextEditingController();
+    final limitController = TextEditingController();
+    String? error;
+    var saving = false;
     await showDialog<void>(
       context: context,
       builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Add Custom Category'),
-          content: TextField(
-            controller: controller,
-            decoration: const InputDecoration(
-              labelText: 'Category name',
-              hintText: 'e.g. Pets, Travel, Gifts',
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Custom category UI only (not connected yet).',
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            Future<void> save() async {
+              final name = nameController.text.trim();
+              final limitText = limitController.text.trim();
+              final limit = limitText.isEmpty
+                  ? null
+                  : double.tryParse(limitText.replaceAll(',', ''));
+              if (name.isEmpty) {
+                setDialogState(() => error = 'Enter a category name.');
+                return;
+              }
+              if (limitText.isNotEmpty &&
+                  (limit == null || !limit.isFinite || limit < 0)) {
+                setDialogState(() => error = 'Enter a limit of \$0 or more.');
+                return;
+              }
+              setDialogState(() {
+                saving = true;
+                error = null;
+              });
+              final failure = await onAdd(name, limit);
+              if (!dialogContext.mounted) return;
+              if (failure != null) {
+                setDialogState(() {
+                  saving = false;
+                  error = failure;
+                });
+                return;
+              }
+              Navigator.of(dialogContext).pop();
+            }
+
+            return AlertDialog(
+              title: const Text('Add Custom Category'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    key: const ValueKey('custom-category-name'),
+                    controller: nameController,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Category name',
+                      hintText: 'e.g. Pets, Travel, Gifts',
                     ),
                   ),
-                );
-              },
-              child: const Text('Save'),
-            ),
-          ],
+                  TextField(
+                    key: const ValueKey('custom-category-limit'),
+                    controller: limitController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      prefixText: '\$',
+                      labelText: 'Monthly limit (optional)',
+                    ),
+                  ),
+                  if (error != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        error!,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(dialogContext).colorScheme.error,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: saving
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: saving ? null : save,
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
+    // Not disposed here: the dialog's closing animation still reads them.
   }
 }
