@@ -4,6 +4,7 @@ from flask import Blueprint, jsonify, request
 
 from api.http_helpers import log_route_error
 from auth import UserAuthError, require_supabase_user_id
+from plaid_webhook import executor
 from push_notifications import (
     process_user_notifications,
     public_push_config,
@@ -48,13 +49,19 @@ def push_subscription():
             save_subscription(user_id, body.get("subscription"))
         except ValueError as error:
             return jsonify({"error": str(error)}), 400
-        try:
-            process_user_notifications(user_id)
-        except Exception as error:
-            log_route_error("/api/push/subscriptions delivery", error)
+        # Queueing and sending existing events takes a few Supabase round trips per event,
+        # which outlasts the app's 15s timeout for a user with many pending reviews.
+        executor.submit(_process_in_background, user_id)
         return jsonify({"ok": True}), 201
     except UserAuthError as error:
         return jsonify({"error": str(error)}), 401
     except Exception as error:
         log_route_error("/api/push/subscriptions unexpected", error)
         return jsonify({"error": "Failed to update push subscription"}), 500
+
+
+def _process_in_background(user_id: str) -> None:
+    try:
+        process_user_notifications(user_id)
+    except Exception as error:
+        log_route_error("/api/push/subscriptions delivery", error)

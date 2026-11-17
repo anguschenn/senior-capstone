@@ -64,6 +64,37 @@ class PushRouteTests(unittest.TestCase):
         save.assert_called_once()
         self.assertEqual(save.call_args.args[0], "user-123")
 
+    def test_subscription_replies_before_existing_events_are_processed(self):
+        import threading
+
+        from routes import push_routes
+
+        subscription = {
+            "endpoint": "https://fcm.googleapis.com/fcm/send/test",
+            "keys": {"p256dh": "p256dh", "auth": "auth"},
+        }
+        release = threading.Event()
+        processed = threading.Event()
+
+        def slow_process(user_id):
+            release.wait(5)
+            processed.set()
+
+        with (
+            app_client() as client,
+            mock.patch.object(push_routes, "save_subscription"),
+            mock.patch.object(push_routes, "process_user_notifications", side_effect=slow_process),
+        ):
+            response = client.post(
+                "/api/push/subscriptions",
+                json={"subscription": subscription},
+                headers=headers(VALID_TOKEN),
+            )
+            self.assertEqual(response.status_code, 201)
+            self.assertFalse(processed.is_set())
+            release.set()
+            self.assertTrue(processed.wait(5))
+
 
 if __name__ == "__main__":
     unittest.main()
