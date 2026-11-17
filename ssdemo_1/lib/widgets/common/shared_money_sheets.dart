@@ -9,22 +9,35 @@ import 'ui.dart';
 const kPaybackLookback = Duration(days: 120);
 
 /// How long after a payback its purchase can be dated: a card charge can
-/// post days after the meal (a restaurant's tip, for one), so a friend's
-/// Venmo often lands first. Friends paying ahead fit in the same week.
-const kPaybackLeadTime = Duration(days: 7);
+/// post over a week after the meal (a restaurant's tip, for one), so a
+/// friend's Venmo often lands first. Friends paying ahead fit in too.
+const kPaybackLeadTime = Duration(days: 14);
+
+/// [date] moved by [days] calendar days. Adding a Duration counts 24-hour
+/// days, which lands an hour off across a clock change and drops a purchase
+/// on the window's last day.
+DateTime _shiftDays(DateTime date, int days) => DateTime(
+  date.year,
+  date.month,
+  date.day + days,
+  date.hour,
+  date.minute,
+  date.second,
+);
 
 /// Purchases [inflow] can pay back, in the order the picker lists them.
 /// The user always picks; nothing is chosen for them. Split purchases come
 /// first, then purchases within a week either side of it, then the rest,
-/// newest first. A purchase can be up to [kPaybackLeadTime] after [inflow]. A purchase is offered only while it has
-/// room left for all of [inflow] (what friends pay back never exceeds it).
+/// newest first. A purchase can be up to [kPaybackLeadTime] after [inflow].
+/// A purchase is offered only while it has room left for all of [inflow]
+/// (what friends pay back never exceeds it).
 /// Money sent to a person (Zelle, Venmo) is not a purchase to pay back.
 List<AppTransaction> linkablePurchases(
   AppTransaction inflow,
   List<AppTransaction> transactions,
 ) {
-  final earliest = inflow.date.subtract(kPaybackLookback);
-  final latest = inflow.date.add(kPaybackLeadTime);
+  final earliest = _shiftDays(inflow.date, -kPaybackLookback.inDays);
+  final latest = _shiftDays(inflow.date, kPaybackLeadTime.inDays);
   final candidates = transactions.where((tx) {
     if (tx.kind != TxKind.spend || tx.id == inflow.id) return false;
     if (AppTransaction.isPeerToPeer('${tx.name} ${tx.description}')) {
@@ -334,8 +347,8 @@ List<AppTransaction> linkablePayments(
   List<AppTransaction> transactions, {
   Set<String> notPaybackIds = const {},
 }) {
-  final earliest = purchase.date.subtract(kPaybackLeadTime);
-  final latest = purchase.date.add(kPaybackLookback);
+  final earliest = _shiftDays(purchase.date, -kPaybackLeadTime.inDays);
+  final latest = _shiftDays(purchase.date, kPaybackLookback.inDays);
   final room = purchase.displayAmount - purchase.paidBack;
   final candidates = transactions.where((tx) {
     if (!tx.isPeerToPeerInflow || tx.kind == TxKind.payback) return false;

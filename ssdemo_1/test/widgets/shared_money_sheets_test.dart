@@ -51,27 +51,26 @@ void main() {
   final concert = _tx('p3', 'Ticketmaster', 150, DateTime(2026, 8, 1));
   final shared = _tx('p4', 'Airbnb', 300, DateTime(2026, 7, 1));
   final later = _tx('p5', 'Uber', 50, DateTime(2026, 10, 5));
-  final tooLate = _tx('p6', 'Lyft', 60, DateTime(2026, 10, 10));
+  final tooLate = _tx('p6', 'Lyft', 60, DateTime(2026, 10, 17));
   final all = [zelle, dinner, lunch, concert, shared, later, tooLate];
 
   test('the user picks; split purchases first, then the week around it', () {
     AppTransaction.sharedAmountById = {'p4': 200};
     final ids = linkablePurchases(zelle, all).map((t) => t.id).toList();
-    // Too small (lunch) and over a week after the payment (Lyft) aren't
+    // Too small (lunch) and over two weeks after the payment (Lyft) aren't
     // offered; Uber, posted 3 days after the payment, is.
     expect(ids, ['p4', 'p5', 'p1', 'p3']);
   });
 
-  test('a payment up to a week before the purchase can pay it back', () {
+  test('a payment up to two weeks before the purchase can pay it back', () {
     final meal = _tx('m1', 'Restaurant', 90, DateTime(2026, 11, 8));
-    AppTransaction venmo(String id, int day) => _tx(
-      id,
-      'Venmo from $id',
-      -45,
-      DateTime(2026, 11, day),
-      pfcPrimary: 'TRANSFER_IN',
-    );
-    final txs = [meal, venmo('early', 1), venmo('ahead', 3)];
+    AppTransaction venmo(String id, DateTime date) =>
+        _tx(id, 'Venmo from $id', -45, date, pfcPrimary: 'TRANSFER_IN');
+    final txs = [
+      meal,
+      venmo('early', DateTime(2026, 10, 24)),
+      venmo('ahead', DateTime(2026, 10, 25)),
+    ];
     expect(linkablePayments(meal, txs).map((t) => t.id), ['ahead']);
     expect(linkablePurchases(txs[2], txs).map((t) => t.id), ['m1']);
     expect(linkablePurchases(txs[1], txs), isEmpty);
@@ -125,7 +124,7 @@ void main() {
         'z0',
         'Venmo from Bob',
         -20,
-        DateTime(2026, 9, 20),
+        DateTime(2026, 9, 10),
         pfcPrimary: 'TRANSFER_IN',
       );
       final big = _tx(
@@ -145,7 +144,7 @@ void main() {
       AppTransaction.kindById = {'z3': TxKind.payback};
       AppTransaction.purchaseByPaybackId = {'z3': dinner};
       final txs = [...all, early, big, linked];
-      // Bob paid before the dinner, Cat's is more than the dinner, Dan's is
+      // Bob paid over two weeks before the dinner, Cat's is more than the dinner, Dan's is
       // already linked: only Amy's is offered.
       expect(linkablePayments(dinner, txs).map((t) => t.id), ['z1']);
       expect(paybacksOf(dinner, txs).map((t) => t.id), ['z3']);
