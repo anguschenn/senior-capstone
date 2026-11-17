@@ -51,13 +51,30 @@ void main() {
   final concert = _tx('p3', 'Ticketmaster', 150, DateTime(2026, 8, 1));
   final shared = _tx('p4', 'Airbnb', 300, DateTime(2026, 7, 1));
   final later = _tx('p5', 'Uber', 50, DateTime(2026, 10, 5));
-  final all = [zelle, dinner, lunch, concert, shared, later];
+  final tooLate = _tx('p6', 'Lyft', 60, DateTime(2026, 10, 10));
+  final all = [zelle, dinner, lunch, concert, shared, later, tooLate];
 
-  test('the user picks; split purchases first, then the week before', () {
+  test('the user picks; split purchases first, then the week around it', () {
     AppTransaction.sharedAmountById = {'p4': 200};
     final ids = linkablePurchases(zelle, all).map((t) => t.id).toList();
-    // Too small (lunch) and after the payment (Uber) aren't offered.
-    expect(ids, ['p4', 'p1', 'p3']);
+    // Too small (lunch) and over a week after the payment (Lyft) aren't
+    // offered; Uber, posted 3 days after the payment, is.
+    expect(ids, ['p4', 'p5', 'p1', 'p3']);
+  });
+
+  test('a payment up to a week before the purchase can pay it back', () {
+    final meal = _tx('m1', 'Restaurant', 90, DateTime(2026, 11, 8));
+    AppTransaction venmo(String id, int day) => _tx(
+      id,
+      'Venmo from $id',
+      -45,
+      DateTime(2026, 11, day),
+      pfcPrimary: 'TRANSFER_IN',
+    );
+    final txs = [meal, venmo('early', 1), venmo('ahead', 3)];
+    expect(linkablePayments(meal, txs).map((t) => t.id), ['ahead']);
+    expect(linkablePurchases(txs[2], txs).map((t) => t.id), ['m1']);
+    expect(linkablePurchases(txs[1], txs), isEmpty);
   });
 
   test('money sent to a person is not offered as a purchase', () {
@@ -92,7 +109,7 @@ void main() {
   test('a purchase already paid back in full is not offered again', () {
     AppTransaction.paidBackById = {'p1': 60};
     expect(linkablePurchases(zelle, all).map((t) => t.id), isNot(['p1']));
-    expect(linkablePurchases(zelle, all).map((t) => t.id), ['p3', 'p4']);
+    expect(linkablePurchases(zelle, all).map((t) => t.id), ['p5', 'p3', 'p4']);
   });
 
   test('splitting evenly leaves the others their part', () {

@@ -8,10 +8,15 @@ import 'ui.dart';
 /// How far back a payback's purchase can be.
 const kPaybackLookback = Duration(days: 120);
 
+/// How long after a payback its purchase can be dated: a card charge can
+/// post days after the meal (a restaurant's tip, for one), so a friend's
+/// Venmo often lands first. Friends paying ahead fit in the same week.
+const kPaybackLeadTime = Duration(days: 7);
+
 /// Purchases [inflow] can pay back, in the order the picker lists them.
 /// The user always picks; nothing is chosen for them. Split purchases come
-/// first, then purchases in the week before it that are at least its size,
-/// then the rest, newest first. A purchase is offered only while it has
+/// first, then purchases within a week either side of it, then the rest,
+/// newest first. A purchase can be up to [kPaybackLeadTime] after [inflow]. A purchase is offered only while it has
 /// room left for all of [inflow] (what friends pay back never exceeds it).
 /// Money sent to a person (Zelle, Venmo) is not a purchase to pay back.
 List<AppTransaction> linkablePurchases(
@@ -19,12 +24,13 @@ List<AppTransaction> linkablePurchases(
   List<AppTransaction> transactions,
 ) {
   final earliest = inflow.date.subtract(kPaybackLookback);
+  final latest = inflow.date.add(kPaybackLeadTime);
   final candidates = transactions.where((tx) {
     if (tx.kind != TxKind.spend || tx.id == inflow.id) return false;
     if (AppTransaction.isPeerToPeer('${tx.name} ${tx.description}')) {
       return false;
     }
-    if (tx.date.isAfter(inflow.date) || tx.date.isBefore(earliest)) {
+    if (tx.date.isAfter(latest) || tx.date.isBefore(earliest)) {
       return false;
     }
     final room = tx.displayAmount - tx.paidBack;
@@ -32,7 +38,7 @@ List<AppTransaction> linkablePurchases(
   }).toList();
   int rank(AppTransaction tx) {
     if (tx.sharedAmount > 0) return 0;
-    final days = inflow.date.difference(tx.date).inDays;
+    final days = inflow.date.difference(tx.date).inDays.abs();
     if (days <= 7) return 1;
     return 2;
   }
@@ -318,8 +324,9 @@ class _SplitPurchaseSheetState extends State<_SplitPurchaseSheet> {
 }
 
 /// Payments from a person that could pay back [purchase]: not linked yet,
-/// not marked "not a payback" ([notPaybackIds]), from the purchase's day up
-/// to 120 days after, and no bigger than what is left of it. The two weeks
+/// not marked "not a payback" ([notPaybackIds]), from [kPaybackLeadTime]
+/// before the purchase up to 120 days after, and no bigger than what is left
+/// of it. The two weeks
 /// after the purchase come first, closest first; then the rest, newest
 /// first. The user picks; nothing is chosen for them.
 List<AppTransaction> linkablePayments(
@@ -327,12 +334,13 @@ List<AppTransaction> linkablePayments(
   List<AppTransaction> transactions, {
   Set<String> notPaybackIds = const {},
 }) {
+  final earliest = purchase.date.subtract(kPaybackLeadTime);
   final latest = purchase.date.add(kPaybackLookback);
   final room = purchase.displayAmount - purchase.paidBack;
   final candidates = transactions.where((tx) {
     if (!tx.isPeerToPeerInflow || tx.kind == TxKind.payback) return false;
     if (notPaybackIds.contains(tx.id)) return false;
-    if (tx.date.isBefore(purchase.date) || tx.date.isAfter(latest)) {
+    if (tx.date.isBefore(earliest) || tx.date.isAfter(latest)) {
       return false;
     }
     return tx.displayAmount <= room + 0.005;
