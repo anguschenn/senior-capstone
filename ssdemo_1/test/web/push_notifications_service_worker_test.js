@@ -158,21 +158,25 @@ test('merges legacy same-kind notifications without losing their count', async (
   assert.equal(worker.notifications[0].title, '2 transactions need review');
 });
 
-test('notification clicks navigate an open app to the destination and focus it', async () => {
+test('notification clicks focus an open app and send it the destination', async () => {
   const worker = createWorker();
   const calls = [];
   worker.windows.push({
     url: 'https://smartspend.example/',
-    async navigate(url) {
-      calls.push(['navigate', url]);
-      return this;
+    async navigate() {
+      // As in Chrome: the app at / is outside the worker's /push/ scope.
+      throw new TypeError('This service worker is not the client\'s active service worker.');
     },
     async focus() {
       calls.push(['focus']);
+      return this;
+    },
+    postMessage(message) {
+      calls.push(['postMessage', message]);
     },
   });
   const event = {
-    notification: { data: { url: '/?notification=transaction_review' }, close() {} },
+    notification: { data: { url: '/?notification=budget' }, close() {} },
     waitUntil(promise) {
       this.pending = promise;
     },
@@ -181,11 +185,41 @@ test('notification clicks navigate an open app to the destination and focus it',
   worker.listeners.notificationclick(event);
   await event.pending;
 
-  assert.deepEqual(calls, [
-    ['navigate', 'https://smartspend.example/?notification=transaction_review'],
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
     ['focus'],
+    [
+      'postMessage',
+      {
+        type: 'smartspend-notification',
+        url: 'https://smartspend.example/?notification=budget',
+      },
+    ],
   ]);
   assert.deepEqual(worker.openedUrls, []);
+});
+
+test('notification clicks open a window when the open app cannot be reached', async () => {
+  const worker = createWorker();
+  worker.windows.push({
+    url: 'https://smartspend.example/',
+    async focus() {
+      throw new Error('Not allowed to focus a window.');
+    },
+    postMessage() {},
+  });
+  const event = {
+    notification: { data: { url: '/?notification=budget' }, close() {} },
+    waitUntil(promise) {
+      this.pending = promise;
+    },
+  };
+
+  worker.listeners.notificationclick(event);
+  await event.pending;
+
+  assert.deepEqual(worker.openedUrls, [
+    'https://smartspend.example/?notification=budget',
+  ]);
 });
 
 test('notification clicks open the destination when the app is closed', async () => {

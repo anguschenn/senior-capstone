@@ -59,12 +59,19 @@ class _MainScreenState extends State<MainScreen> {
     _ctrl.addListener(_onControllerChange);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _ctrl.loadCachedThenRefresh();
-      _openNotificationDestination();
+      _openNotificationDestination(Uri.base);
+    });
+    // A click while the app is open arrives here instead of a page load.
+    PushNotificationService.instance.onNotificationOpened((url) {
+      final uri = Uri.tryParse(url);
+      if (!mounted || uri == null) return;
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      _openNotificationDestination(uri);
     });
   }
 
-  void _openNotificationDestination() {
-    final query = Uri.base.queryParameters;
+  void _openNotificationDestination(Uri uri) {
+    final query = uri.queryParameters;
     final notification = query['notification'];
     final tabIndex = notificationTabIndexFor(notification);
     if (tabIndex != null) {

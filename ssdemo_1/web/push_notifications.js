@@ -36,7 +36,35 @@
     return reg.pushManager.getSubscription();
   };
 
+  // A notification clicked while the app is open (push/sw.js sends its
+  // destination). Held until the app registers its handler.
+  const pendingOpens = [];
+  let openHandler = null;
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      const data = event.data;
+      if (!data || data.type !== 'smartspend-notification') return;
+      if (typeof data.url !== 'string') return;
+      try {
+        if (new URL(data.url).origin !== window.location.origin) return;
+      } catch (_) {
+        return;
+      }
+      if (openHandler) {
+        openHandler(data.url);
+      } else {
+        pendingOpens.push(data.url);
+      }
+    });
+    navigator.serviceWorker.startMessages();
+  }
+
   window.SmartSpendPush = {
+    onNotificationOpened: (handler) => {
+      openHandler = handler;
+      while (pendingOpens.length > 0) handler(pendingOpens.shift());
+    },
+
     status: async () => {
       if (!supported()) {
         return JSON.stringify({

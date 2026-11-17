@@ -110,6 +110,11 @@ class PushNotificationService {
     }
   }
 
+  /// Calls [handler] with the destination URL of a notification clicked
+  /// while the app is already open. A later call replaces the handler.
+  void onNotificationOpened(void Function(String url) handler) =>
+      browser.onNotificationOpened(handler);
+
   Future<void> disable() async {
     final current = _decode(await browser.status());
     final subscription = current['subscription'];

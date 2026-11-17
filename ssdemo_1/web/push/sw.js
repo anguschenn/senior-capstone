@@ -131,7 +131,18 @@ self.addEventListener('notificationclick', (event) => {
           }
         });
         if (existing) {
-          return existing.navigate(requested.href).then(() => existing.focus());
+          // navigate() only works on pages this worker controls, and its
+          // scope is /push/, not the app at /. The open app routes itself
+          // (push_notifications.js) instead, keeping its state.
+          return existing
+            .focus()
+            .then(() =>
+              existing.postMessage({
+                type: 'smartspend-notification',
+                url: requested.href,
+              }),
+            )
+            .catch(() => self.clients.openWindow(requested.href));
         }
         return self.clients.openWindow(requested.href);
       },
