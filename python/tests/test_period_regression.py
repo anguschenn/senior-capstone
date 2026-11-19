@@ -121,7 +121,7 @@ def build_summary(today):
             "subtype": "credit card",
         },
     }
-    txs = server_summary.build_transactions(rows, accounts, {}, None, {})
+    txs = server_summary.build_transactions(rows, accounts, {}, None, {}, {"netflix"})
     summary = server_summary.build_summary(
         txs,
         [],

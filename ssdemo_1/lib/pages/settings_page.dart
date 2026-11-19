@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app/app_theme.dart';
 import '../models/app_models.dart';
+import '../services/push_notification_service.dart';
 import '../widgets/common/ui.dart';
 
 /// Gear page on Wallet: banks, refresh, appearance, sign out.
@@ -21,6 +22,8 @@ class SettingsPage extends StatelessWidget {
     this.bankSyncBusy = false,
     this.subscriptionCount = 0,
     this.onOpenSubscriptions,
+    this.onEnableNotifications,
+    this.onDisableNotifications,
     this.hiddenAccounts = const [],
     this.onHideAccount,
     this.onShowAccount,
@@ -41,6 +44,8 @@ class SettingsPage extends StatelessWidget {
   final VoidCallback onClear;
   final Future<void> Function() onSignOut;
   final VoidCallback? onOpenSubscriptions;
+  final Future<void> Function()? onEnableNotifications;
+  final Future<void> Function()? onDisableNotifications;
 
   /// Accounts the user hid; listed so they can be shown again.
   final List<AccountOption> hiddenAccounts;
@@ -234,6 +239,12 @@ class SettingsPage extends StatelessWidget {
                 ),
                 onTap: onOpenSubscriptions,
               ),
+              if (onEnableNotifications != null &&
+                  onDisableNotifications != null)
+                _PushNotificationsRow(
+                  onEnable: onEnableNotifications!,
+                  onDisable: onDisableNotifications!,
+                ),
               ValueListenableBuilder<ThemeMode>(
                 valueListenable: AppearanceController.instance,
                 builder: (context, mode, _) => row(
@@ -280,6 +291,115 @@ class SettingsPage extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _PushNotificationsRow extends StatefulWidget {
+  const _PushNotificationsRow({
+    required this.onEnable,
+    required this.onDisable,
+  });
+
+  final Future<void> Function() onEnable;
+  final Future<void> Function() onDisable;
+
+  @override
+  State<_PushNotificationsRow> createState() => _PushNotificationsRowState();
+}
+
+class _PushNotificationsRowState extends State<_PushNotificationsRow> {
+  BrowserPushStatus? _status;
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    try {
+      final status = await PushNotificationService.instance.status();
+      if (!mounted) return;
+      setState(() {
+        _status = status;
+        _error = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Could not check browser notification status.';
+      });
+    }
+  }
+
+  Future<void> _setEnabled(bool enabled) async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      if (enabled) {
+        await widget.onEnable();
+      } else {
+        await widget.onDisable();
+      }
+      await _refresh();
+    } catch (error) {
+      await _refresh();
+      if (mounted) {
+        setState(() {
+          _error = error.toString().replaceFirst('Bad state: ', '');
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final status = _status;
+    final enabled = status?.subscribed == true;
+    final subtitle =
+        _error ??
+        (status == null
+            ? 'Checking browser support...'
+            : !status.supported
+            ? 'Push notifications are not supported in this browser'
+            : status.permission == 'denied'
+            ? 'Blocked by Chrome; allow notifications in site settings'
+            : enabled
+            ? 'Enabled in this Chrome profile'
+            : 'Receive budget and review reminders');
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      child: InfoRow(
+        leading: Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(color: c.raised, shape: BoxShape.circle),
+          child: Icon(Icons.notifications_outlined, size: 18, color: c.text),
+        ),
+        title: 'Browser notifications',
+        subtitle: subtitle,
+        trailing: _busy
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Switch(
+                value: enabled,
+                onChanged: status?.supported == true
+                    ? (value) => _setEnabled(value)
+                    : null,
+              ),
+        showChevron: false,
       ),
     );
   }

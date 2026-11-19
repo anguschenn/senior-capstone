@@ -46,16 +46,33 @@ void main() {
       expect(result.confidence, 'high');
     });
 
-    test('OPENAI*CHATGPT SUBSCR with OTHER_OTHER maps to Subscriptions', () {
-      final result = CategoryService.instance.classifyByPfcSignals(
-        pfcPrimary: 'OTHER',
-        pfcDetailed: 'OTHER_OTHER',
-        merchantName: '',
-        transactionName: 'OPENAI*CHATGPT SUBSCR',
-      );
-      expect(result.category, 'Subscriptions');
-      expect(result.confidence, 'high');
-    });
+    test(
+      'a confirmed subscription merchant beats a neutral OTHER_OTHER pfc',
+      () {
+        final result = CategoryService.instance.classifyByPfcSignals(
+          pfcPrimary: 'OTHER',
+          pfcDetailed: 'OTHER_OTHER',
+          merchantName: '',
+          transactionName: 'OPENAI*CHATGPT SUBSCR',
+          confirmedSubscriptionMerchants: {'openai'},
+        );
+        expect(result.category, 'Subscriptions');
+        expect(result.confidence, 'high');
+      },
+    );
+
+    test(
+      'the same merchant without confirmation is not called a subscription',
+      () {
+        final result = CategoryService.instance.classifyByPfcSignals(
+          pfcPrimary: 'OTHER',
+          pfcDetailed: 'OTHER_OTHER',
+          merchantName: '',
+          transactionName: 'OPENAI*CHATGPT SUBSCR',
+        );
+        expect(result.category, isNot('Subscriptions'));
+      },
+    );
 
     test('PAYPAL TRANSFER PPD with OTHER_OTHER maps to Fees & Transfers', () {
       final result = CategoryService.instance.classifyByPfcSignals(

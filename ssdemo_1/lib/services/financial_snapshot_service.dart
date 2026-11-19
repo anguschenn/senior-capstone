@@ -5,6 +5,7 @@ import '../models/finance/financial_snapshot.dart';
 import '../utils/app_helpers.dart';
 import 'ai_summary_service.dart';
 import 'budget_service.dart';
+import 'category_service.dart';
 
 class FinancialSnapshotService {
   const FinancialSnapshotService._();
@@ -51,6 +52,10 @@ class FinancialSnapshotService {
               .where((tx) => selectedAccountIds.contains(tx.accountId))
               .toList();
     final visibleSubscriptions = controller.liveSubscriptions;
+    final confirmedSubscriptionMerchants =
+        CategoryService.confirmedSubscriptionMerchantsFrom(
+          controller.liveSubscriptions,
+        );
     // Budgets are set for the household, not per account: progress always
     // counts every account, whichever one is selected.
     final budgetTransactions = controller.liveTransactions;
@@ -66,12 +71,20 @@ class FinancialSnapshotService {
         serverMonth != null &&
         serverMonth.year == focusMonth.year &&
         serverMonth.month == focusMonth.month;
-    // The server found no budget rows for this month (e.g. a month before
-    // budgets were set): show its spending with no limits, for any account,
-    // rather than this month's limits applied to it.
-    final noBudgetsThisMonth =
+    final focusMonthKey =
+        '${focusMonth.year}-${focusMonth.month.toString().padLeft(2, '0')}';
+    final hasLocalBudgetRowsForFocus = controller.liveBudgetLimitsByMonth
+        .containsKey(focusMonthKey);
+    // An empty server result must not hide a budget row read directly from
+    // Supabase; the backend may not have permission to read that row.
+    final serverFoundNoBudgetsForFocus =
         serverForFocus && controller.serverBudgetProgress!.isEmpty;
-    final useServerBudgetProgress = serverForFocus && !noBudgetsThisMonth;
+    // If neither source has a row for this month, don't borrow another
+    // month's limits.
+    final noBudgetsThisMonth =
+        serverFoundNoBudgetsForFocus && !hasLocalBudgetRowsForFocus;
+    final useServerBudgetProgress =
+        serverForFocus && !serverFoundNoBudgetsForFocus;
     // Every category card, with this month's spending and no limit: fills in
     // categories the month has no budget row for.
     List<BudgetCategoryProgress> spendOnly() => _rebaseProgressFromTemplate(
@@ -90,6 +103,7 @@ class FinancialSnapshotService {
       yearly: false,
       allTime: false,
       reviewedCategoryByTxId: controller.reviewedCategoryByTxId,
+      confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
     );
     final visibleBudgetProgress = useServerBudgetProgress
         ? [
@@ -123,6 +137,7 @@ class FinancialSnapshotService {
             yearly: isAllYearOption(focusMonth),
             allTime: false,
             reviewedCategoryByTxId: controller.reviewedCategoryByTxId,
+            confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
           );
     final visibleBudgetProgressYear = _rebaseProgressFromTemplate(
       template: controller.liveBudgetProgressYear,
@@ -131,6 +146,7 @@ class FinancialSnapshotService {
       yearly: true,
       allTime: false,
       reviewedCategoryByTxId: controller.reviewedCategoryByTxId,
+      confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
     );
     final visibleBudgetProgressAll = _rebaseProgressFromTemplate(
       template: controller.liveBudgetProgressAll,
@@ -139,6 +155,7 @@ class FinancialSnapshotService {
       yearly: false,
       allTime: true,
       reviewedCategoryByTxId: controller.reviewedCategoryByTxId,
+      confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
     );
 
     double visibleIncome = 0;
@@ -256,6 +273,7 @@ class FinancialSnapshotService {
     required bool yearly,
     required bool allTime,
     required Map<String, String> reviewedCategoryByTxId,
+    Set<String>? confirmedSubscriptionMerchants,
   }) {
     if (template.isNotEmpty) {
       return BudgetService.instance.rebasedProgressFromTemplate(
@@ -265,6 +283,7 @@ class FinancialSnapshotService {
         yearly: yearly,
         allTime: allTime,
         reviewedCategoryByTxId: reviewedCategoryByTxId,
+        confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
       );
     }
     if (allTime) {
@@ -273,6 +292,8 @@ class FinancialSnapshotService {
             txs,
             focusMonth,
             reviewedCategoryByTxId,
+            confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
+            customCategories: CategoryService.customCategoryNames.value,
           );
     }
     return BudgetService.instance.buildZeroLimitProgressFromPresetCategories(
@@ -280,6 +301,8 @@ class FinancialSnapshotService {
       focusMonth,
       yearly,
       reviewedCategoryByTxId,
+      confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
+      customCategories: CategoryService.customCategoryNames.value,
     );
   }
 

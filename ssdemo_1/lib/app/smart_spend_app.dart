@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../pages/auth_page.dart';
 import '../core/config/env_config.dart';
 import '../services/auth_service.dart';
+import '../services/idle_sign_out.dart';
 import 'app_theme.dart';
 import 'main_screen.dart';
 
@@ -100,6 +101,7 @@ class _AuthGateState extends State<_AuthGate> {
   }
 
   Future<void> _attemptAutoLoginIfNeeded() async {
+    await _signOutIfIdle();
     if (AuthService.instance.currentUser != null) return;
     if (!EnvConfig.instance.hasAutoLoginCredentials) return;
     try {
@@ -108,6 +110,22 @@ class _AuthGateState extends State<_AuthGate> {
         password: EnvConfig.instance.autoLoginPassword,
       );
     } catch (_) {}
+  }
+
+  /// A saved session unused for [kIdleSignOutAfter] doesn't sign in again
+  Future<void> _signOutIfIdle() async {
+    if (AuthService.instance.currentUser == null) return;
+    final lastActive = await IdleActivityStore.instance.load();
+    if (!isIdleTooLong(lastActive, DateTime.now())) return;
+    await _signOut();
+  }
+
+  Future<void> _signOut() async {
+    try {
+      await AuthService.instance.signOut();
+    } catch (_) {
+      // Offline: the session is still dropped from this device.
+    }
   }
 
   @override
@@ -127,7 +145,11 @@ class _AuthGateState extends State<_AuthGate> {
                   )
                 : user == null
                 ? const AuthPage(key: ValueKey('auth-page'))
-                : const MainScreen(key: ValueKey('main-screen'));
+                : IdleSignOutGuard(
+                    key: const ValueKey('main-screen'),
+                    onIdle: _signOut,
+                    child: const MainScreen(),
+                  );
             // Fade the next page in over the page colour. The old page is
             // dropped at once rather than faded out: after sign-out it
             // would rebuild with no user.

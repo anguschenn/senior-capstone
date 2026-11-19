@@ -96,7 +96,7 @@ _KNOWN_SUBSCRIPTION_MERCHANTS = {
 }
 
 
-def _normalize_merchant(name):
+def normalize_merchant(name):
     name = (name or "").strip().lower()
     name = re.sub(r"\s*(inc\.?|llc\.?|ltd\.?|corp\.?|co\.?|\.com)$", "", name)
     name = re.sub(r"[^\w\s]", " ", name)
@@ -150,7 +150,7 @@ def _detect_from_rows(tx_rows, today=None):
     groups = defaultdict(list)
     for tx in tx_rows:
         raw_merchant = tx.get("merchant_name") or tx.get("name") or ""
-        norm = _normalize_merchant(raw_merchant)
+        norm = normalize_merchant(raw_merchant)
         if not norm:
             continue
         account_id = (tx.get("plaid_account_id") or "").strip()
@@ -258,7 +258,7 @@ def _mark_stale_subscriptions(user_id, tx_rows):
     # its old account.
     tx_lookup = set()
     for tx in tx_rows:
-        norm = _normalize_merchant(tx.get("merchant_name") or tx.get("name") or "")
+        norm = normalize_merchant(tx.get("merchant_name") or tx.get("name") or "")
         try:
             tx_date = dt.date.fromisoformat(tx.get("date") or "")
             tx_lookup.add((norm, tx_date))
@@ -279,7 +279,7 @@ def _mark_stale_subscriptions(user_id, tx_rows):
         if today <= expected + dt.timedelta(days=grace):
             continue
 
-        norm_merchant = _normalize_merchant(sub.get("merchant_name") or "")
+        norm_merchant = normalize_merchant(sub.get("merchant_name") or "")
         window_start = expected - dt.timedelta(days=grace)
         window_end = expected + dt.timedelta(days=grace)
 
@@ -335,7 +335,7 @@ def detect_and_upsert_subscriptions(user_id):
     user_confirmed_keys = set()
     user_dismissed_keys = set()
     for row in existing_resp.data or []:
-        key = _normalize_merchant(row.get("merchant_name") or "")
+        key = normalize_merchant(row.get("merchant_name") or "")
         existing_by_key[key] = row["id"]
         # user_confirmed=True means the user explicitly clicked "Yes, subscription"
         if row.get("user_confirmed") is True:

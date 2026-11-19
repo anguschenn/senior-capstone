@@ -26,7 +26,10 @@ final _rules = (_fixture['rules'] as Map<String, dynamic>)
 
 /// Mirrors the per-transaction loop in SyncService.buildResult:
 /// remembered rule first, otherwise classifyByPfcSignals.
-String _bucketFor(Map<String, dynamic> row) {
+String _bucketFor(
+  Map<String, dynamic> row, {
+  Set<String>? confirmedSubscriptionMerchants,
+}) {
   final service = CategoryService.instance;
   final remembered = _rules[service.ruleKeyForRawTransaction(row)];
   if (remembered != null && remembered.isNotEmpty) return remembered;
@@ -44,6 +47,7 @@ String _bucketFor(Map<String, dynamic> row) {
                     '')
                 .trim(),
         transactionName: ((row['name'] as String?) ?? '').trim(),
+        confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
       )
       .category;
 }
@@ -54,12 +58,22 @@ void main() {
       final testCase = raw as Map<String, dynamic>;
       final row = testCase['row'] as Map<String, dynamic>;
       final expected = testCase['expected'] as Map<String, dynamic>;
+      final confirmedSubscriptionMerchants =
+          (testCase['confirmed_subscription_merchants'] as List?)
+              ?.cast<String>()
+              .toSet();
       test(testCase['description'], () {
         expect(
           CategoryService.instance.ruleKeyForRawTransaction(row),
           expected['rule_key'],
         );
-        expect(_bucketFor(row), expected['bucket']);
+        expect(
+          _bucketFor(
+            row,
+            confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
+          ),
+          expected['bucket'],
+        );
         expect(AppTransaction.fromMap(row).isExpense, expected['is_expense']);
         expect(
           AppTransaction.fromMap(row).expenseAmount > 0,
@@ -79,11 +93,19 @@ void main() {
         final rows = (spec['transactions'] as List)
             .cast<Map<String, dynamic>>();
         final txs = rows.map(AppTransaction.fromMap).toList();
+        final confirmedSubscriptionMerchants =
+            (spec['confirmed_subscription_merchants'] as List?)
+                ?.cast<String>()
+                .toSet();
         // Like sync: pair moves between linked accounts, match refunds.
         AppTransaction.kindById = classifyTransactions(txs, const {}).kinds;
         addTearDown(() => AppTransaction.kindById = const {});
         final reviewed = {
-          for (var i = 0; i < rows.length; i++) txs[i].id: _bucketFor(rows[i]),
+          for (var i = 0; i < rows.length; i++)
+            txs[i].id: _bucketFor(
+              rows[i],
+              confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
+            ),
         };
         final template = [
           for (final b

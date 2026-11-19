@@ -139,7 +139,7 @@ def summary():
     the server-only blocks the app's summary lacks."""
     from ai import server_summary
 
-    txs = server_summary.build_transactions(rows(), ACCOUNTS, {}, None, {})
+    txs = server_summary.build_transactions(rows(), ACCOUNTS, {}, None, {}, {"spotify", "netflix"})
     built = server_summary.build_summary(
         txs,
         [],

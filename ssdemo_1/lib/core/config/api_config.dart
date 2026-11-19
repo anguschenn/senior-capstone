@@ -20,6 +20,10 @@ class ApiConfig {
       .._budgetProgressUri = Uri.parse('${env.backendUrl}/api/budget_progress')
       .._refreshInsightsUri = Uri.parse(
         '${env.backendUrl}/api/refresh_insights',
+      )
+      .._pushConfigUri = Uri.parse('${env.backendUrl}/api/push/config')
+      .._pushSubscriptionsUri = Uri.parse(
+        '${env.backendUrl}/api/push/subscriptions',
       );
   }
 
@@ -29,6 +33,8 @@ class ApiConfig {
   late final Uri _aiCategorySuggestUri;
   late final Uri _budgetProgressUri;
   late final Uri _refreshInsightsUri;
+  late final Uri _pushConfigUri;
+  late final Uri _pushSubscriptionsUri;
 
   Uri get transactionsUri => _transactionsUri;
   Uri get aiChatUri => _aiChatUri;
@@ -40,4 +46,7 @@ class ApiConfig {
 
   /// POST: recompute subscriptions, budget alerts and suggestions.
   Uri get refreshInsightsUri => _refreshInsightsUri;
+
+  Uri get pushConfigUri => _pushConfigUri;
+  Uri get pushSubscriptionsUri => _pushSubscriptionsUri;
 }

@@ -28,6 +28,7 @@ class BudgetPage extends StatefulWidget {
     required this.budgetProgressYear,
     required this.budgetProgressAll,
     required this.onUpdateBudgetLimit,
+    this.onAddCustomCategory,
     required this.aiBudgetSuggestApiUri,
     required this.apiKey,
     this.accessToken,
@@ -38,6 +39,7 @@ class BudgetPage extends StatefulWidget {
     this.scopeNote,
     this.transactions = const [],
     this.reviewedCategoryByTxId = const {},
+    this.subscriptions = const [],
     this.onAsk,
     this.insightsVersion = 0,
   });
@@ -48,6 +50,11 @@ class BudgetPage extends StatefulWidget {
   final List<BudgetCategoryProgress> budgetProgressAll;
   final Future<void> Function(String budgetId, double monthlyLimit)
   onUpdateBudgetLimit;
+
+  /// Creates a category of the user's own with this month's limit, the same
+  /// category transactions can be put in. Returns why it failed, or null.
+  final Future<String?> Function(String name, double? monthlyLimit)?
+  onAddCustomCategory;
   final Uri aiBudgetSuggestApiUri;
   final String apiKey;
 
@@ -65,6 +72,10 @@ class BudgetPage extends StatefulWidget {
   /// Visible transactions, for the per-category breakdown on each card.
   final List<AppTransaction> transactions;
   final Map<String, String> reviewedCategoryByTxId;
+
+  /// Confirmed subscriptions, so the breakdown agrees with the Subscriptions page
+  /// about which merchants are subscriptions.
+  final List<DetectedSubscription> subscriptions;
 
   /// Opens the AI with a question filled in (the ✦ chips).
   final void Function({String? prompt, String? contextLabel})? onAsk;
@@ -822,6 +833,10 @@ class _BudgetPageState extends State<BudgetPage> {
     final cardKeys = {
       for (final item in activeBudgetProgress) normalizeCategoryKey(item.title),
     };
+    final confirmedSubscriptionMerchants =
+        CategoryService.confirmedSubscriptionMerchantsFrom(
+          widget.subscriptions,
+        );
     final out = <String, List<AppTransaction>>{};
     for (final tx in widget.transactions) {
       if (tx.expenseAmount == 0) continue;
@@ -836,6 +851,7 @@ class _BudgetPageState extends State<BudgetPage> {
       final bucket = CategoryService.instance.budgetBucketFor(
         tx,
         widget.reviewedCategoryByTxId,
+        confirmedSubscriptionMerchants: confirmedSubscriptionMerchants,
       );
       final key = BudgetService.cardKeyForBucket(
         normalizeCategoryKey(bucket),
@@ -1009,6 +1025,57 @@ class _BudgetPageState extends State<BudgetPage> {
   // Budget editing dialogs
   // -------------------------------------------------------------------------
 
+  /// Suggested limits for [items] in the selected month, by card title. Month
+  /// view only: the year view's limit field takes a yearly amount.
+  Future<Map<String, ({double limit, int months})>> _loadSuggestedLimits(
+    List<BudgetCategoryProgress> items,
+  ) {
+    if (viewMode != BudgetViewMode.month) return Future.value(const {});
+    final m = widget.selectedMonth;
+    return BudgetService.instance.suggestedLimits(
+      '${m.year}-${m.month.toString().padLeft(2, '0')}',
+      [for (final item in items) item.title],
+    );
+  }
+
+  /// The suggested limit for [title] under the limit field, with Use to fill
+  /// it in. Nothing while loading or with under 3 months of history.
+  Widget _limitSuggestion(
+    Future<Map<String, ({double limit, int months})>> suggestions,
+    String title,
+    TextEditingController controller,
+  ) {
+    return FutureBuilder<Map<String, ({double limit, int months})>>(
+      future: suggestions,
+      builder: (context, snapshot) {
+        final suggestion = snapshot.data?[title];
+        if (suggestion == null || suggestion.limit <= 0) {
+          return const SizedBox.shrink();
+        }
+        return Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Suggested: ${formatMoney(suggestion.limit, signed: false)}, '
+                  'based on average spending from the past '
+                  '${suggestion.months} months',
+                  style: TextStyle(fontSize: 12, color: context.colors.muted),
+                ),
+              ),
+              TextButton(
+                onPressed: () =>
+                    controller.text = suggestion.limit.toStringAsFixed(0),
+                child: const Text('Use'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   // Inline editor for a single budget row.
   Future<void> _showEditBudgetDialog(
     BuildContext context,
@@ -1017,18 +1084,27 @@ class _BudgetPageState extends State<BudgetPage> {
     final controller = TextEditingController(
       text: item.limit.toStringAsFixed(0),
     );
+    final suggestions = _loadSuggestedLimits([item]);
     await showDialog<void>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
           title: Text('Set ${item.title} Budget'),
-          content: TextField(
-            controller: controller,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(
-              prefixText: '\$',
-              labelText: 'Monthly limit',
-            ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: controller,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: const InputDecoration(
+                  prefixText: '\$',
+                  labelText: 'Monthly limit',
+                ),
+              ),
+              _limitSuggestion(suggestions, item.title, controller),
+            ],
           ),
           actions: [
             TextButton(
@@ -1064,6 +1140,7 @@ class _BudgetPageState extends State<BudgetPage> {
     final controller = TextEditingController(
       text: selected.limit.toStringAsFixed(0),
     );
+    final suggestions = _loadSuggestedLimits(editableBudgets);
     await showDialog<void>(
       context: context,
       builder: (dialogContext) {
@@ -1107,6 +1184,7 @@ class _BudgetPageState extends State<BudgetPage> {
                       labelText: 'Monthly limit',
                     ),
                   ),
+                  _limitSuggestion(suggestions, selected.title, controller),
                 ],
               ),
               actions: [
@@ -1141,42 +1219,105 @@ class _BudgetPageState extends State<BudgetPage> {
     );
   }
 
-  // Placeholder UI for future custom category creation.
+  // Adds a category of the user's own, with a budget card from this month on.
   Future<void> _showCustomCategoryDialog(BuildContext context) async {
-    final controller = TextEditingController();
+    final onAdd = widget.onAddCustomCategory;
+    if (onAdd == null) return;
+    final nameController = TextEditingController();
+    final limitController = TextEditingController();
+    String? error;
+    var saving = false;
     await showDialog<void>(
       context: context,
       builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Add Custom Category'),
-          content: TextField(
-            controller: controller,
-            decoration: const InputDecoration(
-              labelText: 'Category name',
-              hintText: 'e.g. Pets, Travel, Gifts',
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Custom category UI only (not connected yet).',
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            Future<void> save() async {
+              final name = nameController.text.trim();
+              final limitText = limitController.text.trim();
+              final limit = limitText.isEmpty
+                  ? null
+                  : double.tryParse(limitText.replaceAll(',', ''));
+              if (name.isEmpty) {
+                setDialogState(() => error = 'Enter a category name.');
+                return;
+              }
+              if (limitText.isNotEmpty &&
+                  (limit == null || !limit.isFinite || limit < 0)) {
+                setDialogState(() => error = 'Enter a limit of \$0 or more.');
+                return;
+              }
+              setDialogState(() {
+                saving = true;
+                error = null;
+              });
+              final failure = await onAdd(name, limit);
+              if (!dialogContext.mounted) return;
+              if (failure != null) {
+                setDialogState(() {
+                  saving = false;
+                  error = failure;
+                });
+                return;
+              }
+              Navigator.of(dialogContext).pop();
+            }
+
+            return AlertDialog(
+              title: const Text('Add Custom Category'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    key: const ValueKey('custom-category-name'),
+                    controller: nameController,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Category name',
+                      hintText: 'e.g. Pets, Travel, Gifts',
                     ),
                   ),
-                );
-              },
-              child: const Text('Save'),
-            ),
-          ],
+                  TextField(
+                    key: const ValueKey('custom-category-limit'),
+                    controller: limitController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      prefixText: '\$',
+                      labelText: 'Monthly limit (optional)',
+                    ),
+                  ),
+                  if (error != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        error!,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(dialogContext).colorScheme.error,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: saving
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: saving ? null : save,
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
+    // Not disposed here: the dialog's closing animation still reads them.
   }
 }
