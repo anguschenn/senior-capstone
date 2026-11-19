@@ -7,6 +7,7 @@ import '../constants/app_constants.dart';
 import '../controllers/main_screen_controller.dart';
 import '../core/config/api_config.dart';
 import '../core/config/env_config.dart';
+import 'notification_destination.dart';
 import '../models/app_models.dart';
 import '../pages/budget_page.dart';
 import '../pages/cash_flow_page.dart';
@@ -16,6 +17,7 @@ import '../pages/subscriptions_page.dart';
 import '../pages/transactions_page.dart';
 import '../services/auth_service.dart';
 import '../services/financial_snapshot_service.dart';
+import '../services/push_notification_service.dart';
 import '../utils/app_helpers.dart';
 import '../widgets/ai_assistant/ai_assistant_panel.dart';
 import '../widgets/common/shared_money_sheets.dart';
@@ -34,6 +36,7 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   final _ctrl = MainScreenController();
+  bool _pendingNotificationReview = false;
 
   List<DateTime> _monthOptions(List<AppTransaction> txs) {
     final monthsWithData = <DateTime>{};
@@ -56,7 +59,40 @@ class _MainScreenState extends State<MainScreen> {
     _ctrl.addListener(_onControllerChange);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _ctrl.loadCachedThenRefresh();
+      _openNotificationDestination(Uri.base);
     });
+    // A click while the app is open arrives here instead of a page load.
+    PushNotificationService.instance.onNotificationOpened((url) {
+      final uri = Uri.tryParse(url);
+      if (!mounted || uri == null) return;
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      _openNotificationDestination(uri);
+    });
+  }
+
+  void _openNotificationDestination(Uri uri) {
+    final query = uri.queryParameters;
+    final notification = query['notification'];
+    final tabIndex = notificationTabIndexFor(notification);
+    if (tabIndex != null) {
+      if (notification == 'transaction_review') {
+        _pendingNotificationReview = true;
+      }
+      _ctrl.selectTab(tabIndex);
+      _maybeOpenNotificationReview();
+      return;
+    }
+
+    if (notification == 'monthly_report') {
+      final month = query['month'];
+      final match = month == null
+          ? null
+          : RegExp(r'^(\d{4})-(0[1-9]|1[0-2])$').firstMatch(month);
+      if (match != null) {
+        _ctrl.selectMonth(DateTime(int.parse(match[1]!), int.parse(match[2]!)));
+      }
+      _openFlow();
+    }
   }
 
   @override
@@ -67,7 +103,43 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _onControllerChange() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() {});
+    _maybeOpenNotificationReview();
+  }
+
+  void _maybeOpenNotificationReview() {
+    if (!_pendingNotificationReview ||
+        _ctrl.loadingFirstData ||
+        _ctrl.syncStatus == 'No data loaded yet') {
+      return;
+    }
+
+    _pendingNotificationReview = false;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final c = _ctrl;
+      final transactions = FinancialSnapshotService.instance
+          .build(c, targetMonth: c.selectedMonth)
+          .transactions;
+      showReviewTransactionsSheet(
+        context: context,
+        transactions: pendingReviewTransactions(
+          transactions: transactions,
+          manualReviewedTxIds: c.manualReviewedTxIds,
+          confirmedReviewTxIds: c.confirmedReviewTxIds,
+          lowConfidenceReviewTxIds: c.lowConfidenceReviewTxIds,
+        ),
+        accountOptions: c.liveAccountOptions,
+        reviewedCategoryByTxId: c.reviewedCategoryByTxId,
+        onTransactionCategorySelected: c.onTransactionCategorySelected,
+        onReviewConfirm: c.confirmReviewedCategory,
+        onLinkPayback: _linkPayback,
+        aiCategorySuggestUri: ApiConfig.instance.aiCategorySuggestUri,
+        apiKey: EnvConfig.instance.backendApiKey,
+        accessToken: AuthService.instance.currentAccessToken,
+      );
+    });
   }
 
   double _monthlySubscriptionTotal(List<DetectedSubscription> subs) =>
@@ -198,6 +270,7 @@ class _MainScreenState extends State<MainScreen> {
         body: CashFlowPage(
           transactions: snapshot.transactions,
           budgetProgress: snapshot.budgetProgress,
+          reviewedCategoryByTxId: c.reviewedCategoryByTxId,
           selectedMonth: c.selectedMonth,
           monthOptions: _monthOptions(c.liveTransactions),
           onMonthChanged: c.selectMonth,
@@ -227,6 +300,8 @@ class _MainScreenState extends State<MainScreen> {
         bankSyncBusy: c.refreshingInBackground,
         syncStatus: c.syncStatus,
         subscriptionCount: subs.where((s) => !s.needsConfirmation).length,
+        onEnableNotifications: PushNotificationService.instance.enable,
+        onDisableNotifications: PushNotificationService.instance.disable,
         onReconnect: c.reauthenticateBank,
         onAddBank: c.connectBankAndPullData,
         onRefresh: c.refreshLiveDataOnly,
@@ -333,6 +408,8 @@ class _MainScreenState extends State<MainScreen> {
         budgetProgressYear: snapshot.budgetProgressYear,
         budgetProgressAll: snapshot.budgetProgressAll,
         onUpdateBudgetLimit: c.updateBudgetLimit,
+        onAddCustomCategory: (name, limit) =>
+            c.addCustomCategory(name, monthlyLimit: limit),
         aiBudgetSuggestApiUri: ApiConfig.instance.aiBudgetSuggestUri,
         apiKey: EnvConfig.instance.backendApiKey,
         accessToken: AuthService.instance.currentAccessToken,
@@ -343,6 +420,7 @@ class _MainScreenState extends State<MainScreen> {
         scopeNote: oneAccount ? 'Budgets cover all accounts' : null,
         transactions: household.transactions,
         reviewedCategoryByTxId: c.reviewedCategoryByTxId,
+        subscriptions: confirmedSubscriptions,
         onAsk: _openAsk,
       ),
       SubscriptionsPage(

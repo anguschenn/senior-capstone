@@ -27,6 +27,7 @@ import datetime as dt
 import re
 from typing import NamedTuple
 
+from subscription_detector import normalize_merchant
 from supabase_repo import supabase
 
 _PAGE_SIZE = 1000
@@ -85,8 +86,6 @@ def budget_category_from_pfc(pfc_detailed: str, pfc_primary: str) -> str:
         return "Housing"
     if has("health", "medical", "pharmacy", "clinic", "doctor", "dental"):
         return "Health"
-    if has("software", "subscription", "streaming", "saas", "cloud"):
-        return "Subscriptions"
     if has("food", "drink", "restaurant"):
         return "Food"
     if has("transportation", "transport", "transit"):
@@ -123,12 +122,12 @@ def budget_category_from_pfc(pfc_detailed: str, pfc_primary: str) -> str:
 
 
 def _keyword_fallback_category(merchant_name: str, transaction_name: str) -> str:
+    # "Subscriptions" is deliberately not reachable here or from PFC alone (removed: a
+    # keyword/PFC match had no requirement the merchant ever recurred, so a one-off
+    # purchase from a subscription-type brand got miscounted). The only way to land in
+    # Subscriptions now is the confirmed-subscriptions check in _strong_signal_override,
+    # or the user's own pick -- both guaranteed to agree with the Subscriptions page.
     text = f"{merchant_name.strip()} {transaction_name.strip()}".lower()
-    if any(
-        n in text
-        for n in ("openai", "chatgpt", "spotify", "netflix", "apple.com/bill", "youtube premium")
-    ):
-        return "Subscriptions"
     if any(n in text for n in ("starbucks", "mcdonald", "doordash", "ubereats")):
         return "Food"
     if any(
@@ -146,10 +145,23 @@ def _keyword_fallback_category(merchant_name: str, transaction_name: str) -> str
     return ""
 
 
-def _strong_signal_override(pfc_primary, pfc_detailed, merchant_name, transaction_name):
+def _strong_signal_override(
+    pfc_primary,
+    pfc_detailed,
+    merchant_name,
+    transaction_name,
+    confirmed_subscription_merchants=None,
+):
     primary = pfc_primary.lower()
     detailed = pfc_detailed.lower()
     text = f"{merchant_name.strip()} {transaction_name.strip()}".lower()
+    if confirmed_subscription_merchants:
+        # The user's own subscriptions table already proved this merchant is an active,
+        # confirmed recurring charge (same set the Subscriptions page's "Confirmed" list
+        # shows) -- that beats any keyword/PFC guess below.
+        norm_text = normalize_merchant(text)
+        if any(m and m in norm_text for m in confirmed_subscription_merchants):
+            return ("Subscriptions", "high")
     if any(
         n in detailed
         for n in (
@@ -166,16 +178,24 @@ def _strong_signal_override(pfc_primary, pfc_detailed, merchant_name, transactio
         n in text for n in ("payment to chase card", "paypal transfer", "zelle payment", "venmo")
     ):
         return ("Fees & Transfers", "high")
-    if any(n in text for n in ("openai", "chatgpt", "spotify", "netflix")):
-        return ("Subscriptions", "high")
     return None
 
 
 def classify_by_pfc_signals(
-    pfc_primary: str, pfc_detailed: str, merchant_name: str = "", transaction_name: str = ""
+    pfc_primary: str,
+    pfc_detailed: str,
+    merchant_name: str = "",
+    transaction_name: str = "",
+    confirmed_subscription_merchants: set[str] | None = None,
 ) -> tuple[str, str]:
     """Returns (category, confidence) with confidence in high | mid | low."""
-    strong = _strong_signal_override(pfc_primary, pfc_detailed, merchant_name, transaction_name)
+    strong = _strong_signal_override(
+        pfc_primary,
+        pfc_detailed,
+        merchant_name,
+        transaction_name,
+        confirmed_subscription_merchants,
+    )
     if strong:
         return strong
 
@@ -405,6 +425,7 @@ def classify_rows(
     remembered_rules: dict[str, str],
     account_type_by_id: dict[str, str] | None = None,
     decisions: dict[str, dict] | None = None,
+    confirmed_subscription_merchants: set[str] | None = None,
 ) -> dict[str, Decided]:
     """{row id: Decided} (classifyTransactions). A refund from a merchant with an earlier
     purchase of at least that amount on the same account, within 120 days, takes that
@@ -437,7 +458,8 @@ def classify_rows(
                 "signed": signed,
                 "id": rid,
                 "kind": kind,
-                "bucket": user_category or _pfc_bucket_for_row(row),
+                "bucket": user_category
+                or _pfc_bucket_for_row(row, confirmed_subscription_merchants),
                 "user_category": user_category,
                 "account": account_id,
                 "account_type": account_type,
@@ -626,17 +648,23 @@ def signed_spend(kind: str, amount: float, paid_back: float = 0.0) -> float:
 
 
 def budget_bucket_for_row(
-    row: dict, remembered_rules: dict[str, str], decisions: dict[str, dict] | None = None
+    row: dict,
+    remembered_rules: dict[str, str],
+    decisions: dict[str, dict] | None = None,
+    confirmed_subscription_merchants: set[str] | None = None,
 ) -> str:
-    return user_category_for_row(row, remembered_rules, decisions) or _pfc_bucket_for_row(row)
+    return user_category_for_row(row, remembered_rules, decisions) or _pfc_bucket_for_row(
+        row, confirmed_subscription_merchants
+    )
 
 
-def _pfc_bucket_for_row(row: dict) -> str:
+def _pfc_bucket_for_row(row: dict, confirmed_subscription_merchants: set[str] | None = None) -> str:
     category, _ = classify_by_pfc_signals(
         pfc_primary=_coalesce(row.get("pfc_primary")).strip(),
         pfc_detailed=_coalesce(row.get("pfc_detailed"), row.get("category")).strip(),
         merchant_name=_coalesce(row.get("name"), row.get("merchant_name")).strip(),
         transaction_name=_coalesce(row.get("name")).strip(),
+        confirmed_subscription_merchants=confirmed_subscription_merchants,
     )
     return category
 
@@ -653,13 +681,19 @@ def build_budget_progress(
     *,
     kinds: dict[str, Decided] | None = None,
     decisions: dict[str, dict] | None = None,
+    confirmed_subscription_merchants: set[str] | None = None,
 ) -> list[dict]:
     """month is 'YYYY-MM'. Output items match what PredictService's burn-rate check reads.
     kinds is classify_rows(tx_rows, remembered_rules, decisions=decisions) when the caller
     already has it."""
     spent_by_key: dict[str, float] = {}
     if kinds is None:
-        kinds = classify_rows(tx_rows, remembered_rules, decisions=decisions)
+        kinds = classify_rows(
+            tx_rows,
+            remembered_rules,
+            decisions=decisions,
+            confirmed_subscription_merchants=confirmed_subscription_merchants,
+        )
     counted: set[str] = set()
     for row in tx_rows:
         if not str(row.get("date") or "").startswith(month):
@@ -752,6 +786,29 @@ def without_hidden_accounts(rows: list[dict], hidden: set[str]) -> list[dict]:
     if not hidden:
         return rows
     return [r for r in rows if str(r.get("plaid_account_id") or "").strip() not in hidden]
+
+
+def fetch_confirmed_subscription_merchants(user_id: str, db=None) -> set[str]:
+    """Normalized merchant names of the user's active, confirmed subscriptions (the
+    subscriptions table) -- the same set the Subscriptions page's "Confirmed" section
+    shows. A one-off purchase from a subscription-type brand that was never detected as
+    recurring, or one the user dismissed, is correctly left out. Empty on any error, so a
+    subscriptions-table hiccup never breaks budget progress itself."""
+    try:
+        rows = (
+            (db or supabase)
+            .table("subscriptions")
+            .select("merchant_name")
+            .eq("user_id", user_id)
+            .eq("is_active", True)
+            .eq("needs_confirmation", False)
+            .execute()
+        ).data or []
+    except Exception:
+        return set()
+    return {
+        normalize_merchant(r.get("merchant_name") or "") for r in rows if r.get("merchant_name")
+    } - {""}
 
 
 def fetch_decisions(user_id: str, db=None) -> dict[str, dict]:
@@ -872,4 +929,5 @@ def compute_budget_progress(user_id: str, month: str) -> list[dict]:
         },
         month=month,
         decisions=decisions,
+        confirmed_subscription_merchants=fetch_confirmed_subscription_merchants(user_id),
     )

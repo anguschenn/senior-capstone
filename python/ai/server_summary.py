@@ -30,6 +30,7 @@ from budget_progress import (
     budget_bucket_for_row,
     build_budget_progress,
     classify_rows,
+    fetch_confirmed_subscription_merchants,
     is_credit_card_payment_row,
     normalize_category_key,
     row_kind,
@@ -99,6 +100,7 @@ class Tx:
         account_meta: dict,
         rules: dict[str, str],
         decisions: dict[str, dict] | None = None,
+        confirmed_subscription_merchants: set[str] | None = None,
     ):
         merchant = (_text(row.get("merchant_name")) or "").strip() or None
         fallback = (_text(row.get("name")) or "").strip() if _text(row.get("name")) else None
@@ -143,7 +145,7 @@ class Tx:
         )
         self.id = provider_id or self.dedupe_key
         user_category = user_category_for_row(row, rules, decisions)
-        self.bucket = budget_bucket_for_row(row, rules, decisions)
+        self.bucket = budget_bucket_for_row(row, rules, decisions, confirmed_subscription_merchants)
         # build_transactions replaces these with the whole-list decision (refund matching,
         # paybacks linked to a purchase).
         self.kind = row_kind(row, user_category, self.account_type)
@@ -225,6 +227,7 @@ def build_transactions(
     rules: dict[str, str],
     account_ids=None,
     decisions: dict[str, dict] | None = None,
+    confirmed_subscription_merchants: set[str] | None = None,
 ) -> list[Tx]:
     """Parsed, de-duplicated, optionally limited to `account_ids` (the app's
     visibleTransactions)."""
@@ -233,7 +236,7 @@ def build_transactions(
     out = []
     unique_rows = []
     for row in tx_rows:
-        tx = Tx(row, account_meta, rules, decisions)
+        tx = Tx(row, account_meta, rules, decisions, confirmed_subscription_merchants)
         if tx.dedupe_key in seen:
             continue
         unique_rows.append(row)
@@ -246,7 +249,13 @@ def build_transactions(
         account_id: str((meta or {}).get("account_type") or "").strip()
         for account_id, meta in account_meta.items()
     }
-    decided = classify_rows(unique_rows, rules, account_types, decisions)
+    decided = classify_rows(
+        unique_rows,
+        rules,
+        account_types,
+        decisions,
+        confirmed_subscription_merchants=confirmed_subscription_merchants,
+    )
     for tx in out:
         if tx.id in decided:
             tx.kind, tx.bucket, tx.paid_back, tx.extra_income = decided[tx.id]
@@ -896,17 +905,25 @@ def summary_for(user_id: str, context: dict, tx_rows=None) -> dict:
             return hit[1]
 
     rows, account_meta, rules, names, decisions = _load(user_id, tx_rows)
+    confirmed_subscriptions = fetch_confirmed_subscription_merchants(user_id)
     if hidden:
         hidden_set = set(hidden)
         rows = [r for r in rows if str(r.get("plaid_account_id") or "").strip() not in hidden_set]
     account_ids = context["account_ids"]
-    txs = build_transactions(rows, account_meta, rules, account_ids or None, decisions)
+    txs = build_transactions(
+        rows, account_meta, rules, account_ids or None, decisions, confirmed_subscriptions
+    )
     progress = []
     past_progress = None
     usual_limits = None
     if not context["all_year"]:
         # Budgets cover every linked account, whichever one is selected (as in the app).
-        kinds = classify_rows(rows, rules, decisions=decisions)
+        kinds = classify_rows(
+            rows,
+            rules,
+            decisions=decisions,
+            confirmed_subscription_merchants=confirmed_subscriptions,
+        )
         progress = build_budget_progress(
             fetch_budget_rows(user_id, context["month"]),
             names,
@@ -943,7 +960,9 @@ def summary_for(user_id: str, context: dict, tx_rows=None) -> dict:
     summary = build_summary(
         txs,
         progress,
-        budget_transactions=build_transactions(rows, account_meta, rules, None, decisions)
+        budget_transactions=build_transactions(
+            rows, account_meta, rules, None, decisions, confirmed_subscriptions
+        )
         if account_ids and progress
         else None,
         # Noon: the app's windows run from "now" minus N days, and any time after midnight

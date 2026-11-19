@@ -17,6 +17,8 @@ EXPECTED_API_ROUTES = {
     "/api/create_link_token_update",
     "/api/health",
     "/api/info",
+    "/api/push/config",
+    "/api/push/subscriptions",
     "/api/refresh_insights",
     "/api/set_access_token",
     "/api/transactions",

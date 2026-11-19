@@ -4,8 +4,10 @@ import '../app/app_theme.dart';
 import '../constants/app_constants.dart';
 import '../models/app_models.dart';
 import '../models/budget_pace.dart';
+import '../services/category_service.dart';
 import '../utils/app_helpers.dart';
 import '../widgets/budget/budget_pace_chart_card.dart';
+import '../widgets/cash_flow/cash_flow_category_chart.dart';
 import '../widgets/cash_flow/cash_flow_range_selector.dart';
 import '../widgets/cash_flow/cash_flow_totals_card.dart';
 import '../widgets/cash_flow/cash_flow_trend_summary_card.dart';
@@ -16,6 +18,7 @@ class CashFlowPage extends StatefulWidget {
     super.key,
     required this.transactions,
     required this.budgetProgress,
+    this.reviewedCategoryByTxId = const {},
     required this.selectedMonth,
     required this.monthOptions,
     required this.onMonthChanged,
@@ -24,6 +27,7 @@ class CashFlowPage extends StatefulWidget {
 
   final List<AppTransaction> transactions;
   final List<BudgetCategoryProgress> budgetProgress;
+  final Map<String, String> reviewedCategoryByTxId;
   final DateTime selectedMonth;
   final List<DateTime> monthOptions;
   final ValueChanged<DateTime> onMonthChanged;
@@ -119,6 +123,22 @@ class _CashFlowPageState extends State<CashFlowPage> {
   }
 
   double get _periodNet => _periodIncome - _periodExpenses;
+
+  Map<String, double> get _periodExpensesByCategory {
+    final totals = <String, double>{};
+    for (final tx in _periodTransactions) {
+      if (tx.expenseAmount == 0) continue;
+      final category = CategoryService.instance.budgetBucketFor(
+        tx,
+        widget.reviewedCategoryByTxId,
+      );
+      totals[category] = (totals[category] ?? 0) + tx.expenseAmount;
+    }
+    final positiveTotals =
+        totals.entries.where((entry) => entry.value > 0).toList()
+          ..sort((a, b) => b.value.compareTo(a.value));
+    return Map.fromEntries(positiveTotals);
+  }
 
   List<MonthlyFlowPoint> get _activeSeries {
     final focus = _focusMonth;
@@ -285,6 +305,10 @@ class _CashFlowPageState extends State<CashFlowPage> {
                       style: TextStyle(color: c.muted),
                     ),
                   ),
+                const SizedBox(height: 12),
+                CashFlowCategoryChart(
+                  spendingByCategory: _periodExpensesByCategory,
+                ),
                 const SizedBox(height: 12),
                 CashFlowTotalsCard(
                   income: _periodIncome,

@@ -1,6 +1,7 @@
 {
   "description": "Shared by python/tests/test_server_summary.py and ssdemo_1/test/services/ai_summary_contract_test.dart. `expected` is written by `python tests/test_server_summary.py --write`; both sides must match it.",
   "now": "2026-10-10T12:00:00",
+  "confirmed_subscription_merchants": ["spotify", "netflix"],
   "accounts": [
     {
       "plaid_account_id": "acc-checking",

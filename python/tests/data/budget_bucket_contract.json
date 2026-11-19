@@ -62,7 +62,8 @@
       }
     },
     {
-      "description": "netflix: name beats entertainment pfc",
+      "description": "netflix: a confirmed subscription beats the entertainment pfc guess",
+      "confirmed_subscription_merchants": ["netflix"],
       "row": {
         "plaid_transaction_id": "tx-4",
         "date": "2026-09-10",
@@ -75,6 +76,81 @@
       "expected": {
         "rule_key": "netflix.com|entertainment|entertainment tv and movies",
         "bucket": "Subscriptions",
+        "is_expense": true,
+        "counts_as_spending": true
+      }
+    },
+    {
+      "description": "netflix without confirmation: falls through to its entertainment pfc",
+      "row": {
+        "plaid_transaction_id": "tx-4b",
+        "date": "2026-09-10",
+        "name": "Netflix.com",
+        "merchant_name": "Netflix",
+        "amount": 15.49,
+        "pfc_primary": "ENTERTAINMENT",
+        "pfc_detailed": "ENTERTAINMENT_TV_AND_MOVIES"
+      },
+      "expected": {
+        "rule_key": "netflix.com|entertainment|entertainment tv and movies",
+        "bucket": "Entertainment",
+        "is_expense": true,
+        "counts_as_spending": true
+      }
+    },
+    {
+      "description": "confirmed subscription (Anthropic) with a neutral PFC: Subscriptions, not Other",
+      "confirmed_subscription_merchants": ["anthropic", "puregym"],
+      "row": {
+        "plaid_transaction_id": "tx-sub-1",
+        "date": "2026-09-10",
+        "name": "ANTHROPIC CLAUDE SUBSCR",
+        "merchant_name": "Anthropic",
+        "amount": 21.78,
+        "pfc_primary": "GENERAL_SERVICES",
+        "pfc_detailed": "GENERAL_SERVICES_OTHER_GENERAL_SERVICES"
+      },
+      "expected": {
+        "rule_key": "anthropic claude subscr|general services|general services other general services",
+        "bucket": "Subscriptions",
+        "is_expense": true,
+        "counts_as_spending": true
+      }
+    },
+    {
+      "description": "confirmed subscription (Puregym) with a neutral PFC: Subscriptions, not Other",
+      "confirmed_subscription_merchants": ["anthropic", "puregym"],
+      "row": {
+        "plaid_transaction_id": "tx-sub-2",
+        "date": "2026-09-10",
+        "name": "PUREGYM MEMBERSHIP",
+        "merchant_name": "Puregym",
+        "amount": 33.44,
+        "pfc_primary": "PERSONAL_CARE",
+        "pfc_detailed": "PERSONAL_CARE_GYMS_AND_FITNESS_CENTERS"
+      },
+      "expected": {
+        "rule_key": "puregym membership|personal care|personal care gyms and fitness centers",
+        "bucket": "Subscriptions",
+        "is_expense": true,
+        "counts_as_spending": true
+      }
+    },
+    {
+      "description": "a one-off purchase from a subscription-type brand that was never confirmed: not swept into Subscriptions",
+      "confirmed_subscription_merchants": ["anthropic", "puregym"],
+      "row": {
+        "plaid_transaction_id": "tx-sub-3",
+        "date": "2026-09-10",
+        "name": "ADOBE ONE-TIME PURCHASE",
+        "merchant_name": "Adobe",
+        "amount": 49.99,
+        "pfc_primary": "GENERAL_SERVICES",
+        "pfc_detailed": "GENERAL_SERVICES_OTHER_GENERAL_SERVICES"
+      },
+      "expected": {
+        "rule_key": "adobe one-time purchase|general services|general services other general services",
+        "bucket": "Other",
         "is_expense": true,
         "counts_as_spending": true
       }
@@ -450,6 +526,7 @@
   ],
   "progress": {
     "month": "2026-09",
+    "confirmed_subscription_merchants": ["netflix"],
     "categories": {
       "cat-food": "Food",
       "cat-transport": "Transport",

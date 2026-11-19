@@ -24,8 +24,14 @@ class BudgetBucketContractTests(unittest.TestCase):
         for case in FIXTURE["transactions"]:
             with self.subTest(case["description"]):
                 row, expected = case["row"], case["expected"]
+                confirmed_subs = set(case.get("confirmed_subscription_merchants") or [])
                 self.assertEqual(rule_key_for_row(row), expected["rule_key"])
-                self.assertEqual(budget_bucket_for_row(row, rules), expected["bucket"])
+                self.assertEqual(
+                    budget_bucket_for_row(
+                        row, rules, confirmed_subscription_merchants=confirmed_subs
+                    ),
+                    expected["bucket"],
+                )
                 self.assertEqual(is_expense_row(row), expected["is_expense"])
                 self.assertEqual(counts_as_spending(row), expected["counts_as_spending"])
                 if "kind" in expected:
@@ -41,6 +47,9 @@ class BudgetBucketContractTests(unittest.TestCase):
                     tx_rows=spec["transactions"],
                     remembered_rules=FIXTURE["rules"],
                     month=spec["month"],
+                    confirmed_subscription_merchants=set(
+                        spec.get("confirmed_subscription_merchants") or []
+                    ),
                 )
                 actual = [
                     {k: item[k] for k in ("category_id", "category", "spent", "limit")}

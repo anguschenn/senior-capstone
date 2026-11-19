@@ -33,6 +33,7 @@ def _build(fixture, case):
         fixture["rules"],
         case["account_ids"] or None,
         fixture.get("decisions"),
+        set(fixture.get("confirmed_subscription_merchants") or []),
     )
     summary = server_summary.build_summary(
         txs,

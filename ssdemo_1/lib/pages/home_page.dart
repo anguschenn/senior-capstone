@@ -131,29 +131,22 @@ class HomePage extends StatelessWidget {
   }
 
   void _openReview(BuildContext context) {
-    showModalBottomSheet<void>(
+    showReviewTransactionsSheet(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      transactions: pendingReviewTransactions(
+        transactions: lowConfidenceTransactions,
+        manualReviewedTxIds: manualReviewedTxIds,
+        confirmedReviewTxIds: confirmedReviewTxIds,
+        lowConfidenceReviewTxIds: lowConfidenceReviewTxIds,
       ),
-      builder: (_) => ReviewTransactionsSheet(
-        transactions: pendingReviewTransactions(
-          transactions: lowConfidenceTransactions,
-          manualReviewedTxIds: manualReviewedTxIds,
-          confirmedReviewTxIds: confirmedReviewTxIds,
-          lowConfidenceReviewTxIds: lowConfidenceReviewTxIds,
-        ),
-        accountOptions: accountOptions,
-        reviewedCategoryByTxId: reviewedCategoryByTxId,
-        onTransactionCategorySelected: onTransactionCategorySelected,
-        onReviewConfirm: onReviewConfirm,
-        onLinkPayback: onLinkPayback,
-        aiCategorySuggestUri: aiCategorySuggestUri,
-        apiKey: apiKey,
-        accessToken: accessToken,
-      ),
+      accountOptions: accountOptions,
+      reviewedCategoryByTxId: reviewedCategoryByTxId,
+      onTransactionCategorySelected: onTransactionCategorySelected,
+      onReviewConfirm: onReviewConfirm,
+      onLinkPayback: onLinkPayback,
+      aiCategorySuggestUri: aiCategorySuggestUri,
+      apiKey: apiKey,
+      accessToken: accessToken,
     );
   }
 
@@ -1092,6 +1085,40 @@ class TransactionRow extends StatelessWidget {
 }
 
 /// Sheet listing transactions whose category needs a quick check.
+void showReviewTransactionsSheet({
+  required BuildContext context,
+  required List<AppTransaction> transactions,
+  required List<AccountOption> accountOptions,
+  required Map<String, String> reviewedCategoryByTxId,
+  required void Function(AppTransaction tx, String category)
+  onTransactionCategorySelected,
+  required Future<void> Function(String txId) onReviewConfirm,
+  Future<bool> Function(BuildContext context, AppTransaction tx)? onLinkPayback,
+  Uri? aiCategorySuggestUri,
+  String? apiKey,
+  String? accessToken,
+}) {
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    ),
+    builder: (_) => ReviewTransactionsSheet(
+      transactions: transactions,
+      accountOptions: accountOptions,
+      reviewedCategoryByTxId: reviewedCategoryByTxId,
+      onTransactionCategorySelected: onTransactionCategorySelected,
+      onReviewConfirm: onReviewConfirm,
+      onLinkPayback: onLinkPayback,
+      aiCategorySuggestUri: aiCategorySuggestUri,
+      apiKey: apiKey,
+      accessToken: accessToken,
+    ),
+  );
+}
+
 class ReviewTransactionsSheet extends StatefulWidget {
   const ReviewTransactionsSheet({
     super.key,
